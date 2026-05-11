@@ -972,8 +972,19 @@ function DocPreview({ data }) {
                   <div style={{...SANS,fontSize:"11px",color:GR,marginBottom:"6px",fontWeight:"600"}}>📎 {f.name}</div>
                   {isImg && <img src={src} alt={f.name} style={{width:"100%",border:`1px solid ${GB}`,borderRadius:"6px",display:"block"}}/>}
                   {isPdf && (
-                    <div>
-                      <embed src={src} type="application/pdf" style={{width:"100%",height:"650px",border:`1px solid ${GB}`,borderRadius:"6px",display:"block"}}/>
+                    <div style={{border:`2px solid ${GB}`,borderRadius:"8px",overflow:"hidden"}}>
+                      <div style={{background:"#f5f7fb",padding:"16px 20px",display:"flex",alignItems:"center",gap:"14px"}}>
+                        <span style={{fontSize:"36px"}}>📄</span>
+                        <div style={{flex:1}}>
+                          <div style={{...SANS,fontWeight:"700",fontSize:"13px",color:N}}>{f.name}</div>
+                          <div style={{...SANS,fontSize:"11px",color:GR,marginTop:"2px"}}>Documento PDF allegato</div>
+                        </div>
+                        <a href={src} target="_blank" rel="noreferrer"
+                           style={{...SANS,fontSize:"12px",fontWeight:"600",color:WH,background:N,padding:"7px 14px",borderRadius:"6px",textDecoration:"none"}}>
+                          Apri PDF ↗
+                        </a>
+                      </div>
+                      <iframe src={src} style={{width:"100%",height:"500px",border:"none",display:"block"}} title={f.name}/>
                     </div>
                   )}
                   {!isImg&&!isPdf&&(
@@ -1187,19 +1198,12 @@ ${all2HTML ? page(all2HTML) : ""}
   const doPrint = () => {
     const html = buildPrintHTML();
     if (!html) return;
-    const blob = new Blob([html], {type:"text/html;charset=utf-8"});
-    const url  = URL.createObjectURL(blob);
-    const ifr  = document.createElement("iframe");
-    ifr.style.cssText = "position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;border:none;opacity:0;";
-    document.body.appendChild(ifr);
-    ifr.onload = () => {
-      try {
-        ifr.contentWindow.focus();
-        ifr.contentWindow.print();
-      } catch(e) { console.error(e); }
-      setTimeout(() => { document.body.removeChild(ifr); URL.revokeObjectURL(url); }, 3000);
-    };
-    ifr.src = url;
+    const w = window.open("", "_blank");
+    if (!w) { alert("Abilita i popup per questo sito nelle impostazioni del browser, poi riprova."); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 800);
   };
 
   const doDownloadHTML = () => {
@@ -1225,7 +1229,11 @@ ${all2HTML ? page(all2HTML) : ""}
     <div style={{display:"flex", height:"calc(100vh - 60px)", overflow:"hidden"}}>
 
       {/* ── PANNELLO SINISTRO ── */}
-      <div style={{width:"360px",minWidth:"300px",background:WH,borderRight:`1px solid ${GB}`,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+      <div
+        style={{width:"360px",minWidth:"300px",background:WH,borderRight:`1px solid ${GB}`,display:"flex",flexDirection:"column",overflow:"hidden"}}
+        onDragOver={e=>{e.preventDefault();e.stopPropagation();}}
+        onDrop={e=>{e.preventDefault();e.stopPropagation();if(e.dataTransfer.files.length>0)addAll2Files(e.dataTransfer.files);}}
+      >
 
         {/* Top bar */}
         <div style={{padding:"12px 16px",borderBottom:`1px solid ${GB}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:N,position:"relative"}}>
