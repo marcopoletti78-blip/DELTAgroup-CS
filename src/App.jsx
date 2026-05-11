@@ -507,9 +507,15 @@ function Modify({ onBack, onDone }) {
   const addFiles = async (files) => {
     setErr(null);
     const toAdd = [];
+    const MAX_MB = 10;
     for (const file of Array.from(files)) {
       const t = detectType(file);
       if (!t) { setErr(`Formato non supportato: ${file.name}. Usa PDF o immagini (JPG, PNG).`); continue; }
+      const sizeMB = file.size / 1024 / 1024;
+      if (sizeMB > MAX_MB) {
+        setErr(`⚠ "${file.name}" è ${sizeMB.toFixed(1)}MB — troppo grande per l'AI (max ${MAX_MB}MB). Per planimetrie grandi usa la sezione Allegato 2 nell'editor dopo la generazione.`);
+        continue;
+      }
       const data = await readAsB64(file);
       toAdd.push({ id: Date.now() + Math.random(), name: file.name, type: t, data });
     }
@@ -630,8 +636,9 @@ ${attachments.length > 0 ? `DOCUMENTI/IMMAGINI AGGIUNTIVI ALLEGATI (${attachment
           <Inp v={mods} set={setMods}
             ph={"Aggiungi eventuali indicazioni che non compaiono nei documenti allegati:\nes. Il nuovo capo impiego è Marco Poletti, tel. 078 333 43 33.\nes. Rimuovere il riferimento al servizio sanitario privato, resta solo la CRI.\nes. L'agente al settore B lavora solo sabato sera."}
             rows={5}/>
-          <div style={{...SANS,fontSize:"11px",color:GR,marginTop:"6px"}}>
-            ℹ L'AI analizza tutti i documenti allegati e posiziona automaticamente le informazioni nei capitoli corretti
+          <div style={{...SANS,fontSize:"11px",color:GR,marginTop:"6px",lineHeight:1.6}}>
+            ℹ Allega qui mail, email, nuovi orari (max ~3MB per file) · L'AI li analizza e posiziona nei capitoli giusti<br/>
+            📐 <strong>Planimetrie grandi</strong>: aggiungile nell'Allegato 2 dopo la generazione — non serve mandarle all'AI
           </div>
         </Crd>
 
@@ -1036,8 +1043,14 @@ function Editor({ data: initialData, onBack }) {
 
   const addFiles = async (files) => {
     const toAdd = [];
+    const MAX_MB = 10;
     for (const file of Array.from(files)) {
       const t = detectType(file); if (!t) continue;
+      const sizeMB = file.size / 1024 / 1024;
+      if (sizeMB > MAX_MB) {
+        setErr(`⚠ "${file.name}" è ${sizeMB.toFixed(1)}MB — troppo grande (max ${MAX_MB}MB). Per planimetrie usa la sezione Allegato 2 qui sotto.`);
+        continue;
+      }
       const d = await readAsB64(file);
       toAdd.push({id:Date.now()+Math.random(), name:file.name, type:t, data:d});
     }
