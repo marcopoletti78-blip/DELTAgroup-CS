@@ -1341,21 +1341,31 @@ function Home({ onNew, onMod }) {
 function Header({ onHome }) {
   return (
     <div style={{
-      background:N, padding:"0 24px", height:"60px",
+      background:"#111827", padding:"0 20px", height:"60px",
       display:"flex",alignItems:"center",justifyContent:"space-between",
       borderBottom:`3px solid ${RD}`,position:"sticky",top:0,zIndex:100,
+      boxShadow:"0 2px 12px rgba(0,0,0,0.4)",
     }}>
-      <button onClick={onHome} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"12px"}}>
-        <div style={{...SERIF,fontSize:"21px",fontWeight:"700",color:WH,letterSpacing:"0.04em"}}>
-          DELTA<sup style={{fontSize:"10px",color:RD,verticalAlign:"super",fontWeight:"700"}}>®</sup>
-          <span style={{fontWeight:"400",fontSize:"14px"}}> group</span>
+      <button onClick={onHome} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"12px",padding:0}}>
+        {/* Logo triangolo DELTAgroup */}
+        <div style={{width:"40px",height:"40px",borderRadius:"9px",background:"#1E40AF",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+          <svg viewBox="0 0 512 512" width="26" height="26">
+            <polygon points="256,92 422,402 90,402" fill="none" stroke="#fff" strokeWidth="52" strokeLinejoin="round"/>
+          </svg>
         </div>
-        <div style={{width:"1px",height:"24px",background:"rgba(255,255,255,0.25)"}}/>
-        <div style={{...SANS,fontSize:"10px",color:"rgba(255,255,255,0.65)",textTransform:"uppercase",letterSpacing:"0.12em"}}>
-          Concetti di Sicurezza
+        {/* Nome app */}
+        <div style={{display:"flex",flexDirection:"column",alignItems:"flex-start",gap:"1px"}}>
+          <div style={{display:"flex",alignItems:"baseline",gap:"0px"}}>
+            <span style={{...SERIF,fontSize:"18px",fontWeight:"700",color:WH,letterSpacing:"0.04em"}}>DELTA</span>
+            <span style={{...SERIF,fontSize:"14px",fontWeight:"400",color:"rgba(255,255,255,0.85)"}}>group</span>
+            <span style={{...SANS,fontSize:"18px",fontWeight:"700",color:RD,marginLeft:"6px",letterSpacing:"0.06em"}}>CS</span>
+          </div>
+          <div style={{...SANS,fontSize:"9px",color:"rgba(255,255,255,0.45)",textTransform:"uppercase",letterSpacing:"0.14em"}}>
+            Concetti di Sicurezza · Ticino · v2.0
+          </div>
         </div>
       </button>
-      <div style={{...SANS,fontSize:"10px",color:"rgba(255,255,255,0.35)",textTransform:"uppercase",letterSpacing:"0.08em"}}>
+      <div style={{...SANS,fontSize:"10px",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"right"}}>
         Security &amp; Services AG
       </div>
     </div>
