@@ -751,7 +751,7 @@ function DocPreview({ data }) {
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
 
       {/* ── CARTA INTESTATA HEADER ── */}
-      <div style={{padding:"0",marginBottom:"0",borderBottom:`1px solid ${GB}`}}>
+      <div className="doc-page-header" style={{padding:"0",marginBottom:"0",borderBottom:`1px solid ${GB}`}}>
         <img src={HDR_IMG} alt="DELTAgroup header" style={{width:"100%",display:"block"}}/>
       </div>
 
@@ -971,7 +971,15 @@ function DocPreview({ data }) {
                 <div key={i}>
                   <div style={{...SANS,fontSize:"11px",color:GR,marginBottom:"6px",fontWeight:"600"}}>📎 {f.name}</div>
                   {isImg && <img src={src} alt={f.name} style={{width:"100%",border:`1px solid ${GB}`,borderRadius:"6px"}}/>}
-                  {isPdf && <iframe src={src} style={{width:"100%",height:"600px",border:`1px solid ${GB}`,borderRadius:"6px"}} title={f.name}/>}
+                  {isPdf && (
+                    <object data={src} type="application/pdf" style={{width:"100%",height:"600px",border:`1px solid ${GB}`,borderRadius:"6px"}}>
+                      <div style={{padding:"20px",textAlign:"center",...SANS,fontSize:"12px",color:GR}}>
+                        <div style={{fontSize:"32px",marginBottom:"8px"}}>📄</div>
+                        <div style={{fontWeight:"600",color:TX,marginBottom:"4px"}}>{f.name}</div>
+                        <a href={src} download={f.name} style={{color:N,fontWeight:"600"}}>⬇ Scarica PDF</a>
+                      </div>
+                    </object>
+                  )}
                   {!isImg&&!isPdf&&(
                     <div style={{background:"#f0f4f9",border:`1px solid ${GB}`,borderRadius:"6px",padding:"16px",display:"flex",alignItems:"center",gap:"10px",...SANS,fontSize:"12px",color:TX}}>
                       <span style={{fontSize:"28px"}}>📊</span>
@@ -997,7 +1005,7 @@ function DocPreview({ data }) {
       </div>{/* fine body */}
 
       {/* ── CARTA INTESTATA FOOTER ── */}
-      <div style={{borderTop:`1px solid ${GB}`}}>
+      <div className="doc-page-footer" style={{borderTop:`1px solid ${GB}`}}>
         <img src={FTR_IMG} alt="DELTAgroup footer" style={{width:"100%",display:"block"}}/>
       </div>
     </div>
@@ -1022,12 +1030,12 @@ function Editor({ data: initialData, onBack }) {
 
   // Previeni apertura file dal browser in modo aggressivo (capture phase)
   React.useEffect(() => {
-    const stop = (e) => { e.preventDefault(); e.stopPropagation(); };
-    document.addEventListener("dragover", stop, true);
-    document.addEventListener("drop", stop, true);
+    const stopDrag = (e) => e.preventDefault();
+    document.addEventListener("dragover", stopDrag);
+    document.addEventListener("drop", stopDrag);
     return () => {
-      document.removeEventListener("dragover", stop, true);
-      document.removeEventListener("drop", stop, true);
+      document.removeEventListener("dragover", stopDrag);
+      document.removeEventListener("drop", stopDrag);
     };
   }, []);
 
@@ -1093,6 +1101,11 @@ function Editor({ data: initialData, onBack }) {
   const buildPrintHTML = () => {
     const el = document.getElementById("doc-preview");
     if (!el) return "";
+    // Estrae header e footer per ripeterli fissi su ogni pagina di stampa
+    const hdrEl = el.querySelector(".doc-page-header");
+    const ftrEl = el.querySelector(".doc-page-footer");
+    const hdrHTML = hdrEl ? hdrEl.outerHTML : "";
+    const ftrHTML = ftrEl ? ftrEl.outerHTML : "";
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Concetto di Sicurezza – ${data.nomeEvento||""}</title>
 <style>
@@ -1103,12 +1116,20 @@ td,th{padding:5px 9px;border:1px solid #d0dae8;font-size:9.5pt;}
 th{background:#0c1d3d!important;color:#fff!important;}
 img{max-width:100%;display:block;}
 ul{margin:0;padding-left:18px;}li{line-height:1.7;}
-iframe{width:100%;height:480px;border:1px solid #ddd;}
+object{width:100%;height:500px;border:1px solid #ddd;}
+.doc-page-header,.doc-page-footer{display:none;}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
+  .print-hdr{position:fixed;top:0;left:0;width:100%;z-index:9999;background:#fff;}
+  .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:9999;background:#fff;}
+  .print-body{margin-top:85px;margin-bottom:65px;}
 }
-</style></head><body>${el.outerHTML}</body></html>`;
+</style></head><body>
+<div class="print-hdr">${hdrHTML}</div>
+<div class="print-ftr">${ftrHTML}</div>
+<div class="print-body">${el.outerHTML}</div>
+</body></html>`;
   };
 
   const doPrint = () => {
