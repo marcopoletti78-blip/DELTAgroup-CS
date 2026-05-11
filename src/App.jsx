@@ -756,7 +756,7 @@ function DocPreview({ data }) {
       </div>
 
       {/* ── COVER ── */}
-      <div style={{textAlign:"center",borderBottom:`3px solid ${RD}`,paddingBottom:"32px",marginBottom:"0",padding:"36px 48px 32px"}}>
+      <div id="pc" style={{textAlign:"center",borderBottom:`3px solid ${RD}`,paddingBottom:"32px",marginBottom:"0",padding:"36px 48px 32px"}}>
         {data.logoEvento && (
           <div style={{marginBottom:"20px"}}>
             <img src={data.logoEvento} alt="logo evento" style={{maxHeight:"90px",maxWidth:"220px",objectFit:"contain"}}/>
@@ -778,7 +778,7 @@ function DocPreview({ data }) {
       </div>
 
       {/* ── INDICE ── */}
-      <div style={{padding:"36px 48px",borderBottom:`1px solid ${GB}`}}>
+      <div id="ptoc" style={{padding:"36px 48px",borderBottom:`1px solid ${GB}`}}>
         <div style={{...SANS,fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",color:N,marginBottom:"16px",borderBottom:`2px solid ${N}`,paddingBottom:"6px"}}>Indice</div>
         {TOC_ENTRIES.map((e,i)=>(
           <div key={i} style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:isMain(e.n)?"6px":"2px",paddingLeft:isMain(e.n)?"0":"18px"}}>
@@ -790,7 +790,7 @@ function DocPreview({ data }) {
       </div>
 
       {/* ── BODY ── */}
-      <div style={{padding:"36px 48px"}}>
+      <div id="pbody" style={{padding:"36px 48px"}}>
 
       {/* S1 */}
       {data.s1&&(
@@ -939,7 +939,7 @@ function DocPreview({ data }) {
       )}
 
       {/* ALLEGATO 1 */}
-      <div style={{marginTop:"16px",paddingTop:"28px",borderTop:`1px solid ${GB}`,pageBreakBefore:"always",breakBefore:"page"}}>
+      <div id="pall1" style={{marginTop:"0",paddingTop:"28px",borderTop:"none",pageBreakBefore:"always",breakBefore:"page"}}>
         <div style={{background:N,color:WH,padding:"9px 16px",fontSize:"13px",fontWeight:"700",...SANS,borderRadius:"6px",marginBottom:"22px",textAlign:"center",textTransform:"uppercase",letterSpacing:"0.08em"}}>
           Allegato 1 – Formulario Annunci d'Emergenza
         </div>
@@ -957,7 +957,7 @@ function DocPreview({ data }) {
       </div>
 
       {/* ALLEGATO 2 */}
-      <div style={{marginTop:"0",paddingTop:"28px",borderTop:"none",pageBreakBefore:"always",breakBefore:"page"}}>
+      <div id="pall2" style={{marginTop:"0",paddingTop:"28px",borderTop:"none",pageBreakBefore:"always",breakBefore:"page"}}>
         <div style={{background:N,color:WH,padding:"9px 16px",fontSize:"13px",fontWeight:"700",...SANS,borderRadius:"6px",marginBottom:"22px",textAlign:"center",textTransform:"uppercase",letterSpacing:"0.08em"}}>
           Allegato 2 – Planimetria Dispositivo Agenti
         </div>
@@ -971,7 +971,11 @@ function DocPreview({ data }) {
                 <div key={f.id||i} style={{marginBottom:"12px"}}>
                   <div style={{...SANS,fontSize:"11px",color:GR,marginBottom:"6px",fontWeight:"600"}}>📎 {f.name}</div>
                   {isImg && <img src={src} alt={f.name} style={{width:"100%",border:`1px solid ${GB}`,borderRadius:"6px",display:"block"}}/>}
-                  {isPdf && <iframe src={src} style={{width:"100%",height:"650px",border:`1px solid ${GB}`,borderRadius:"6px",display:"block"}} title={f.name}/>}
+                  {isPdf && (
+                    <div>
+                      <embed src={src} type="application/pdf" style={{width:"100%",height:"650px",border:`1px solid ${GB}`,borderRadius:"6px",display:"block"}}/>
+                    </div>
+                  )}
                   {!isImg&&!isPdf&&(
                     <div style={{background:"#f0f4f9",border:`1px solid ${GB}`,borderRadius:"6px",padding:"16px",display:"flex",alignItems:"center",gap:"10px",...SANS,fontSize:"12px",color:TX}}>
                       <span style={{fontSize:"28px"}}>📊</span>
@@ -1096,52 +1100,89 @@ function Editor({ data: initialData, onBack }) {
   const buildPrintHTML = () => {
     const el = document.getElementById("doc-preview");
     if (!el) return "";
-    // Clona il documento e rimuove header/footer inline (verranno messi fissi)
-    const clone = el.cloneNode(true);
-    const inlineHdr = clone.querySelector(".doc-page-header");
-    const inlineFtr = clone.querySelector(".doc-page-footer");
-    if (inlineHdr) inlineHdr.style.display = "none";
-    if (inlineFtr) inlineFtr.style.display = "none";
-    // Intestazione: usa le immagini base64 direttamente
-    const hdrContent = HDR_IMG
-      ? `<img src="${HDR_IMG}" style="width:100%;display:block;" />`
-      : `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 32px;border-bottom:1px solid #ddd;">
-           <div style="font-size:20px;color:#999;">🦅 🔥 ✂️</div>
-           <div style="text-align:right;font-family:Georgia,serif;font-size:20px;font-weight:700;color:#0c1d3d;">DELTA<sup style="font-size:9px;color:#c8102e;">®</sup>group<br/><span style="font-size:10px;font-weight:400;">Security &amp; Services AG</span></div>
+
+    const getHTML = (id) => {
+      const node = el.querySelector(`#${id}`);
+      return node ? node.innerHTML : "";
+    };
+
+    const hdr = HDR_IMG
+      ? `<img src="${HDR_IMG}" style="width:100%;display:block;"/>`
+      : `<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 32px;border-bottom:1px solid #ddd;font-family:Georgia,serif;">
+           <span style="font-size:24px;color:#bbb;">🦅 🔥 ✂️</span>
+           <div style="text-align:right;font-size:20px;font-weight:700;color:#0c1d3d;">DELTA<sup style="font-size:9px;color:#c8102e;">®</sup>group<br/><span style="font-size:10px;font-weight:400;font-family:Arial;">Security &amp; Services AG</span></div>
          </div>`;
-    const ftrContent = FTR_IMG
-      ? `<img src="${FTR_IMG}" style="width:100%;display:block;" />`
-      : `<div style="display:flex;justify-content:space-between;padding:8px 32px;border-top:1px solid #ddd;font-size:9pt;color:#888;">
-           <div><b>DELTA®group</b> · Via alla Foce 4, 6933 Muzzano</div>
-           <div>T +41 91 921 49 49 · info@delta.ch</div>
+
+    const ftr = FTR_IMG
+      ? `<img src="${FTR_IMG}" style="width:100%;display:block;"/>`
+      : `<div style="display:flex;justify-content:space-between;padding:8px 32px;border-top:1px solid #ddd;font-size:9pt;color:#888;font-family:Arial;">
+           <b>DELTA®group</b>&nbsp;·&nbsp;Via alla Foce 4, 6933 Muzzano
+           <span>T +41 91 921 49 49 &nbsp;·&nbsp; info@delta.ch</span>
          </div>`;
+
+    const page = (content, extraClass="") =>
+      `<div class="ppage ${extraClass}">
+        <div class="phdr">${hdr}</div>
+        <div class="pcnt">${content}</div>
+        <div class="pftr">${ftr}</div>
+      </div>`;
+
+    const coverHTML = getHTML("pc");
+    const tocHTML   = getHTML("ptoc");
+    const bodyHTML  = getHTML("pbody");
+    const all1HTML  = getHTML("pall1");
+    const all2HTML  = getHTML("pall2");
+
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Concetto di Sicurezza – ${data.nomeEvento||""}</title>
 <style>
-*{box-sizing:border-box;}
+*{box-sizing:border-box;margin:0;padding:0;}
 @page{size:A4 portrait;margin:0;}
-body{margin:0;font-family:Arial,sans-serif;font-size:10pt;color:#1a2038;background:#fff;}
+body{font-family:Arial,sans-serif;font-size:10pt;color:#1a2038;background:#fff;}
 table{width:100%;border-collapse:collapse;margin:4px 0;}
-td,th{padding:5px 9px;border:1px solid #d0dae8;font-size:9.5pt;}
+td,th{padding:5px 9px;border:1px solid #d0dae8;font-size:9pt;}
 th{background:#0c1d3d!important;color:#fff!important;}
 img{max-width:100%;display:block;}
 ul{margin:0;padding-left:18px;}li{line-height:1.7;}
-.print-hdr{width:100%;}
-.print-ftr{width:100%;}
-.print-body{padding:16px 32px;}
+embed{display:block;}
+/* Pagine esplicite */
+.ppage{
+  width:210mm;min-height:297mm;
+  display:flex;flex-direction:column;
+  break-after:page;page-break-after:always;
+}
+.ppage:last-child{break-after:auto;page-break-after:auto;}
+.phdr{width:100%;flex-shrink:0;}
+.pftr{width:100%;flex-shrink:0;margin-top:auto;}
+.pcnt{flex:1;padding:20px 36px;overflow:hidden;}
+/* Cover centrata */
+.cover .pcnt{
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  text-align:center;
+}
+/* Body: scorre su più pagine con header/footer ogni pagina */
+.pflow{break-before:page;page-break-before:always;}
+.pflow-hdr{width:100%;}
+.pflow-cnt{padding:20px 36px;margin-bottom:0;}
+.pflow-ftr{width:100%;}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
-  .print-hdr{position:fixed;top:0;left:0;width:100%;z-index:9999;background:#fff;}
-  .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:9999;background:#fff;}
-  .print-body{margin-top:90px;margin-bottom:70px;padding:0 32px;}
 }
 </style></head><body>
-<div class="print-hdr">${hdrContent}</div>
-<div class="print-ftr">${ftrContent}</div>
-<div class="print-body">${clone.innerHTML}</div>
+${page(coverHTML,"cover")}
+${page(tocHTML)}
+<div class="pflow">
+  <div class="pflow-hdr">${hdr}</div>
+  <div class="pflow-cnt">${bodyHTML}</div>
+  <div class="pflow-ftr">${ftr}</div>
+</div>
+${all1HTML ? page(all1HTML) : ""}
+${all2HTML ? page(all2HTML) : ""}
 </body></html>`;
   };
+
 
   const doPrint = () => {
     const html = buildPrintHTML();
