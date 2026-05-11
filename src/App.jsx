@@ -966,27 +966,16 @@ function DocPreview({ data }) {
             {data.allegato2Files.map((f,i)=>{
               const isImg = f.type.startsWith("image/");
               const isPdf = f.type==="application/pdf";
-              const src = `data:${f.type};base64,${f.data}`;
+              const src = f.url;
               return (
-                <div key={i}>
+                <div key={f.id||i} style={{marginBottom:"12px"}}>
                   <div style={{...SANS,fontSize:"11px",color:GR,marginBottom:"6px",fontWeight:"600"}}>📎 {f.name}</div>
-                  {isImg && <img src={src} alt={f.name} style={{width:"100%",border:`1px solid ${GB}`,borderRadius:"6px"}}/>}
-                  {isPdf && (
-                    <object data={src} type="application/pdf" style={{width:"100%",height:"600px",border:`1px solid ${GB}`,borderRadius:"6px"}}>
-                      <div style={{padding:"20px",textAlign:"center",...SANS,fontSize:"12px",color:GR}}>
-                        <div style={{fontSize:"32px",marginBottom:"8px"}}>📄</div>
-                        <div style={{fontWeight:"600",color:TX,marginBottom:"4px"}}>{f.name}</div>
-                        <a href={src} download={f.name} style={{color:N,fontWeight:"600"}}>⬇ Scarica PDF</a>
-                      </div>
-                    </object>
-                  )}
+                  {isImg && <img src={src} alt={f.name} style={{width:"100%",border:`1px solid ${GB}`,borderRadius:"6px",display:"block"}}/>}
+                  {isPdf && <iframe src={src} style={{width:"100%",height:"650px",border:`1px solid ${GB}`,borderRadius:"6px",display:"block"}} title={f.name}/>}
                   {!isImg&&!isPdf&&(
                     <div style={{background:"#f0f4f9",border:`1px solid ${GB}`,borderRadius:"6px",padding:"16px",display:"flex",alignItems:"center",gap:"10px",...SANS,fontSize:"12px",color:TX}}>
                       <span style={{fontSize:"28px"}}>📊</span>
-                      <div>
-                        <div style={{fontWeight:"600"}}>{f.name}</div>
-                        <div style={{fontSize:"11px",color:GR,marginTop:"2px"}}>File allegato — visualizzabile aprendo il documento originale</div>
-                      </div>
+                      <div style={{fontWeight:"600"}}>{f.name}</div>
                     </div>
                   )}
                 </div>
@@ -1071,17 +1060,23 @@ function Editor({ data: initialData, onBack }) {
     setAttachments(prev=>[...prev,...toAdd]);
   };
 
-  const addAll2Files = async (files) => {
-    const toAdd = [];
-    for (const file of Array.from(files)) {
-      const t = detectType(file)||"application/octet-stream";
-      const d = await readAsB64(file);
-      toAdd.push({id:Date.now()+Math.random(), name:file.name, type:t, data:d});
-    }
+  const addAll2Files = (files) => {
+    const toAdd = Array.from(files).map(file => ({
+      id: Date.now()+Math.random(),
+      name: file.name,
+      type: detectType(file)||"application/octet-stream",
+      url: URL.createObjectURL(file),
+    }));
     setData(prev=>({...prev, allegato2Files:[...(prev.allegato2Files||[]),...toAdd]}));
   };
 
-  const removeAll2 = (id) => setData(prev=>({...prev, allegato2Files:(prev.allegato2Files||[]).filter(f=>f.id!==id)}));
+  const removeAll2 = (id) => {
+    setData(prev=>{
+      const f = (prev.allegato2Files||[]).find(x=>x.id===id);
+      if(f?.url) URL.revokeObjectURL(f.url);
+      return {...prev, allegato2Files:(prev.allegato2Files||[]).filter(x=>x.id!==id)};
+    });
+  };
 
   const applyEdit = async () => {
     if (!msg.trim() && attachments.length===0) return;
@@ -1101,34 +1096,50 @@ function Editor({ data: initialData, onBack }) {
   const buildPrintHTML = () => {
     const el = document.getElementById("doc-preview");
     if (!el) return "";
-    // Estrae header e footer per ripeterli fissi su ogni pagina di stampa
-    const hdrEl = el.querySelector(".doc-page-header");
-    const ftrEl = el.querySelector(".doc-page-footer");
-    const hdrHTML = hdrEl ? hdrEl.outerHTML : "";
-    const ftrHTML = ftrEl ? ftrEl.outerHTML : "";
+    // Clona il documento e rimuove header/footer inline (verranno messi fissi)
+    const clone = el.cloneNode(true);
+    const inlineHdr = clone.querySelector(".doc-page-header");
+    const inlineFtr = clone.querySelector(".doc-page-footer");
+    if (inlineHdr) inlineHdr.style.display = "none";
+    if (inlineFtr) inlineFtr.style.display = "none";
+    // Intestazione: usa le immagini base64 direttamente
+    const hdrContent = HDR_IMG
+      ? `<img src="${HDR_IMG}" style="width:100%;display:block;" />`
+      : `<div style="display:flex;justify-content:space-between;align-items:center;padding:10px 32px;border-bottom:1px solid #ddd;">
+           <div style="font-size:20px;color:#999;">🦅 🔥 ✂️</div>
+           <div style="text-align:right;font-family:Georgia,serif;font-size:20px;font-weight:700;color:#0c1d3d;">DELTA<sup style="font-size:9px;color:#c8102e;">®</sup>group<br/><span style="font-size:10px;font-weight:400;">Security &amp; Services AG</span></div>
+         </div>`;
+    const ftrContent = FTR_IMG
+      ? `<img src="${FTR_IMG}" style="width:100%;display:block;" />`
+      : `<div style="display:flex;justify-content:space-between;padding:8px 32px;border-top:1px solid #ddd;font-size:9pt;color:#888;">
+           <div><b>DELTA®group</b> · Via alla Foce 4, 6933 Muzzano</div>
+           <div>T +41 91 921 49 49 · info@delta.ch</div>
+         </div>`;
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Concetto di Sicurezza – ${data.nomeEvento||""}</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:Arial,sans-serif;font-size:10pt;color:#1a2038;background:#fff;}
+*{box-sizing:border-box;}
+@page{size:A4 portrait;margin:0;}
+body{margin:0;font-family:Arial,sans-serif;font-size:10pt;color:#1a2038;background:#fff;}
 table{width:100%;border-collapse:collapse;margin:4px 0;}
 td,th{padding:5px 9px;border:1px solid #d0dae8;font-size:9.5pt;}
 th{background:#0c1d3d!important;color:#fff!important;}
 img{max-width:100%;display:block;}
 ul{margin:0;padding-left:18px;}li{line-height:1.7;}
-object{width:100%;height:500px;border:1px solid #ddd;}
-.doc-page-header,.doc-page-footer{display:none;}
+.print-hdr{width:100%;}
+.print-ftr{width:100%;}
+.print-body{padding:16px 32px;}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
   .print-hdr{position:fixed;top:0;left:0;width:100%;z-index:9999;background:#fff;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:9999;background:#fff;}
-  .print-body{margin-top:85px;margin-bottom:65px;}
+  .print-body{margin-top:90px;margin-bottom:70px;padding:0 32px;}
 }
 </style></head><body>
-<div class="print-hdr">${hdrHTML}</div>
-<div class="print-ftr">${ftrHTML}</div>
-<div class="print-body">${el.outerHTML}</div>
+<div class="print-hdr">${hdrContent}</div>
+<div class="print-ftr">${ftrContent}</div>
+<div class="print-body">${clone.innerHTML}</div>
 </body></html>`;
   };
 
