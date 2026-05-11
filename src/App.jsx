@@ -71,7 +71,7 @@ async function callAI(userMsg, mainDoc=null, attachments=[], sysOverride=null) {
   }
   blocks.push({ type:"text", text:userMsg });
   const content = blocks.length === 1 ? userMsg : blocks;
-  const r = await fetch("/api/generate", {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -810,8 +810,7 @@ function DocPreview({ data }) {
             <Dsub n="1.6" t="Stato Maggiore">
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12.5px"}}>
                 <tbody>
-                  {data.s1.statoMaggiore.split(/
-/).map(s=>s.trim()).filter(Boolean).map((s,i)=>{
+                  {data.s1.statoMaggiore.split("\n").map(s=>s.trim()).filter(Boolean).map((s,i)=>{
                     const sep = s.indexOf(":");
                     const org = sep>-1 ? s.slice(0,sep).trim() : s;
                     const nom = sep>-1 ? s.slice(sep+1).trim() : "";
