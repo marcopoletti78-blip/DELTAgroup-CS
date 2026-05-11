@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 
 // ── PALETTE ──────────────────────────────────────────────────────────────────
 const N = "#0c1d3d";    // navy
