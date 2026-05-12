@@ -31,7 +31,7 @@ export function formatAnthropicError(status, payload) {
   return "Richiesta non riuscita (codice " + String(status ?? "sconosciuto") + ").";
 }
 
-// Stati HTTP da ritentare in anthropicMessages (oltre agli errori di rete).
+// Stati HTTP da ritentare oltre agli errori di rete; usati da anthropicMessages.
 function isRetryableHttpStatus(status) {
   return status === 429 || status === 503 || status === 529;
 }
