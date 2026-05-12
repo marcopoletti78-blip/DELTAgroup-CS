@@ -28,13 +28,10 @@ export function formatAnthropicError(status, payload) {
     return "Errore del server AI. Riprova più tardi.";
   }
   if (raw) return raw;
-  return `Richiesta non riuscita (codice ${status || "sconosciuto"}).`;
+  return "Richiesta non riuscita (codice " + String(status ?? "sconosciuto") + ").";
 }
 
-/**
- * @param {object} body - corpo JSON come richiesto da Anthropic Messages API
- * @param {{ maxRetries?: number }} [opts]
- */
+// Stati HTTP da ritentare in anthropicMessages (oltre agli errori di rete).
 function isRetryableHttpStatus(status) {
   return status === 429 || status === 503 || status === 529;
 }

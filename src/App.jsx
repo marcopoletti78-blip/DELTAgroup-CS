@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { applyPatch } from "fast-json-patch";
 import { anthropicMessages, sanitizeDocumentForApi, DEFAULT_MAX_TOKENS, GENERATION_MAX_TOKENS } from "./anthropicApi.js";
-import { Document, Page, View, Text, Image, StyleSheet, pdf, PDFViewer } from "@react-pdf/renderer";
+import { Document, Page, View, Text, Image, StyleSheet, pdf } from "@react-pdf/renderer";
+import { buildDeltaDocxBlob } from "./buildDocxExport.js";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.mjs?url";
 
 async function pdfFirstPageToPngDataUrl(fileUrl, { maxRenderWidth = 1400 } = {}) {
@@ -112,7 +113,18 @@ Per array usa indici numerici nei path. Mantieni coerenza tipi e struttura esist
 const MODEL_SONNET = "claude-sonnet-4-20250514";
 const MODEL_HAIKU = "claude-haiku-4-5-20251001";
 
-/** @param options {{ model?: string, max_tokens?: number }} */
+const DOCX_MEDIA = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+function documentMediaTypeForAttachment(a) {
+  if (a.type && a.type !== "application/octet-stream" && !a.type.startsWith("image/")) return a.type;
+  const n = (a.name || "").toLowerCase();
+  if (n.endsWith(".docx")) return DOCX_MEDIA;
+  if (n.endsWith(".doc")) return "application/msword";
+  if (n.endsWith(".pdf")) return "application/pdf";
+  return "application/pdf";
+}
+
+// options opzionali: model, max_tokens, fullDocumentGeneration
 async function callAI(userMsg, mainDoc = null, attachments = [], sysOverride = null, options = {}) {
   const blocks = [];
   if (mainDoc) {
@@ -123,7 +135,8 @@ async function callAI(userMsg, mainDoc = null, attachments = [], sysOverride = n
     if (isImg) {
       blocks.push({ type: "image", source: { type: "base64", media_type: a.type, data: a.data } });
     } else {
-      blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: a.data } });
+      const media_type = documentMediaTypeForAttachment(a);
+      blocks.push({ type: "document", source: { type: "base64", media_type, data: a.data } });
     }
   }
   blocks.push({ type: "text", text: userMsg });
@@ -845,7 +858,6 @@ const TOC_ENTRIES = [
 const isMain = (n) => /^\d+$/.test(n);
 
 // ── PDF (react-pdf) ──────────────────────────────────────────────────────────
-const PDF_MARGIN_PT = 40;
 const pdfStyles = StyleSheet.create({
   page: { paddingTop: 40, paddingBottom: 40, paddingLeft: 50, paddingRight: 50, fontSize: 10, color: TX },
   coverPage: { padding: 0, fontSize: 10, color: TX },
@@ -884,6 +896,379 @@ const allegatoPage = (n) => {
   if (n === "A2") return "10";
   return "";
 };
+
+const wordPageShell = {
+  width: "210mm",
+  maxWidth: "100%",
+  minHeight: "260mm",
+  margin: "14px auto",
+  padding: "18mm 16mm",
+  background: WH,
+  boxShadow: "0 2px 14px rgba(12,29,61,0.12)",
+  boxSizing: "border-box",
+  color: TX,
+  fontSize: "11pt",
+  lineHeight: 1.55,
+  fontFamily: "Georgia, 'Times New Roman', Times, serif",
+};
+
+/** Anteprima stile Word (HTML): aggiornamento immediato senza PDF live. */
+function WordLikeDocPreview({ data }) {
+  const tocRows = TOC_ENTRIES.map((e) => {
+    const p =
+      e.n === "A1" || e.n === "A2"
+        ? allegatoPage(e.n)
+        : isMain(e.n)
+          ? String(chapterStartPage(e.n))
+          : String(chapterStartPage(e.n.split(".")[0]));
+    return { ...e, p };
+  });
+
+  const allegato2Img =
+    (data?.allegato2Files || []).find((f) => (f?.type || "").startsWith("image/")) ||
+    (data?.allegato2Files || []).find((f) => (f?.previewType || "").startsWith("image/") && !!f.previewUrl) ||
+    null;
+
+  const Page = ({ k, children }) => (
+    <div key={k} style={wordPageShell}>
+      {children}
+    </div>
+  );
+
+  return (
+    <div style={{ height: "100%", width: "100%", overflowY: "auto", background: "#d5dbe6", padding: "10px 0 28px" }}>
+      <Page k="p1">
+        <img src={HDR_IMG} alt="" style={{ width: "100%", display: "block", marginBottom: 18 }} />
+        <div style={{ textAlign: "center", padding: "8px 12px 32px" }}>
+          {data?.logoEvento ? (
+            <img src={data.logoEvento} alt="Logo" style={{ maxWidth: 220, maxHeight: 90, marginBottom: 14 }} />
+          ) : null}
+          <div style={{ ...SANS, fontSize: "15pt", fontWeight: "700", color: N }}>DELTAgroup</div>
+          <div style={{ ...SANS, fontSize: "8.5pt", color: GR, textTransform: "uppercase", letterSpacing: "0.12em", marginBottom: 16 }}>
+            Security &amp; Services AG
+          </div>
+          <div style={{ ...SANS, fontSize: "10pt", fontWeight: "700", color: N, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 8 }}>
+            Concetto di sicurezza
+          </div>
+          <div style={{ fontSize: "17pt", fontWeight: "700", color: N, marginBottom: 8 }}>{data?.nomeEvento || ""}</div>
+          {data?.luogo ? <div style={{ fontSize: "10.5pt", color: TM }}>{data.luogo}</div> : null}
+          {data?.anno ? <div style={{ fontSize: "10.5pt", color: TM }}>Edizione {data.anno}</div> : null}
+        </div>
+        <img src={FTR_IMG} alt="" style={{ width: "100%", display: "block", marginTop: "auto" }} />
+      </Page>
+
+      <Page k="p2">
+        <div style={{ ...SANS, fontSize: "12pt", fontWeight: "700", color: N, textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12, borderBottom: `2px solid ${N}`, paddingBottom: 8 }}>
+          Indice
+        </div>
+        {tocRows.map((e, i) => {
+          const main = isMain(e.n);
+          return (
+            <div
+              key={i}
+              style={{
+                display: "flex",
+                alignItems: "baseline",
+                marginBottom: main ? 6 : 4,
+                paddingLeft: main ? 0 : 14,
+                ...SANS,
+                fontSize: main ? "10.5pt" : "10pt",
+                fontWeight: main ? "700" : "400",
+                color: main ? N : TX,
+              }}
+            >
+              <span style={{ flexShrink: 0 }}>{e.t}</span>
+              <span style={{ flex: 1, borderBottom: "1px dotted #c0c0c0", margin: "0 8px 2px", minWidth: 12 }} />
+              <span style={{ width: 36, textAlign: "right", flexShrink: 0 }}>{e.p}</span>
+            </div>
+          );
+        })}
+      </Page>
+
+      <Page k="p3">
+        <Dsec n="1" t="Responsabilità">
+          <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: CONTENT_GAP, ...SANS, fontSize: "10pt" }}>
+            <thead>
+              <tr>
+                {["Aree", "Società / Persona", "Tel. Azienda / E-Mail", "Tel. Mobile"].map((h, idx) => (
+                  <th
+                    key={h}
+                    style={{
+                      background: N,
+                      color: WH,
+                      padding: "7px 8px",
+                      textAlign: "left",
+                      border: `1px solid ${GB}`,
+                      borderRight: idx === 3 ? "none" : `1px solid ${GB}`,
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(data?.s1?.contatti || []).map((r, idx) => (
+                <tr key={idx} style={{ background: idx % 2 === 0 ? WH : "#f9fbfd" }}>
+                  <td style={{ padding: "7px 8px", border: `1px solid ${GB}` }}>{r.area || ""}</td>
+                  <td style={{ padding: "7px 8px", border: `1px solid ${GB}` }}>{r.societa || ""}</td>
+                  <td style={{ padding: "7px 8px", border: `1px solid ${GB}` }}>{(r.email || r.telAzienda) || ""}</td>
+                  <td style={{ padding: "7px 8px", border: `1px solid ${GB}` }}>{r.telMobile || ""}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {data?.s1?.sicurezza ? (
+            <Dsub n="1.1" t="Servizio di sicurezza">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s1.sicurezza}</div>
+            </Dsub>
+          ) : null}
+          {data?.s1?.polizia ? (
+            <Dsub n="1.2" t="Polizia">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s1.polizia}</div>
+            </Dsub>
+          ) : null}
+          {data?.s1?.sanitari ? (
+            <Dsub n="1.3" t="Sanitari">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s1.sanitari}</div>
+            </Dsub>
+          ) : null}
+          {data?.s1?.rega ? (
+            <Dsub n="1.4" t="REGA">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s1.rega}</div>
+            </Dsub>
+          ) : null}
+          {data?.s1?.pompieri ? (
+            <Dsub n="1.5" t="Pompieri">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s1.pompieri}</div>
+            </Dsub>
+          ) : null}
+          {data?.s1?.statoMaggiore ? (
+            <Dsub n="1.6" t="Stato Maggiore">
+              {data.s1.statoMaggiore
+                .split("\n")
+                .map((s) => s.trim())
+                .filter(Boolean)
+                .map((line, idx) => (
+                  <div key={idx} style={{ marginBottom: 6, whiteSpace: "pre-line" }}>
+                    {line}
+                  </div>
+                ))}
+            </Dsub>
+          ) : null}
+          {data?.s1?.puntoRitrovo ? (
+            <div style={{ border: `1px solid ${GB}`, background: GL, padding: 10, textAlign: "center", ...SANS, fontSize: "10pt", fontWeight: "700", color: N }}>
+              Punto di ritrovo: {data.s1.puntoRitrovo}
+            </div>
+          ) : null}
+        </Dsec>
+      </Page>
+
+      <Page k="p4">
+        <Dsec n="2" t="Descrizione">
+          {data?.s2?.descrizione ? <div style={{ marginBottom: 12, whiteSpace: "pre-line" }}>{data.s2.descrizione}</div> : null}
+          {data?.s2?.programma?.length ? (
+            <div style={{ marginBottom: 12 }}>
+              {data.s2.programma.map((p, i) => (
+                <div key={i} style={{ marginBottom: 6 }}>
+                  <strong>{p.giorno}</strong>
+                  {p.giorno && p.attivita ? " — " : ""}
+                  {p.attivita}
+                </div>
+              ))}
+            </div>
+          ) : null}
+          {data?.s2?.orari ? (
+            <Dsub n="2.1" t="Periodo e orari d'apertura">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s2.orari}</div>
+            </Dsub>
+          ) : null}
+          {data?.s2?.location ? (
+            <Dsub n="2.2" t="Location">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s2.location}</div>
+            </Dsub>
+          ) : null}
+          {data?.s2?.pattuglia ? (
+            <Dsub n="2.3" t="Pattuglia esterna">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s2.pattuglia}</div>
+            </Dsub>
+          ) : null}
+          {data?.s2?.visitatori ? (
+            <Dsub n="2.4" t="Tipologia e numero dei visitatori">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s2.visitatori}</div>
+            </Dsub>
+          ) : null}
+          {data?.s2?.minori ? (
+            <Dsub n="2.5" t="Gestione dei minori">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s2.minori}</div>
+            </Dsub>
+          ) : null}
+        </Dsec>
+      </Page>
+
+      <Page k="p5">
+        <Dsec n="3" t="Analisi dei pericoli">
+          <p style={{ ...SANS, margin: "0 0 12px" }}>
+            Ad ogni evento vi sono fattori di rischio che potrebbero pregiudicare il buon esito dello stesso. Una valutazione attenta di questi fattori può influire sia sulla buona riuscita che sulle misure da adottare in caso di necessità.
+          </p>
+          {data?.s3?.passivi?.length ? <RiskTbl title="Rischi passivi" rows={data.s3.passivi} /> : null}
+          {data?.s3?.attivi?.length ? <RiskTbl title="Rischi attivi" rows={data.s3.attivi} /> : null}
+          {data?.s3?.meteo ? (
+            <Dsub n="3.2" t="Meteo">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s3.meteo}</div>
+            </Dsub>
+          ) : null}
+          {data?.s3?.terrorismo ? (
+            <Dsub n="3.3" t="Atto terroristico / attentato">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s3.terrorismo}</div>
+            </Dsub>
+          ) : null}
+          {data?.s3?.evacuazione ? (
+            <Dsub n="3.4" t="Evacuazione">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s3.evacuazione}</div>
+            </Dsub>
+          ) : null}
+        </Dsec>
+      </Page>
+
+      <Page k="p6">
+        <Dsec n="4" t="Dispositivo di sicurezza">
+          <p style={{ ...SANS, margin: "0 0 12px" }}>
+            La DELTAgroup Security &amp; Services AG mette a disposizione il seguente dispositivo di sicurezza.
+          </p>
+          {(data?.s4?.righe || []).map((r, i) => (
+            <div key={i} style={{ marginBottom: 6, ...SANS }}>
+              <strong style={{ color: N }}>{r.data}</strong> — {r.agenti} {r.orario ? `(${r.orario})` : ""}
+            </div>
+          ))}
+          {data?.s4?.modifiche ? (
+            <Dsub n="4.1" t="Modifiche">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s4.modifiche}</div>
+            </Dsub>
+          ) : null}
+          {data?.s4?.comunicazioni ? (
+            <Dsub n="4.2" t="Comunicazioni">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s4.comunicazioni}</div>
+            </Dsub>
+          ) : null}
+          <Dsub n="4.3" t="Divisa">
+            <div>Secondo regolamento DELTAgroup.</div>
+          </Dsub>
+          {data?.s4?.postoComando ? (
+            <Dsub n="4.4" t="Posto Comando">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s4.postoComando}</div>
+            </Dsub>
+          ) : null}
+          {data?.s4?.diversi ? (
+            <Dsub n="4.5" t="Diversi">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s4.diversi}</div>
+            </Dsub>
+          ) : null}
+        </Dsec>
+      </Page>
+
+      <Page k="p7">
+        <Dsec n="5" t="Scenari">
+          {data?.s5?.incendio ? (
+            <Dsub n="5.1" t="Incendio">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s5.incendio}</div>
+            </Dsub>
+          ) : null}
+          {data?.s5?.intossicazione ? (
+            <Dsub n="5.2" t="Intossicazione">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s5.intossicazione}</div>
+            </Dsub>
+          ) : null}
+          {data?.s5?.ordine ? (
+            <Dsub n="5.3" t="Problemi d'ordine">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s5.ordine}</div>
+            </Dsub>
+          ) : null}
+          {data?.s5?.ferimenti ? (
+            <Dsub n="5.4" t="Ferimenti / Malori">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s5.ferimenti}</div>
+            </Dsub>
+          ) : null}
+          {data?.s5?.droghe ? (
+            <Dsub n="5.5" t="Sostanze stupefacenti">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s5.droghe}</div>
+            </Dsub>
+          ) : null}
+        </Dsec>
+      </Page>
+
+      <Page k="p8">
+        <Dsec n="6" t="Casi d'Allarme">
+          {data?.s6?.smc ? (
+            <Dsub n="6.1" t="Stato Maggiore di Crisi">
+              <div style={{ whiteSpace: "pre-line" }}>{data.s6.smc}</div>
+            </Dsub>
+          ) : null}
+          {[
+            ["6.2", "Evacuazione", "ev"],
+            ["6.3", "Allarme incendio", "inc"],
+            ["6.4", "Minaccia Bomba", "mb"],
+            ["6.5", "Allarme Bomba (indicazione precisa)", "ab"],
+            ["6.6", "Atto Terroristico / Attentato", "at"],
+            ["6.7", "Allarme tecnico (Corrente elettrica)", "te"],
+            ["6.8", "Allarme Meteo", "me"],
+          ].map(([n, t, k]) =>
+            data?.s6?.[k]?.length ? (
+              <Dsub key={n} n={n} t={t}>
+                {data.s6[k].map((s, i) => (
+                  <div key={i} style={{ marginBottom: 6 }}>
+                    {i + 1}. {s}
+                  </div>
+                ))}
+              </Dsub>
+            ) : null,
+          )}
+          <Dsub n="6.9" t="Annunci d'emergenza">
+            <div>
+              La DELTA Security AG prepara e predispone il formulario degli annunci d&apos;emergenza in prossimità di ogni palco o punto dove si possa, tramite un dispositivo audio, effettuare gli annunci.
+            </div>
+          </Dsub>
+        </Dsec>
+      </Page>
+
+      <Page k="p9">
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ ...SANS, fontSize: "11pt", fontWeight: "700", color: N, textTransform: "uppercase", letterSpacing: "0.06em" }}>ALLEGATO 1 – FORMULARIO ANNUNCI D&apos;EMERGENZA</div>
+          <div style={{ height: 2, background: N, marginTop: 8 }} />
+        </div>
+        {(ANNUNCI || []).map((sec, i) => (
+          <div key={i} style={{ marginBottom: 16 }}>
+            <div style={{ ...SANS, fontSize: "10.5pt", fontWeight: "700", color: N, marginBottom: 8 }}>{sec.n}</div>
+            {(sec.items || []).map((it, j) => (
+              <div key={j} style={{ marginBottom: 10 }}>
+                <div style={{ ...SANS, fontSize: "10pt", fontWeight: "700", color: TX, marginBottom: 4 }}>Nr. – {it.l}</div>
+                <div style={{ fontSize: "10pt", lineHeight: 1.4, whiteSpace: "pre-line" }}>{it.t}</div>
+              </div>
+            ))}
+          </div>
+        ))}
+      </Page>
+
+      <Page k="p10">
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ ...SANS, fontSize: "11pt", fontWeight: "700", color: N, textTransform: "uppercase", letterSpacing: "0.06em" }}>ALLEGATO 2 – PLANIMETRIA DISPOSITIVO AGENTI</div>
+          <div style={{ height: 2, background: N, marginTop: 8 }} />
+        </div>
+        {allegato2Img?.url || allegato2Img?.previewUrl ? (
+          <img
+            src={allegato2Img.previewUrl || allegato2Img.url}
+            alt="Planimetria"
+            style={{ width: "100%", height: "auto", objectFit: "contain", border: `1px solid ${GB}` }}
+          />
+        ) : (
+          <p style={{ ...SANS, color: TM }}>
+            Nessuna planimetria immagine allegata. Carica un file PNG/JPG nella sezione Allegato 2.
+          </p>
+        )}
+      </Page>
+    </div>
+  );
+}
 
 function DeltaPdfDocument({ data }) {
   const tocRows = TOC_ENTRIES.map((e) => {
@@ -1103,16 +1488,6 @@ function DeltaPdfDocument({ data }) {
   );
 }
 
-const PdfLivePreview = React.memo(function PdfLivePreview({ data }) {
-  return (
-    <div style={{ height: "100%", width: "100%" }}>
-      <PDFViewer style={{ width: "100%", height: "100%", border: "none" }}>
-        <DeltaPdfDocument data={data} />
-      </PDFViewer>
-    </div>
-  );
-});
-
 function Editor({ data: initialData, onBack }) {
   const initDoc = useMemo(
     () => ({ ...initialData, allegato2Files: initialData.allegato2Files || [] }),
@@ -1134,6 +1509,7 @@ function Editor({ data: initialData, onBack }) {
   const all2Ref = useRef();
   const evacRef = useRef();
   const messagesEndRef = useRef();
+  const composerWrapRef = useRef(null);
   const rightDragCount = useRef(0);
   const dataRef = useRef(data);
   const inFlightRef = useRef(false);
@@ -1171,14 +1547,18 @@ function Editor({ data: initialData, onBack }) {
     setUndoVersion((v) => v + 1);
   };
 
-  // Previeni apertura file dal browser in modo aggressivo (capture phase)
+  // Evita che il browser apra i file al drop; lascia gestire il drop alla chat (data-delta-chat-composer).
   useEffect(() => {
-    const stopDrag = (e) => e.preventDefault();
-    document.addEventListener("dragover", stopDrag);
-    document.addEventListener("drop", stopDrag);
+    const stopDragOver = (e) => e.preventDefault();
+    const stopDrop = (e) => {
+      if (e.target.closest?.("[data-delta-chat-composer]")) return;
+      e.preventDefault();
+    };
+    document.addEventListener("dragover", stopDragOver);
+    document.addEventListener("drop", stopDrop);
     return () => {
-      document.removeEventListener("dragover", stopDrag);
-      document.removeEventListener("drop", stopDrag);
+      document.removeEventListener("dragover", stopDragOver);
+      document.removeEventListener("drop", stopDrop);
     };
   }, []);
 
@@ -1192,19 +1572,57 @@ function Editor({ data: initialData, onBack }) {
 
   const detectType = (file) => {
     if (file.type.startsWith("image/")) return file.type;
-    if (file.type==="application/pdf") return "application/pdf";
+    if (file.type === "application/pdf") return "application/pdf";
+    if (file.type === DOCX_MEDIA || file.type === "application/msword") return file.type;
     const ext = file.name.toLowerCase();
     if (ext.endsWith(".pdf")) return "application/pdf";
-    if (ext.endsWith(".jpg")||ext.endsWith(".jpeg")) return "image/jpeg";
+    if (ext.endsWith(".docx")) return DOCX_MEDIA;
+    if (ext.endsWith(".doc")) return "application/msword";
+    if (ext.endsWith(".jpg") || ext.endsWith(".jpeg")) return "image/jpeg";
     if (ext.endsWith(".png")) return "image/png";
     return null;
+  };
+
+  const attachmentKindLabel = (a) => {
+    if (a.type.startsWith("image/")) return "immagine";
+    const n = (a.name || "").toLowerCase();
+    if (n.endsWith(".docx") || n.endsWith(".doc") || a.type === DOCX_MEDIA || a.type === "application/msword") return "documento Word";
+    return "PDF";
+  };
+
+  const onComposerDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setComposerDrag(true);
+  };
+  const onComposerDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const next = e.relatedTarget;
+    if (!composerWrapRef.current || !next || !composerWrapRef.current.contains(next)) {
+      setComposerDrag(false);
+    }
+  };
+  const onComposerDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+  const onComposerDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setComposerDrag(false);
+    if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
   };
 
   const addFiles = async (files) => {
     const toAdd = [];
     const MAX_MB = 10;
     for (const file of Array.from(files)) {
-      const t = detectType(file); if (!t) continue;
+      const t = detectType(file);
+      if (!t) {
+        setErr(`Formato non supportato: "${file.name}". Nella chat sono ammessi PDF, JPG, PNG, DOC e DOCX.`);
+        continue;
+      }
       const sizeMB = file.size / 1024 / 1024;
       if (sizeMB > MAX_MB) {
         setErr(`Il file "${file.name}" supera la dimensione massima (${MAX_MB} MB). Riduci il file o allegane uno più piccolo.`);
@@ -1296,7 +1714,7 @@ function Editor({ data: initialData, onBack }) {
     const text = draft.trim();
     const files = [...composerAttachments];
     if (!text && files.length === 0) {
-      setErr("Scrivi un messaggio in italiano oppure allega un PDF o un'immagine.");
+      setErr("Scrivi un messaggio in italiano oppure allega PDF, immagini o Word (DOCX).");
       return;
     }
     inFlightRef.current = true;
@@ -1313,7 +1731,7 @@ function Editor({ data: initialData, onBack }) {
 
     try {
       const sanitized = sanitizeDocumentForApi(base);
-      const attList = files.map((a) => `- ${a.name} (${a.type.startsWith("image/") ? "immagine" : "PDF"})`).join("\n");
+      const attList = files.map((a) => `- ${a.name} (${attachmentKindLabel(a)})`).join("\n");
       const promptText = `DOCUMENTO ATTUALE (JSON senza dati binari nel testo — logo e file strutturali sono omessi):\n${JSON.stringify(sanitized, null, 2)}\n\nRICHIESTA UTENTE (italiano):\n${text || "(Integra le informazioni dagli allegati nel documento con patch JSON.)"}${files.length > 0 ? `\n\nALLEGATI (${files.length}):\n${attList}\nAnalizza gli allegati e aggiorna il documento con operazioni patch sui campi testuali appropriati.` : ""}`;
 
       const raw = await callAI(promptText, null, files, SYS_PATCH_EDITOR, { model: MODEL_HAIKU, max_tokens: 8000 });
@@ -1383,6 +1801,26 @@ function Editor({ data: initialData, onBack }) {
     }
   };
 
+  const doSaveWord = async () => {
+    try {
+      setErr(null);
+      const nomeFile = (data.nomeEvento || "concetto").replace(/[^a-zA-Z0-9_\-]/g, "_");
+      const blob = await buildDeltaDocxBlob(data);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${nomeFile}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }, 500);
+    } catch (e) {
+      setErr("Errore generazione Word. Riprova.");
+    }
+  };
+
 
 
   const dropBase = (drag) => ({
@@ -1440,14 +1878,21 @@ function Editor({ data: initialData, onBack }) {
                   <span>PDF</span>
                   <div>
                     <div style={{ fontWeight: "600" }}>Salva come PDF</div>
-                    <div style={{ fontSize: "10px", color: GR }}>Scarica sul computer</div>
+                    <div style={{ fontSize: "10px", color: GR }}>Layout ufficiale per stampa e archiviazione</div>
+                  </div>
+                </button>
+                <button type="button" onClick={() => { doSaveWord(); setShowSave(false); }} style={{ ...SANS, width: "100%", padding: "11px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: "13px", color: TX, display: "flex", gap: "10px", alignItems: "center", borderBottom: `1px solid ${GB}` }}>
+                  <span>DOCX</span>
+                  <div>
+                    <div style={{ fontWeight: "600" }}>Salva come Word</div>
+                    <div style={{ fontSize: "10px", color: GR }}>File .docx modificabile</div>
                   </div>
                 </button>
                 <button type="button" onClick={() => { doPrint(); setShowSave(false); }} style={{ ...SANS, width: "100%", padding: "11px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left", fontSize: "13px", color: TX, display: "flex", gap: "10px", alignItems: "center" }}>
                   <span>Stampa</span>
                   <div>
-                    <div style={{ fontWeight: "600" }}>Stampa</div>
-                    <div style={{ fontSize: "10px", color: GR }}>Dialogo di stampa del browser</div>
+                    <div style={{ fontWeight: "600" }}>Stampa (PDF)</div>
+                    <div style={{ fontSize: "10px", color: GR }}>Apre il PDF e il dialogo di stampa</div>
                   </div>
                 </button>
               </div>
@@ -1458,14 +1903,14 @@ function Editor({ data: initialData, onBack }) {
         <div style={{ padding: "12px 16px 8px", borderBottom: `1px solid ${GB}` }}>
           <div style={{ ...SERIF, fontSize: "17px", fontWeight: "700", color: N }}>Chat documento</div>
           <div style={{ ...SANS, fontSize: "11px", color: TM, marginTop: "4px", lineHeight: 1.45 }}>
-            Comandi in italiano e allegati per questa richiesta. Invio o pulsante Invia per elaborare (Maiusc+Invio va a capo). Le modifiche sono applicate come patch sul testo strutturato; logo, piantine Allegato 2 e piano evacuazione si gestiscono con le icone sotto.
+            {`Comandi in italiano e allegati per questa richiesta. L'anteprima a destra è HTML stile Word e si aggiorna subito dopo ogni patch; PDF e Word si generano solo da "Stampa / Salva". Invio o pulsante Invia (Maiusc+Invio va a capo). Logo, piantine Allegato 2 e piano evacuazione: icone sotto.`}
           </div>
         </div>
 
         <div style={{ flex: 1, overflowY: "auto", padding: "12px 14px", background: "#fafbfd" }}>
           {messages.length === 0 ? (
             <div style={{ ...SANS, fontSize: "12px", color: GR, textAlign: "center", marginTop: "32px", lineHeight: 1.7 }}>
-              Inizia una conversazione: chiedi ad esempio di aggiornare date, organico o contatti, oppure allega un PDF con nuove informazioni.
+              Inizia una conversazione: chiedi ad esempio di aggiornare date, organico o contatti, oppure allega PDF, immagini o Word con nuove informazioni.
             </div>
           ) : (
             messages.map((m) => (
@@ -1504,47 +1949,81 @@ function Editor({ data: initialData, onBack }) {
           )}
           {err && <div style={{ ...SANS, fontSize: "11px", color: RD, marginBottom: "8px", background: "#fff0f0", padding: "6px 9px", borderRadius: "5px" }}>{err}</div>}
 
-          {composerAttachments.length > 0 && (
-            <div style={{ marginBottom: "8px", maxHeight: "72px", overflowY: "auto" }}>
-              {composerAttachments.map((a) => (
-                <div key={a.id} style={{ display: "flex", alignItems: "center", gap: "6px", padding: "2px 0", ...SANS, fontSize: "11px" }}>
-                  <span>{a.type.startsWith("image/") ? "Immagine" : "PDF"}</span>
-                  <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: TX }}>{a.name}</span>
-                  <button type="button" onClick={() => setComposerAttachments((p) => p.filter((x) => x.id !== a.id))} style={{ background: "none", border: "none", cursor: "pointer", color: "#ccc", fontSize: "16px", padding: 0, lineHeight: 1 }}>
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          <textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder={"es. Cambia le date al 2027\nes. Aggiungi un agente domenica 14–22\nes. Il nuovo capo impiego è Mario Rossi"}
-            rows={4}
-            disabled={loading}
-            style={{ ...SANS, width: "100%", boxSizing: "border-box", padding: "9px 11px", border: `1px solid ${GB}`, borderRadius: "8px", fontSize: "12px", color: TX, resize: "vertical", outline: "none", lineHeight: 1.55, background: WH, marginBottom: "8px" }}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                if (!loading && (draft.trim() || composerAttachments.length > 0)) sendChat();
-              }
-            }}
-          />
-
           <div
-            style={dropBase(composerDrag)}
-            onClick={() => addRef.current?.click()}
-            onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setComposerDrag(true); }}
-            onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
-            onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setComposerDrag(false); }}
-            onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setComposerDrag(false); addFiles(e.dataTransfer.files); }}
+            ref={composerWrapRef}
+            data-delta-chat-composer
+            onDragEnter={onComposerDragEnter}
+            onDragLeave={onComposerDragLeave}
+            onDragOver={onComposerDragOver}
+            onDrop={onComposerDrop}
+            style={{
+              borderRadius: "10px",
+              padding: composerDrag ? "7px" : "8px",
+              marginBottom: "8px",
+              border: composerDrag ? `2px dashed ${N}` : `1px solid ${GB}`,
+              background: composerDrag ? "#f0f4fc" : WH,
+              transition: "border-color 0.15s, background 0.15s",
+            }}
           >
-            <span style={{ fontSize: "16px" }}>+</span>
-            <span style={{ ...SANS, fontSize: "11px", color: TM }}>Trascina PDF o immagini per la richiesta corrente</span>
+            <textarea
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              placeholder={"es. Cambia le date al 2027\nes. Aggiungi un agente domenica 14–22\nes. Il nuovo capo impiego è Mario Rossi"}
+              rows={4}
+              disabled={loading}
+              style={{ ...SANS, width: "100%", boxSizing: "border-box", padding: "9px 11px", border: `1px solid ${GB}`, borderRadius: "8px", fontSize: "12px", color: TX, resize: "vertical", outline: "none", lineHeight: 1.55, background: WH, marginBottom: "8px" }}
+              onDragOver={onComposerDragOver}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  if (!loading && (draft.trim() || composerAttachments.length > 0)) sendChat();
+                }
+              }}
+            />
+
+            {composerAttachments.length > 0 && (
+              <div style={{ marginBottom: "8px", maxHeight: "96px", overflowY: "auto" }}>
+                {composerAttachments.map((a) => (
+                  <div key={a.id} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "4px 2px", ...SANS, fontSize: "11px" }}>
+                    <span style={{ fontSize: "15px", lineHeight: 1 }} aria-hidden>
+                      {a.type.startsWith("image/") ? "🖼️" : attachmentKindLabel(a) === "documento Word" ? "📝" : "📄"}
+                    </span>
+                    <span style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: TX }} title={a.name}>
+                      {a.name}
+                    </span>
+                    <span style={{ color: TM, flexShrink: 0, fontSize: "10px" }}>{attachmentKindLabel(a)}</span>
+                    <button type="button" onClick={() => setComposerAttachments((p) => p.filter((x) => x.id !== a.id))} style={{ background: "none", border: "none", cursor: "pointer", color: "#bbb", fontSize: "16px", padding: 0, lineHeight: 1 }} aria-label="Rimuovi allegato">
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); addRef.current?.click(); } }}
+              style={{
+                ...dropBase(composerDrag),
+                marginBottom: 0,
+              }}
+              onClick={() => addRef.current?.click()}
+            >
+              <span style={{ fontSize: "16px" }}>+</span>
+              <span style={{ ...SANS, fontSize: "11px", color: TM }}>
+                Clicca per allegare oppure trascina sulla zona sopra: PDF, JPG, PNG, DOC/DOCX
+              </span>
+            </div>
+            <input
+              ref={addRef}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }}
+            />
           </div>
-          <input ref={addRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" multiple style={{ display: "none" }} onChange={(e) => addFiles(e.target.files)} />
 
           <input ref={evacRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,application/pdf" style={{ display: "none" }} onChange={(e) => { setEvacPiano(e.target.files); e.target.value = ""; }} />
           <input ref={all2Ref} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp,.doc,.docx,.xls,.xlsx,.csv" multiple style={{ display: "none" }} onChange={(e) => addAll2Files(e.target.files)} />
@@ -1608,7 +2087,7 @@ function Editor({ data: initialData, onBack }) {
             <span style={{ fontSize: "16px" }}>⏳</span> In elaborazione…
           </div>
         )}
-        <PdfLivePreview data={previewData} />
+        <WordLikeDocPreview data={previewData} />
       </div>
     </div>
   );
