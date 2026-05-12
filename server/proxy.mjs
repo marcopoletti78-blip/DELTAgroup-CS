@@ -20,16 +20,31 @@ const API_KEY = (process.env.ANTHROPIC_API_KEY || "").trim();
 const OUTBOUND_TIMEOUT_MS = Number(process.env.ANTHROPIC_OUTBOUND_TIMEOUT_MS || 120000);
 const MAX_ANTHROPIC_RETRIES = Number(process.env.ANTHROPIC_PROXY_RETRIES || 4);
 
+const MAX_INBOUND_BODY_BYTES = Number(process.env.PROXY_MAX_BODY_MB || 32) * 1024 * 1024;
+
 function readBody(req) {
   return new Promise((resolve, reject) => {
     const chunks = [];
-    req.on("data", (c) => chunks.push(c));
+    let total = 0;
+    req.on("data", (c) => {
+      total += c.length;
+      if (total > MAX_INBOUND_BODY_BYTES) {
+        const err = new Error("Corpo della richiesta troppo grande.");
+        err.httpStatus = 413;
+        req.destroy();
+        reject(err);
+        return;
+      }
+      chunks.push(c);
+    });
     req.on("end", () => {
       try {
         const raw = Buffer.concat(chunks).toString("utf8");
         resolve(raw ? JSON.parse(raw) : {});
-      } catch (e) {
-        reject(e);
+      } catch {
+        const err = new Error("JSON della richiesta non valido.");
+        err.httpStatus = 400;
+        reject(err);
       }
     });
     req.on("error", reject);
@@ -155,7 +170,8 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
       res.end(JSON.stringify(anthropicJson));
     } catch (e) {
-      res.writeHead(500, { "Content-Type": "application/json; charset=utf-8" });
+      const status = e?.httpStatus || 500;
+      res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
       res.end(
         JSON.stringify({
           error: {
@@ -182,5 +198,5 @@ server.listen(PORT, () => {
   console.log(`[DELTAgroup proxy] http://127.0.0.1:${PORT}  →  Anthropic /v1/messages`);
   console.log(`[DELTAgroup proxy] .env caricato da: ${resolve(__dirname, "..", ".env")}`);
   console.log(`[DELTAgroup proxy] ANTHROPIC_API_KEY: ${keyHint}`);
-  console.log(`[DELTAgroup proxy] Timeout outbound: ${OUTBOUND_TIMEOUT_MS}ms · Retry max: ${MAX_ANTHROPIC_RETRIES}`);
+  console.log(`[DELTAgroup proxy] Max corpo in ingresso: ${Math.round(MAX_INBOUND_BODY_BYTES / (1024 * 1024))} MB (PROXY_MAX_BODY_MB)`);
 });

@@ -1,5 +1,5 @@
 /**
- * Chiamate al proxy locale (/api/anthropic/messages) con retry su 429.
+ * Chiamate al proxy locale (/api/anthropic/messages) con retry su 429, 503, 529 e errori di rete.
  */
 
 const DEFAULT_MAX_TOKENS = 8000;
@@ -12,6 +12,9 @@ function sleep(ms) {
 /** Messaggio errore in italiano per l'utente */
 export function formatAnthropicError(status, payload) {
   const raw = payload?.error?.message || payload?.message || "";
+  if (status === 413) {
+    return "Richiesta troppo grande per il proxy. Riduci allegati o la dimensione del messaggio.";
+  }
   if (status === 401 || status === 403) {
     return "Autenticazione API non riuscita. Verifica la chiave sul server (ANTHROPIC_API_KEY).";
   }
@@ -32,22 +35,41 @@ export function formatAnthropicError(status, payload) {
  * @param {object} body - corpo JSON come richiesto da Anthropic Messages API
  * @param {{ maxRetries?: number }} [opts]
  */
+function isRetryableHttpStatus(status) {
+  return status === 429 || status === 503 || status === 529;
+}
+
 export async function anthropicMessages(body, opts = {}) {
   const maxRetries = opts.maxRetries ?? 6;
   let delayMs = 1500;
   let lastErr = new Error("Richiesta non riuscita.");
 
   for (let attempt = 0; attempt < maxRetries; attempt++) {
-    const r = await fetch("/api/anthropic/messages", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
+    let r;
+    try {
+      r = await fetch("/api/anthropic/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+    } catch (netErr) {
+      lastErr = netErr instanceof Error ? netErr : new Error(String(netErr));
+      if (attempt < maxRetries - 1) {
+        await sleep(delayMs);
+        delayMs = Math.min(delayMs * 2, 60_000);
+        continue;
+      }
+      throw new Error(
+        "Connessione al proxy non riuscita. Avvia il proxy (npm run proxy o npm run dev) e verifica rete/firewall.",
+      );
+    }
+
     const d = await r.json().catch(() => ({}));
 
-    if (r.status === 429 && attempt < maxRetries - 1) {
+    if (isRetryableHttpStatus(r.status) && attempt < maxRetries - 1) {
       const retryAfter = Number(r.headers.get("retry-after"));
-      const wait = Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : delayMs;
+      const wait =
+        Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : delayMs;
       await sleep(wait);
       delayMs = Math.min(delayMs * 2, 60_000);
       lastErr = new Error(formatAnthropicError(r.status, d));
@@ -73,7 +95,10 @@ export async function anthropicMessages(body, opts = {}) {
  * @param {object} data
  */
 export function sanitizeDocumentForApi(data) {
-  const clone = JSON.parse(JSON.stringify(data));
+  const clone =
+    typeof structuredClone === "function"
+      ? structuredClone(data)
+      : JSON.parse(JSON.stringify(data));
   if (clone.logoEvento) {
     clone.logoEvento = "[LOGO_PRESENTE_NON_INCLUSO_NEL_PROMPT]";
   }

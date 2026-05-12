@@ -135,7 +135,13 @@ async function callAI(userMsg, mainDoc = null, attachments = [], sysOverride = n
     system: sysOverride || SYS_PROMPT,
     messages: [{ role: "user", content }],
   });
-  return JSON.parse(text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(
+      "La risposta dell'AI non è JSON valido. Riformula la richiesta o riprova; per documenti molto lunghi conviene chiedere modifiche più mirate.",
+    );
+  }
 }
 
 function preserveBlobsAfterPatch(patched, prev) {
@@ -147,11 +153,33 @@ function preserveBlobsAfterPatch(patched, prev) {
   };
 }
 
+/** Path che non devono essere toccati da JSON Patch (allineato al prompt SYS_PATCH_EDITOR). */
+const PROTECTED_PATCH_PREFIXES = ["/logoEvento", "/allegato2Files", "/s3/evacuazionePiano"];
+
+function assertPatchDoesNotTouchProtectedAssets(patchOps) {
+  for (const op of patchOps) {
+    const paths = [op.path, op.from].filter((x) => typeof x === "string");
+    for (const p of paths) {
+      if (!p.startsWith("/")) {
+        throw new Error('Ogni operazione patch deve usare un path assoluto che inizi con "/".');
+      }
+      for (const prefix of PROTECTED_PATCH_PREFIXES) {
+        if (p === prefix || p.startsWith(`${prefix}/`)) {
+          throw new Error(
+            "La patch tenta di modificare logo, Allegato 2 o piano evacuazione: questi elementi si gestiscono solo dall'interfaccia. Riformula la richiesta in testo.",
+          );
+        }
+      }
+    }
+  }
+}
+
 /** Applica JSON Patch in locale; preserva blob allegati/logo. */
 function applyJsonPatchToDocument(base, patchOps) {
   if (!Array.isArray(patchOps) || patchOps.length === 0) {
     throw new Error("La risposta non contiene operazioni di patch valide.");
   }
+  assertPatchDoesNotTouchProtectedAssets(patchOps);
   const clone = structuredClone(base);
   try {
     applyPatch(clone, patchOps, true, true);
