@@ -4,16 +4,22 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "concurrently -k \"node server/proxy.mjs\" \"vite\"",
+    "dev:vite-only": "vite",
+    "proxy": "node server/proxy.mjs",
     "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "fast-json-patch": "^3.1.1",
+    "@react-pdf/renderer": "^4.5.1",
+    "pdfjs-dist": "4.10.38",
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.0",
+    "concurrently": "^9.1.2",
     "vite": "^5.0.0"
   }
 }
