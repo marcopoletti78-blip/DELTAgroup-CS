@@ -1155,7 +1155,7 @@ function Editor({ data: initialData, onBack }) {
       .map((sid) => {
         const node = el.querySelector(`#pbody-main > #${sid}`);
         const inner = node ? node.innerHTML : "";
-        return inner ? page(inner) : "";
+        return inner ? page(inner, "ppage-flow") : "";
       })
       .join("");
 
@@ -1173,10 +1173,13 @@ ul{margin:0;padding-left:18px;}li{line-height:1.7;}
 embed{display:block;}
 /* Pagine esplicite */
 .ppage{
-  width:210mm;height:297mm;overflow:hidden;
+  width:210mm;
   display:flex;flex-direction:column;
   break-after:page;page-break-after:always;
 }
+.ppage-fixed{height:297mm;overflow:hidden;}
+.ppage-flow{min-height:297mm;overflow:visible;}
+.ppage-flow .pcnt{overflow:visible;flex:1 1 auto;}
 .ppage:last-child{break-after:auto;page-break-after:auto;}
 .phdr{width:100%;flex-shrink:0;}
 .pftr{width:100%;flex-shrink:0;margin-top:auto;}
@@ -1192,11 +1195,11 @@ embed{display:block;}
   th{background:#0c1d3d!important;color:#fff!important;}
 }
 </style></head><body>
-${page(coverHTML,"cover")}
-${page(tocHTML)}
+${page(coverHTML,"cover ppage-fixed")}
+${page(tocHTML,"ppage-fixed")}
 ${sectionPages}
-${all1HTML ? page(all1HTML) : ""}
-${all2HTML ? page(all2HTML) : ""}
+${all1HTML ? page(all1HTML, "ppage-flow") : ""}
+${all2HTML ? page(all2HTML, "ppage-flow") : ""}
 </body></html>`;
   };
 
