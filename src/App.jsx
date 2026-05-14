@@ -1099,7 +1099,8 @@ function Editor({ data: initialData, onBack }) {
     setLoading(true); setErr(null);
     const SYS_EDIT = SYS_PROMPT+"\n\nTi viene passato il JSON attuale del documento e la modifica richiesta. Restituisci il JSON completo aggiornato con le modifiche applicate, mantenendo tutti i campi esistenti.";
     const attList = attachments.map(a=>`- ${a.name} (${a.type.startsWith("image/")?"immagine/piantina":"documento PDF"})`).join("\n");
-    const editMsg = `DOCUMENTO ATTUALE (JSON):\n${JSON.stringify(data,null,2)}\n\nMODIFICA RICHIESTA:\n${msg||"(vedi allegati)"}${attachments.length>0?`\n\nALLEGATI (${attachments.length}):\n${attList}\nAnalizza gli allegati e integra le informazioni nei capitoli corretti.`:""}`;
+    const dataClean = {...data, logoEvento: data.logoEvento ? "[logo_caricato]" : null};
+    const editMsg = `DOCUMENTO ATTUALE (JSON):\n${JSON.stringify(dataClean,null,2)}\n\nMODIFICA RICHIESTA:\n${msg||"(vedi allegati)"}${attachments.length>0?`\n\nALLEGATI (${attachments.length}):\n${attList}\nAnalizza gli allegati e integra le informazioni nei capitoli corretti.`:""}`;
     try {
       const newData = await callAI(editMsg, null, attachments, SYS_EDIT);
       setData({...newData, logoEvento:data.logoEvento||null, allegato2Files:data.allegato2Files||[]});
@@ -1495,3 +1496,4 @@ export default function App() {
     </div>
   );
 }
+fix: rimuovi logo base64 dal prompt modifica AI
