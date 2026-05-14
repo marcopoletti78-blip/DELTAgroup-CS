@@ -1159,6 +1159,10 @@ function Editor({ data: initialData, onBack }) {
       })
       .join("");
 
+    console.log("ALL1 length:", all1HTML.length, "| inizio:", all1HTML.substring(0, 100));
+    console.log("ALL2 length:", all2HTML.length, "| inizio:", all2HTML.substring(0, 100));
+    console.log("sectionPages length:", sectionPages.length);
+
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Concetto di Sicurezza – ${data.nomeEvento||""}</title>
 <style>
@@ -1503,4 +1507,3 @@ export default function App() {
     </div>
   );
 }
-fix: rimuovi logo base64 dal prompt modifica AI
