@@ -685,9 +685,9 @@ function RiskTbl({ title, rows }) {
   );
 }
 
-function Dsec({ n, t, children }) {
+function Dsec({ n, t, children, id }) {
   return (
-    <div style={{marginBottom:"28px",breakInside:"avoid"}}>
+    <div id={id} style={{marginBottom:"28px",breakInside:"avoid"}}>
       <div style={{background:N,color:WH,padding:"9px 16px",fontSize:"13px",fontWeight:"700",...SANS,borderRadius:"6px 6px 0 0"}}>{n}&nbsp;&nbsp;{t}</div>
       <div style={{border:`1px solid ${GB}`,borderTop:"none",borderRadius:"0 0 6px 6px",padding:"20px",background:WH}}>{children}</div>
     </div>
@@ -793,9 +793,10 @@ function DocPreview({ data }) {
       {/* ── BODY ── */}
       <div id="pbody" style={{padding:"36px 48px"}}>
 
+      <div id="pbody-main">
       {/* S1 */}
       {data.s1&&(
-        <Dsec n="1" t="Responsabilità">
+        <Dsec id="ps1" n="1" t="Responsabilità">
           <table style={{width:"100%",borderCollapse:"collapse",marginBottom:"22px",fontSize:"11.5px",border:`1px solid ${GB}`}}>
             <thead>
               <tr>
@@ -849,7 +850,7 @@ function DocPreview({ data }) {
 
       {/* S2 */}
       {data.s2&&(
-        <Dsec n="2" t="Descrizione">
+        <Dsec id="ps2" n="2" t="Descrizione">
           {data.s2.descrizione&&<p style={{...SANS,fontSize:"12.5px",lineHeight:1.75,marginBottom:"16px",margin:"0 0 16px"}}>{data.s2.descrizione}</p>}
           {data.s2.programma&&data.s2.programma.length>0&&(
             <div style={{...SANS,fontSize:"12.5px",lineHeight:2.1,marginBottom:"16px"}}>
@@ -873,7 +874,7 @@ function DocPreview({ data }) {
 
       {/* S3 */}
       {data.s3&&(
-        <Dsec n="3" t="Analisi dei pericoli">
+        <Dsec id="ps3" n="3" t="Analisi dei pericoli">
           <p style={{...SANS,fontSize:"12.5px",lineHeight:1.75,margin:"0 0 16px"}}>Ad ogni evento vi sono fattori di rischio che potrebbero pregiudicare il buon esito dello stesso. Una valutazione attenta di questi fattori può influire sia sulla buona riuscita che sulle misure da adottare in caso di necessità.</p>
           <Dsub n="3.1" t="Analisi del rischio">
             <RiskTbl title="Lista Pericoli Passivi" rows={data.s3.passivi}/>
@@ -887,7 +888,7 @@ function DocPreview({ data }) {
 
       {/* S4 */}
       {data.s4&&(
-        <Dsec n="4" t="Dispositivo di sicurezza">
+        <Dsec id="ps4" n="4" t="Dispositivo di sicurezza">
           <p style={{...SANS,fontSize:"12.5px",margin:"0 0 12px"}}>La DELTAgroup Security &amp; Services AG mette a disposizione il seguente dispositivo di sicurezza. La planimetria con le posizioni degli agenti è riportata nell'<strong>Allegato 2</strong>.</p>
           <div style={{marginBottom:"20px",border:`1px solid ${GB}`,borderRadius:"6px",overflow:"hidden"}}>
             {(data.s4.righe||[]).map((r,i)=>(
@@ -908,7 +909,7 @@ function DocPreview({ data }) {
 
       {/* S5 */}
       {data.s5&&(
-        <Dsec n="5" t="Scenari">
+        <Dsec id="ps5" n="5" t="Scenari">
           {data.s5.incendio&&<Dsub n="5.1" t="Incendio">{data.s5.incendio}</Dsub>}
           {data.s5.intossicazione&&<Dsub n="5.2" t="Intossicazione">{data.s5.intossicazione}</Dsub>}
           {data.s5.ordine&&<Dsub n="5.3" t="Problemi d'ordine">{data.s5.ordine}</Dsub>}
@@ -919,7 +920,7 @@ function DocPreview({ data }) {
 
       {/* S6 */}
       {data.s6&&(
-        <Dsec n="6" t="Casi d'Allarme">
+        <Dsec id="ps6" n="6" t="Casi d'Allarme">
           {data.s6.smc&&<Dsub n="6.1" t="Stato Maggiore di Crisi">{data.s6.smc}</Dsub>}
           {[["6.2","Evacuazione","ev"],["6.3","Allarme incendio","inc"],["6.4","Minaccia Bomba","mb"],
             ["6.5","Allarme Bomba (indicazione precisa)","ab"],["6.6","Atto Terroristico / Attentato","at"],
@@ -938,6 +939,8 @@ function DocPreview({ data }) {
           </Dsub>
         </Dsec>
       )}
+
+      </div>{/* fine pbody-main: solo sezioni 1–6 (stampa PDF) */}
 
       {/* ALLEGATO 1 */}
       <div id="pall1" style={{marginTop:"0",paddingTop:"28px",borderTop:"none",pageBreakBefore:"always",breakBefore:"page"}}>
@@ -1142,9 +1145,19 @@ function Editor({ data: initialData, onBack }) {
 
     const coverHTML = getHTML("pc");
     const tocHTML   = getHTML("ptoc");
-    const bodyHTML  = getHTML("pbody");
-    const all1HTML  = getHTML("pall1");
-    const all2HTML  = getHTML("pall2");
+
+    const nPall1 = el.querySelector("#pbody > #pall1");
+    const all1HTML = nPall1 ? nPall1.innerHTML : "";
+    const nPall2 = el.querySelector("#pbody > #pall2");
+    const all2HTML = nPall2 ? nPall2.innerHTML : "";
+
+    const sectionPages = ["ps1", "ps2", "ps3", "ps4", "ps5", "ps6"]
+      .map((sid) => {
+        const node = el.querySelector(`#pbody-main > #${sid}`);
+        const inner = node ? node.innerHTML : "";
+        return inner ? page(inner) : "";
+      })
+      .join("");
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Concetto di Sicurezza – ${data.nomeEvento||""}</title>
@@ -1160,7 +1173,7 @@ ul{margin:0;padding-left:18px;}li{line-height:1.7;}
 embed{display:block;}
 /* Pagine esplicite */
 .ppage{
-  width:210mm;min-height:297mm;
+  width:210mm;height:297mm;overflow:hidden;
   display:flex;flex-direction:column;
   break-after:page;page-break-after:always;
 }
@@ -1174,11 +1187,6 @@ embed{display:block;}
   align-items:center;justify-content:center;
   text-align:center;
 }
-/* Body: scorre su più pagine con header/footer ogni pagina */
-.pflow{break-before:page;page-break-before:always;}
-.pflow-hdr{width:100%;}
-.pflow-cnt{padding:20px 36px;margin-bottom:0;}
-.pflow-ftr{width:100%;}
 @media print{
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
@@ -1186,11 +1194,7 @@ embed{display:block;}
 </style></head><body>
 ${page(coverHTML,"cover")}
 ${page(tocHTML)}
-<div class="pflow">
-  <div class="pflow-hdr">${hdr}</div>
-  <div class="pflow-cnt">${bodyHTML}</div>
-  <div class="pflow-ftr">${ftr}</div>
-</div>
+${sectionPages}
 ${all1HTML ? page(all1HTML) : ""}
 ${all2HTML ? page(all2HTML) : ""}
 </body></html>`;
