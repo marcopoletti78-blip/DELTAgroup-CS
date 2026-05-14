@@ -1216,7 +1216,7 @@ ${all2HTML ? page(all2HTML, "ppage-flow") : ""}
     w.document.open();
     w.document.write(html);
     w.document.close();
-    setTimeout(() => { w.focus(); w.print(); }, 800);
+    setTimeout(() => { w.focus(); w.print(); }, 2500);
   };
 
   const doDownloadHTML = () => {
