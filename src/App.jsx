@@ -431,7 +431,8 @@ function Wizard({ onBack, onDone }) {
   const gen = async () => {
     setLoading(true); setErr(null);
     try {
-      const data = await callAI(`Crea un Concetto di Sicurezza completo per:\n${JSON.stringify(f,null,2)}`);
+      const fClean = {...f, logoEvento: f.logoEvento ? "[logo_caricato]" : null};
+const data = await callAI(`Crea un Concetto di Sicurezza completo per:\n${JSON.stringify(fClean,null,2)}`);
       onDone({...data, logoEvento: f.logoEvento||null});
     } catch(e) { setErr(e.message); }
     finally { setLoading(false); }
