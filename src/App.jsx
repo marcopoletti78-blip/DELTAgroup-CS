@@ -92,6 +92,28 @@ async function callAI(userMsg, mainDoc=null, attachments=[], sysOverride=null) {
   return JSON.parse(t);
 }
 
+async function callAIText(userMsg, sysOverride = null) {
+  const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": apiKey,
+      "anthropic-version": "2023-06-01",
+      "anthropic-dangerous-direct-browser-access": "true",
+    },
+    body: JSON.stringify({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 4000,
+      system: sysOverride || "Sei un redattore tecnico italiano. Rispondi SOLO con il testo richiesto, senza markdown fence, senza commenti introduttivi.",
+      messages: [{ role: "user", content: userMsg }],
+    }),
+  });
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error?.message || "Errore API");
+  return d.content[0].text.trim();
+}
+
 // ── SHARED UI ─────────────────────────────────────────────────────────────────
 const inp = {
   width:"100%", boxSizing:"border-box", padding:"9px 12px",
@@ -744,18 +766,408 @@ const TOC_ENTRIES = [
   {n:"All. 2", t:"Planimetria dispositivo agenti"},
 ];
 
+const DEFAULT_SECTION_ORDER = ["ps1", "ps2", "ps3", "ps4", "ps5", "ps6", "all1", "all2"];
+const TOC_PRESET_BLOCKS = {
+  ps1: TOC_ENTRIES.slice(0, 7),
+  ps2: TOC_ENTRIES.slice(7, 14),
+  ps3: TOC_ENTRIES.slice(14, 19),
+  ps4: TOC_ENTRIES.slice(19, 26),
+  ps5: TOC_ENTRIES.slice(26, 32),
+  ps6: TOC_ENTRIES.slice(32, 42),
+};
+const TOC_ALL1_ENTRY = TOC_ENTRIES[42];
+const TOC_ALL2_ENTRY = TOC_ENTRIES[43];
+
+function parseCustomSectionKey(key) {
+  if (!key?.startsWith("custom:")) return null;
+  return key.slice(7);
+}
+
+function getCustomChapterNumbers(sectionOrder, customSections) {
+  const m = new Map();
+  let i = 0;
+  for (const key of sectionOrder) {
+    const id = parseCustomSectionKey(key);
+    if (!id) continue;
+    const s = customSections.find((c) => c.id === id);
+    if (s?.type === "capitolo") {
+      i += 1;
+      m.set(id, 6 + i);
+    }
+  }
+  return m;
+}
+
+function getCustomAllegatoNumbers(sectionOrder, customSections) {
+  const m = new Map();
+  let i = 0;
+  for (const key of sectionOrder) {
+    const id = parseCustomSectionKey(key);
+    if (!id) continue;
+    const s = customSections.find((c) => c.id === id);
+    if (s?.type === "allegato") {
+      i += 1;
+      m.set(id, 2 + i);
+    }
+  }
+  return m;
+}
+
+function buildTocRows(sectionOrder, customSections) {
+  const ch = getCustomChapterNumbers(sectionOrder, customSections);
+  const al = getCustomAllegatoNumbers(sectionOrder, customSections);
+  const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
+  const rows = [];
+  for (const key of order) {
+    if (key === "ps1") rows.push(...TOC_PRESET_BLOCKS.ps1);
+    else if (key === "ps2") rows.push(...TOC_PRESET_BLOCKS.ps2);
+    else if (key === "ps3") rows.push(...TOC_PRESET_BLOCKS.ps3);
+    else if (key === "ps4") rows.push(...TOC_PRESET_BLOCKS.ps4);
+    else if (key === "ps5") rows.push(...TOC_PRESET_BLOCKS.ps5);
+    else if (key === "ps6") rows.push(...TOC_PRESET_BLOCKS.ps6);
+    else if (key === "all1") rows.push(TOC_ALL1_ENTRY);
+    else if (key === "all2") rows.push(TOC_ALL2_ENTRY);
+    else if (key.startsWith("custom:")) {
+      const id = parseCustomSectionKey(key);
+      const s = customSections.find((c) => c.id === id);
+      if (!s) continue;
+      if (s.type === "capitolo") {
+        rows.push({ n: String(ch.get(id) ?? 7), t: s.title || "Capitolo", main: true });
+      } else {
+        const n = al.get(id) ?? 3;
+        rows.push({ n: `All. ${n}`, t: s.title || "Allegato", main: true });
+      }
+    }
+  }
+  return rows;
+}
+
+function escapeHtmlPrint(s) {
+  if (s == null) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function formatCustomBodyForPrint(htmlOrText) {
+  if (!htmlOrText) return "";
+  const t = String(htmlOrText);
+  if (/<[a-z][\s\S]*>/i.test(t)) return t;
+  return escapeHtmlPrint(t).replace(/\n/g, "<br/>");
+}
+
 const isMain = (n) => /^\d+$/.test(n) || n.startsWith("All.");
 
-function DocPreview({ data }) {
+/** Anteprima: blocchi preset (ordine gestito dal container). */
+function PresetPs1({ data }) {
+  if (!data.s1) return null;
+  return (
+    <Dsec id="ps1" n="1" t="Responsabilità">
+      <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:"22px", fontSize:"11.5px", border:`1px solid ${GB}` }}>
+        <thead>
+          <tr>
+            {["Aree","Società / Persona","Tel. Azienda / E-Mail","Tel. Mobile"].map((h)=>(
+              <th key={h} style={{background:N,color:WH,padding:"8px 10px",textAlign:"left",...SANS,border:`1px solid ${NM}`}}>{h}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {(data.s1.contatti || []).map((c, i)=>(
+            <tr key={i} style={{background:i%2===0?WH:"#f9fbfd"}}>
+              <td style={{padding:"8px 10px",fontWeight:"700",color:N,...SANS,border:`1px solid ${GB}`}}>{c.area}</td>
+              <td style={{padding:"8px 10px",...SANS,border:`1px solid ${GB}`}}>{c.societa}</td>
+              <td style={{padding:"8px 10px",...SANS,color:"#1565c0",border:`1px solid ${GB}`}}>{c.email || c.telAzienda}</td>
+              <td style={{padding:"8px 10px",...SANS,border:`1px solid ${GB}`}}>{c.telMobile}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.s1.sicurezza && <Dsub n="1.1" t="Servizio di sicurezza">{data.s1.sicurezza}</Dsub>}
+      {data.s1.polizia && <Dsub n="1.2" t="Polizia">{data.s1.polizia}</Dsub>}
+      {data.s1.sanitari && <Dsub n="1.3" t="Sanitari">{data.s1.sanitari}</Dsub>}
+      {data.s1.rega && <Dsub n="1.4" t="REGA">{data.s1.rega}</Dsub>}
+      {data.s1.pompieri && <Dsub n="1.5" t="Pompieri">{data.s1.pompieri}</Dsub>}
+      {data.s1.statoMaggiore && (
+        <Dsub n="1.6" t="Stato Maggiore">
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12.5px" }}>
+            <tbody>
+              {data.s1.statoMaggiore.split("\n").map((s)=>s.trim()).filter(Boolean).map((s, i)=>{
+                const sep = s.indexOf(":");
+                const org = sep > -1 ? s.slice(0, sep).trim() : s;
+                const nom = sep > -1 ? s.slice(sep + 1).trim() : "";
+                return (
+                  <tr key={i}>
+                    <td style={{padding:"3px 24px 3px 0", width:"44%", ...SANS, fontWeight:"700", color:TX, verticalAlign:"top", whiteSpace:"nowrap"}}>{org}{sep > -1 ? ":" : ""}</td>
+                    <td style={{padding:"3px 0", ...SANS, color:TX, verticalAlign:"top"}}>{nom}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </Dsub>
+      )}
+      {data.s1.puntoRitrovo && (
+        <div style={{background:GL,border:`1px solid ${GB}`,borderRadius:"6px",padding:"10px 16px",fontWeight:"700",fontSize:"12.5px",...SANS,color:N,textAlign:"center",textTransform:"uppercase",letterSpacing:"0.07em"}}>
+          PUNTO DI RITROVO: {data.s1.puntoRitrovo}
+        </div>
+      )}
+    </Dsec>
+  );
+}
+
+function PresetPs2({ data }) {
+  if (!data.s2) return null;
+  return (
+    <Dsec id="ps2" n="2" t="Descrizione">
+      {data.s2.descrizione && <p style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, marginBottom:"16px", margin:"0 0 16px" }}>{data.s2.descrizione}</p>}
+      {data.s2.programma && data.s2.programma.length > 0 && (
+        <div style={{ ...SANS, fontSize:"12.5px", lineHeight:2.1, marginBottom:"16px" }}>
+          {data.s2.programma.map((p, i) => <div key={i}><strong>{p.giorno}</strong>{p.giorno && p.attivita ? " — " : ""}{p.attivita}</div>)}
+        </div>
+      )}
+      {data.s2.orari && <Dsub n="2.1" t="Periodo e orari d'apertura">{data.s2.orari}</Dsub>}
+      {data.s2.location && (
+        <Dsub n="2.2" t="Location">
+          {data.s2.location}
+          <div style={{ ...SANS, fontSize:"12px", fontStyle:"italic", color:TM, marginTop:"8px", padding:"6px 10px", background:GL, borderRadius:"4px", border:`1px solid ${GB}` }}>
+            📎 La planimetria della location con il dispositivo degli agenti è riportata nell'<strong>Allegato 2</strong>.
+          </div>
+        </Dsub>
+      )}
+      {data.s2.pattuglia && <Dsub n="2.3" t="Pattuglia esterna">{data.s2.pattuglia}</Dsub>}
+      {data.s2.visitatori && <Dsub n="2.4" t="Tipologia e numero dei visitatori">{data.s2.visitatori}</Dsub>}
+      {data.s2.minori && <Dsub n="2.5" t="Gestione dei minori">{data.s2.minori}</Dsub>}
+    </Dsec>
+  );
+}
+
+function PresetPs3({ data }) {
+  if (!data.s3) return null;
+  return (
+    <Dsec id="ps3" n="3" t="Analisi dei pericoli">
+      <p style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, margin:"0 0 16px" }}>Ad ogni evento vi sono fattori di rischio che potrebbero pregiudicare il buon esito dello stesso. Una valutazione attenta di questi fattori può influire sia sulla buona riuscita che sulle misure da adottare in caso di necessità.</p>
+      <Dsub n="3.1" t="Analisi del rischio">
+        <RiskTbl title="Lista Pericoli Passivi" rows={data.s3.passivi} />
+        <RiskTbl title="Lista Pericoli Attivi" rows={data.s3.attivi} />
+      </Dsub>
+      {data.s3.meteo && <Dsub n="3.2" t="Meteo">{data.s3.meteo}</Dsub>}
+      {data.s3.terrorismo && <Dsub n="3.3" t="Atto terroristico / attentato">{data.s3.terrorismo}</Dsub>}
+      {data.s3.evacuazione && <Dsub n="3.4" t="Evacuazione">{data.s3.evacuazione}</Dsub>}
+    </Dsec>
+  );
+}
+
+function PresetPs4({ data }) {
+  if (!data.s4) return null;
+  return (
+    <Dsec id="ps4" n="4" t="Dispositivo di sicurezza">
+      <p style={{ ...SANS, fontSize:"12.5px", margin:"0 0 12px" }}>La DELTAgroup Security &amp; Services AG mette a disposizione il seguente dispositivo di sicurezza. La planimetria con le posizioni degli agenti è riportata nell'<strong>Allegato 2</strong>.</p>
+      <div style={{ marginBottom:"20px", border:`1px solid ${GB}`, borderRadius:"6px", overflow:"hidden" }}>
+        {(data.s4.righe || []).map((r, i)=>(
+          <div key={i} style={{ display:"flex", gap:"20px", padding:"8px 14px", background:i % 2 === 0 ? "#f9fbfd" : WH, fontSize:"12.5px", ...SANS, borderBottom:i < (data.s4.righe || []).length - 1 ? `1px solid ${GL}` : "none" }}>
+            <span style={{ fontWeight:"700", color:N, minWidth:"110px" }}>➤&nbsp;{r.data}</span>
+            <span>{r.agenti}</span>
+            <span style={{ color:TM }}>{r.orario}</span>
+          </div>
+        ))}
+      </div>
+      {data.s4.modifiche && <Dsub n="4.1" t="Modifiche">{data.s4.modifiche}</Dsub>}
+      {data.s4.comunicazioni && <Dsub n="4.2" t="Comunicazioni">{data.s4.comunicazioni}</Dsub>}
+      <Dsub n="4.3" t="Divisa">Secondo regolamento DELTAgroup.</Dsub>
+      {data.s4.postoComando && <Dsub n="4.4" t="Posto Comando">{data.s4.postoComando}</Dsub>}
+      {data.s4.diversi && <Dsub n="4.5" t="Diversi">{data.s4.diversi}</Dsub>}
+    </Dsec>
+  );
+}
+
+function PresetPs5({ data }) {
+  if (!data.s5) return null;
+  return (
+    <Dsec id="ps5" n="5" t="Scenari">
+      {data.s5.incendio && <Dsub n="5.1" t="Incendio">{data.s5.incendio}</Dsub>}
+      {data.s5.intossicazione && <Dsub n="5.2" t="Intossicazione">{data.s5.intossicazione}</Dsub>}
+      {data.s5.ordine && <Dsub n="5.3" t="Problemi d'ordine">{data.s5.ordine}</Dsub>}
+      {data.s5.ferimenti && <Dsub n="5.4" t="Ferimenti / Malori">{data.s5.ferimenti}</Dsub>}
+      {data.s5.droghe && <Dsub n="5.5" t="Sostanze stupefacenti">{data.s5.droghe}</Dsub>}
+    </Dsec>
+  );
+}
+
+function PresetPs6({ data }) {
+  if (!data.s6) return null;
+  return (
+    <>
+      <Dsec id="ps6a" n="6" t="Casi d'Allarme">
+        {data.s6.smc && <Dsub n="6.1" t="Stato Maggiore di Crisi">{data.s6.smc}</Dsub>}
+        {[
+          ["6.2", "Evacuazione", "ev"],
+          ["6.3", "Allarme incendio", "inc"],
+          ["6.4", "Minaccia Bomba", "mb"],
+          ["6.5", "Allarme Bomba (indicazione precisa)", "ab"],
+        ].map(([n, t, k]) => (
+          data.s6[k] && data.s6[k].length > 0 && (
+            <Dsub key={n} n={n} t={t}>
+              <ol style={{ margin:0, paddingLeft:"18px" }}>
+                {data.s6[k].map((s, i) => <li key={i} style={{ marginBottom:"3px" }}>{s}</li>)}
+              </ol>
+            </Dsub>
+          )
+        ))}
+      </Dsec>
+      <Dsec id="ps6b" n="6" t="Casi d'Allarme">
+        {[
+          ["6.6", "Atto Terroristico / Attentato", "at"],
+          ["6.7", "Allarme tecnico (Corrente elettrica)", "te"],
+          ["6.8", "Allarme Meteo", "me"],
+        ].map(([n, t, k]) => (
+          data.s6[k] && data.s6[k].length > 0 && (
+            <Dsub key={n} n={n} t={t}>
+              <ol style={{ margin:0, paddingLeft:"18px" }}>
+                {data.s6[k].map((s, i) => <li key={i} style={{ marginBottom:"3px" }}>{s}</li>)}
+              </ol>
+            </Dsub>
+          )
+        ))}
+        <Dsub n="6.9" t="Annunci d'emergenza">
+          La DELTA Security AG prepara e predispone il formulario degli annunci d'emergenza in prossimità di ogni palco o punto dove si possa, tramite un dispositivo audio, effettuare gli annunci. Il responsabile della sicurezza sarà pure lui in possesso di tale formulario. Il formulario con gli annunci d'emergenza è inserito nel presente protocollo di sicurezza. (Allegato 1)
+        </Dsub>
+      </Dsec>
+    </>
+  );
+}
+
+function PresetAll1() {
+  return (
+    <div id="pall1" style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
+      <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+        Allegato 1 – Formulario Annunci d'Emergenza
+      </div>
+      {ANNUNCI.map((sec)=>(
+        <div key={sec.n} style={{ marginBottom:"22px", breakInside:"avoid", pageBreakInside:"avoid" }}>
+          <div style={{ fontWeight:"700", fontSize:"12.5px", textDecoration:"underline", color:N, ...SANS, marginBottom:"12px" }}>{sec.n}</div>
+          {sec.items.map((it, i)=>(
+            <div key={i} style={{ marginBottom:"13px", paddingLeft:"8px", breakInside:"avoid", pageBreakInside:"avoid" }}>
+              <div style={{ fontWeight:"700", fontSize:"11.5px", ...SANS, color:TX, marginBottom:"3px" }}>Nr. – {it.l}</div>
+              <div style={{ ...SANS, fontSize:"11.5px", whiteSpace:"pre-line", color:TX, lineHeight:1.65, paddingLeft:"10px" }}>{it.t}</div>
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function PresetAll2({ data }) {
+  return (
+    <div id="pall2" style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
+      <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+        Allegato 2 – Planimetria Dispositivo Agenti
+      </div>
+      {(data.allegato2Files && data.allegato2Files.length > 0) ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
+          {data.allegato2Files.map((f, i)=>{
+            const isImg = f.type.startsWith("image/");
+            const isPdf = f.type === "application/pdf";
+            const src = f.url;
+            return (
+              <div key={f.id || i} style={{ marginBottom:"12px" }}>
+                <div style={{ ...SANS, fontSize:"11px", color:GR, marginBottom:"6px", fontWeight:"600" }}>📎 {f.name}</div>
+                {isImg && <img src={src} alt={f.name} style={{ width:"100%", border:`1px solid ${GB}`, borderRadius:"6px", display:"block" }} />}
+                {isPdf && (
+                  <div style={{ border:`2px solid ${GB}`, borderRadius:"8px", overflow:"hidden" }}>
+                    <div style={{ background:"#f5f7fb", padding:"16px 20px", display:"flex", alignItems:"center", gap:"14px" }}>
+                      <span style={{ fontSize:"36px" }}>📄</span>
+                      <div style={{ flex:1 }}>
+                        <div style={{ ...SANS, fontWeight:"700", fontSize:"13px", color:N }}>{f.name}</div>
+                        <div style={{ ...SANS, fontSize:"11px", color:GR, marginTop:"2px" }}>Documento PDF allegato</div>
+                      </div>
+                      <a href={src} target="_blank" rel="noreferrer"
+                        style={{ ...SANS, fontSize:"12px", fontWeight:"600", color:WH, background:N, padding:"7px 14px", borderRadius:"6px", textDecoration:"none" }}>
+                        Apri PDF ↗
+                      </a>
+                    </div>
+                    <iframe src={src} style={{ width:"100%", height:"500px", border:"none", display:"block" }} title={f.name} />
+                  </div>
+                )}
+                {!isImg && !isPdf && (
+                  <div style={{ background:"#f0f4f9", border:`1px solid ${GB}`, borderRadius:"6px", padding:"16px", display:"flex", alignItems:"center", gap:"10px", ...SANS, fontSize:"12px", color:TX }}>
+                    <span style={{ fontSize:"28px" }}>📊</span>
+                    <div style={{ fontWeight:"600" }}>{f.name}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div style={{ border:`2px dashed ${GB}`, borderRadius:"8px", padding:"40px", textAlign:"center", color:GR, ...SANS, fontSize:"12.5px" }}>
+          <div style={{ fontSize:"36px", marginBottom:"10px" }}>🗺️</div>
+          <div style={{ fontWeight:"600", color:TM, marginBottom:"4px" }}>Planimetria da allegare</div>
+          <div style={{ fontSize:"11px" }}>Carica la piantina dal pannello di modifica a sinistra → sezione Allegato 2</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function CustomCapitoloPreview({ section, displayNum }) {
+  const id = `pcap-${section.id}`;
+  const inner = section.content && /<[a-z][\s\S]*>/i.test(section.content) ? (
+    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }} dangerouslySetInnerHTML={{ __html: section.content }} />
+  ) : (
+    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS, whiteSpace:"pre-wrap" }}>{section.content || ""}</div>
+  );
+  return (
+    <Dsec id={id} n={String(displayNum)} t={section.title || "Senza titolo"}>
+      {inner}
+    </Dsec>
+  );
+}
+
+function CustomAllegatoPreview({ section, displayAllegatoNum }) {
+  const pid = `pallc-${section.id}`;
+  const src = section.imageUrl;
+  const isPdf = section.fileMime === "application/pdf";
+  return (
+    <div id={pid} style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
+      <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+        Allegato {displayAllegatoNum} – {section.title || "Allegato"}
+      </div>
+      {src ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
+          {isPdf ? (
+            <iframe src={src} style={{ width:"100%", height:"500px", border:`1px solid ${GB}`, borderRadius:"6px" }} title={section.title || "PDF"} />
+          ) : (
+            <img src={src} alt={section.title || ""} style={{ width:"100%", border:`1px solid ${GB}`, borderRadius:"6px", display:"block" }} />
+          )}
+          {section.content && (
+            <div style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX, whiteSpace:"pre-wrap" }}>{section.content}</div>
+          )}
+        </div>
+      ) : (
+        <div style={{ border:`2px dashed ${GB}`, borderRadius:"8px", padding:"24px", textAlign:"center", color:GR, ...SANS, fontSize:"12.5px" }}>
+          Nessun file caricato per questo allegato.
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DocPreview({ data, customSections = [], sectionOrder }) {
+  const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
+  const tocRows = buildTocRows(order, customSections);
+  const chMap = getCustomChapterNumbers(order, customSections);
+  const alMap = getCustomAllegatoNumbers(order, customSections);
+
   return (
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
 
-      {/* ── CARTA INTESTATA HEADER ── */}
       <div className="doc-page-header" style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"4px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
         <img src={logoImg} alt="DELTAgroup" style={{height:65,display:"block"}}/>
       </div>
 
-      {/* ── COVER ── */}
       <div id="pc" style={{textAlign:"center",borderBottom:`3px solid ${RD}`,paddingBottom:"32px",marginBottom:"0",padding:"36px 48px 32px"}}>
         {data.logoEvento && (
           <div style={{marginBottom:"20px"}}>
@@ -770,10 +1182,9 @@ function DocPreview({ data }) {
         {data.anno&&<div style={{...SANS,fontSize:"12px",color:TM}}>Edizione {data.anno}</div>}
       </div>
 
-      {/* ── INDICE ── */}
       <div id="ptoc" style={{padding:"36px 48px",borderBottom:`1px solid ${GB}`}}>
         <div style={{...SANS,fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",color:N,marginBottom:"16px",borderBottom:`2px solid ${N}`,paddingBottom:"6px"}}>Indice</div>
-        {TOC_ENTRIES.map((e,i)=>(
+        {tocRows.map((e,i)=>(
           <div key={i} style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:isMain(e.n)?"6px":"2px",paddingLeft:isMain(e.n)?"0":"18px"}}>
             <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX}}>{e.t}</span>
             <span style={{flex:1,borderBottom:"1px dotted #ccc",height:"1px",marginBottom:"3px"}}/>
@@ -782,243 +1193,31 @@ function DocPreview({ data }) {
         ))}
       </div>
 
-      {/* ── BODY ── */}
       <div id="pbody" style={{padding:"36px 48px"}}>
-
-      <div id="pbody-main">
-      {/* S1 */}
-      {data.s1&&(
-        <Dsec id="ps1" n="1" t="Responsabilità">
-          <table style={{width:"100%",borderCollapse:"collapse",marginBottom:"22px",fontSize:"11.5px",border:`1px solid ${GB}`}}>
-            <thead>
-              <tr>
-                {["Aree","Società / Persona","Tel. Azienda / E-Mail","Tel. Mobile"].map(h=>(
-                  <th key={h} style={{background:N,color:WH,padding:"8px 10px",textAlign:"left",...SANS,border:`1px solid ${NM}`}}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(data.s1.contatti||[]).map((c,i)=>(
-                <tr key={i} style={{background:i%2===0?WH:"#f9fbfd"}}>
-                  <td style={{padding:"8px 10px",fontWeight:"700",color:N,...SANS,border:`1px solid ${GB}`}}>{c.area}</td>
-                  <td style={{padding:"8px 10px",...SANS,border:`1px solid ${GB}`}}>{c.societa}</td>
-                  <td style={{padding:"8px 10px",...SANS,color:"#1565c0",border:`1px solid ${GB}`}}>{c.email||c.telAzienda}</td>
-                  <td style={{padding:"8px 10px",...SANS,border:`1px solid ${GB}`}}>{c.telMobile}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {data.s1.sicurezza&&<Dsub n="1.1" t="Servizio di sicurezza">{data.s1.sicurezza}</Dsub>}
-          {data.s1.polizia&&<Dsub n="1.2" t="Polizia">{data.s1.polizia}</Dsub>}
-          {data.s1.sanitari&&<Dsub n="1.3" t="Sanitari">{data.s1.sanitari}</Dsub>}
-          {data.s1.rega&&<Dsub n="1.4" t="REGA">{data.s1.rega}</Dsub>}
-          {data.s1.pompieri&&<Dsub n="1.5" t="Pompieri">{data.s1.pompieri}</Dsub>}
-          {data.s1.statoMaggiore&&(
-            <Dsub n="1.6" t="Stato Maggiore">
-              <table style={{width:"100%",borderCollapse:"collapse",fontSize:"12.5px"}}>
-                <tbody>
-                  {data.s1.statoMaggiore.split("\n").map(s=>s.trim()).filter(Boolean).map((s,i)=>{
-                    const sep = s.indexOf(":");
-                    const org = sep>-1 ? s.slice(0,sep).trim() : s;
-                    const nom = sep>-1 ? s.slice(sep+1).trim() : "";
-                    return (
-                      <tr key={i}>
-                        <td style={{padding:"3px 24px 3px 0",width:"44%",...SANS,fontWeight:"700",color:TX,verticalAlign:"top",whiteSpace:"nowrap"}}>{org}{sep>-1?":":""}</td>
-                        <td style={{padding:"3px 0",...SANS,color:TX,verticalAlign:"top"}}>{nom}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </Dsub>
-          )}
-          {data.s1.puntoRitrovo&&(
-            <div style={{background:GL,border:`1px solid ${GB}`,borderRadius:"6px",padding:"10px 16px",fontWeight:"700",fontSize:"12.5px",...SANS,color:N,textAlign:"center",textTransform:"uppercase",letterSpacing:"0.07em"}}>
-              PUNTO DI RITROVO: {data.s1.puntoRitrovo}
-            </div>
-          )}
-        </Dsec>
-      )}
-
-      {/* S2 */}
-      {data.s2&&(
-        <Dsec id="ps2" n="2" t="Descrizione">
-          {data.s2.descrizione&&<p style={{...SANS,fontSize:"12.5px",lineHeight:1.75,marginBottom:"16px",margin:"0 0 16px"}}>{data.s2.descrizione}</p>}
-          {data.s2.programma&&data.s2.programma.length>0&&(
-            <div style={{...SANS,fontSize:"12.5px",lineHeight:2.1,marginBottom:"16px"}}>
-              {data.s2.programma.map((p,i)=><div key={i}><strong>{p.giorno}</strong>{p.giorno&&p.attivita?" — ":""}{p.attivita}</div>)}
-            </div>
-          )}
-          {data.s2.orari&&<Dsub n="2.1" t="Periodo e orari d'apertura">{data.s2.orari}</Dsub>}
-          {data.s2.location&&(
-            <Dsub n="2.2" t="Location">
-              {data.s2.location}
-              <div style={{...SANS,fontSize:"12px",fontStyle:"italic",color:TM,marginTop:"8px",padding:"6px 10px",background:GL,borderRadius:"4px",border:`1px solid ${GB}`}}>
-                📎 La planimetria della location con il dispositivo degli agenti è riportata nell'<strong>Allegato 2</strong>.
-              </div>
-            </Dsub>
-          )}
-          {data.s2.pattuglia&&<Dsub n="2.3" t="Pattuglia esterna">{data.s2.pattuglia}</Dsub>}
-          {data.s2.visitatori&&<Dsub n="2.4" t="Tipologia e numero dei visitatori">{data.s2.visitatori}</Dsub>}
-          {data.s2.minori&&<Dsub n="2.5" t="Gestione dei minori">{data.s2.minori}</Dsub>}
-        </Dsec>
-      )}
-
-      {/* S3 */}
-      {data.s3&&(
-        <Dsec id="ps3" n="3" t="Analisi dei pericoli">
-          <p style={{...SANS,fontSize:"12.5px",lineHeight:1.75,margin:"0 0 16px"}}>Ad ogni evento vi sono fattori di rischio che potrebbero pregiudicare il buon esito dello stesso. Una valutazione attenta di questi fattori può influire sia sulla buona riuscita che sulle misure da adottare in caso di necessità.</p>
-          <Dsub n="3.1" t="Analisi del rischio">
-            <RiskTbl title="Lista Pericoli Passivi" rows={data.s3.passivi}/>
-            <RiskTbl title="Lista Pericoli Attivi" rows={data.s3.attivi}/>
-          </Dsub>
-          {data.s3.meteo&&<Dsub n="3.2" t="Meteo">{data.s3.meteo}</Dsub>}
-          {data.s3.terrorismo&&<Dsub n="3.3" t="Atto terroristico / attentato">{data.s3.terrorismo}</Dsub>}
-          {data.s3.evacuazione&&<Dsub n="3.4" t="Evacuazione">{data.s3.evacuazione}</Dsub>}
-        </Dsec>
-      )}
-
-      {/* S4 */}
-      {data.s4&&(
-        <Dsec id="ps4" n="4" t="Dispositivo di sicurezza">
-          <p style={{...SANS,fontSize:"12.5px",margin:"0 0 12px"}}>La DELTAgroup Security &amp; Services AG mette a disposizione il seguente dispositivo di sicurezza. La planimetria con le posizioni degli agenti è riportata nell'<strong>Allegato 2</strong>.</p>
-          <div style={{marginBottom:"20px",border:`1px solid ${GB}`,borderRadius:"6px",overflow:"hidden"}}>
-            {(data.s4.righe||[]).map((r,i)=>(
-              <div key={i} style={{display:"flex",gap:"20px",padding:"8px 14px",background:i%2===0?"#f9fbfd":WH,fontSize:"12.5px",...SANS,borderBottom:i<(data.s4.righe||[]).length-1?`1px solid ${GL}`:"none"}}>
-                <span style={{fontWeight:"700",color:N,minWidth:"110px"}}>➤&nbsp;{r.data}</span>
-                <span>{r.agenti}</span>
-                <span style={{color:TM}}>{r.orario}</span>
-              </div>
-            ))}
-          </div>
-          {data.s4.modifiche&&<Dsub n="4.1" t="Modifiche">{data.s4.modifiche}</Dsub>}
-          {data.s4.comunicazioni&&<Dsub n="4.2" t="Comunicazioni">{data.s4.comunicazioni}</Dsub>}
-          <Dsub n="4.3" t="Divisa">Secondo regolamento DELTAgroup.</Dsub>
-          {data.s4.postoComando&&<Dsub n="4.4" t="Posto Comando">{data.s4.postoComando}</Dsub>}
-          {data.s4.diversi&&<Dsub n="4.5" t="Diversi">{data.s4.diversi}</Dsub>}
-        </Dsec>
-      )}
-
-      {/* S5 */}
-      {data.s5&&(
-        <Dsec id="ps5" n="5" t="Scenari">
-          {data.s5.incendio&&<Dsub n="5.1" t="Incendio">{data.s5.incendio}</Dsub>}
-          {data.s5.intossicazione&&<Dsub n="5.2" t="Intossicazione">{data.s5.intossicazione}</Dsub>}
-          {data.s5.ordine&&<Dsub n="5.3" t="Problemi d'ordine">{data.s5.ordine}</Dsub>}
-          {data.s5.ferimenti&&<Dsub n="5.4" t="Ferimenti / Malori">{data.s5.ferimenti}</Dsub>}
-          {data.s5.droghe&&<Dsub n="5.5" t="Sostanze stupefacenti">{data.s5.droghe}</Dsub>}
-        </Dsec>
-      )}
-
-      {/* S6 */}
-      {data.s6&&(
-        <>
-        <Dsec id="ps6a" n="6" t="Casi d'Allarme">
-          {data.s6.smc&&<Dsub n="6.1" t="Stato Maggiore di Crisi">{data.s6.smc}</Dsub>}
-          {[["6.2","Evacuazione","ev"],["6.3","Allarme incendio","inc"],["6.4","Minaccia Bomba","mb"],
-            ["6.5","Allarme Bomba (indicazione precisa)","ab"]
-          ].map(([n,t,k])=>(
-            data.s6[k]&&data.s6[k].length>0&&(
-              <Dsub key={n} n={n} t={t}>
-                <ol style={{margin:0,paddingLeft:"18px"}}>
-                  {data.s6[k].map((s,i)=><li key={i} style={{marginBottom:"3px"}}>{s}</li>)}
-                </ol>
-              </Dsub>
-            )
-          ))}
-        </Dsec>
-        <Dsec id="ps6b" n="6" t="Casi d'Allarme">
-          {[["6.6","Atto Terroristico / Attentato","at"],
-            ["6.7","Allarme tecnico (Corrente elettrica)","te"],["6.8","Allarme Meteo","me"]
-          ].map(([n,t,k])=>(
-            data.s6[k]&&data.s6[k].length>0&&(
-              <Dsub key={n} n={n} t={t}>
-                <ol style={{margin:0,paddingLeft:"18px"}}>
-                  {data.s6[k].map((s,i)=><li key={i} style={{marginBottom:"3px"}}>{s}</li>)}
-                </ol>
-              </Dsub>
-            )
-          ))}
-          <Dsub n="6.9" t="Annunci d'emergenza">
-            La DELTA Security AG prepara e predispone il formulario degli annunci d'emergenza in prossimità di ogni palco o punto dove si possa, tramite un dispositivo audio, effettuare gli annunci. Il responsabile della sicurezza sarà pure lui in possesso di tale formulario. Il formulario con gli annunci d'emergenza è inserito nel presente protocollo di sicurezza. (Allegato 1)
-          </Dsub>
-        </Dsec>
-        </>
-      )}
-
-      </div>{/* fine pbody-main: solo sezioni 1–6 (stampa PDF) */}
-
-      {/* ALLEGATO 1 */}
-      <div id="pall1" style={{marginTop:"0",paddingTop:"28px",borderTop:"none",pageBreakBefore:"always",breakBefore:"page"}}>
-        <div style={{background:N,color:WH,padding:"9px 16px",fontSize:"13px",fontWeight:"700",...SANS,borderRadius:"6px",marginBottom:"22px",textAlign:"center",textTransform:"uppercase",letterSpacing:"0.08em"}}>
-          Allegato 1 – Formulario Annunci d'Emergenza
-        </div>
-        {ANNUNCI.map(sec=>(
-          <div key={sec.n} style={{marginBottom:"22px",breakInside:"avoid",pageBreakInside:"avoid"}}>
-            <div style={{fontWeight:"700",fontSize:"12.5px",textDecoration:"underline",color:N,...SANS,marginBottom:"12px"}}>{sec.n}</div>
-            {sec.items.map((it,i)=>(
-              <div key={i} style={{marginBottom:"13px",paddingLeft:"8px",breakInside:"avoid",pageBreakInside:"avoid"}}>
-                <div style={{fontWeight:"700",fontSize:"11.5px",...SANS,color:TX,marginBottom:"3px"}}>Nr. – {it.l}</div>
-                <div style={{...SANS,fontSize:"11.5px",whiteSpace:"pre-line",color:TX,lineHeight:1.65,paddingLeft:"10px"}}>{it.t}</div>
-              </div>
-            ))}
-          </div>
-        ))}
+        {order.map((key)=>{
+          if (key === "ps1") return <PresetPs1 key={key} data={data} />;
+          if (key === "ps2") return <PresetPs2 key={key} data={data} />;
+          if (key === "ps3") return <PresetPs3 key={key} data={data} />;
+          if (key === "ps4") return <PresetPs4 key={key} data={data} />;
+          if (key === "ps5") return <PresetPs5 key={key} data={data} />;
+          if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} /></React.Fragment>;
+          if (key === "all1") return <PresetAll1 key={key} />;
+          if (key === "all2") return <PresetAll2 key={key} data={data} />;
+          if (key.startsWith("custom:")) {
+            const id = parseCustomSectionKey(key);
+            const s = customSections.find((c) => c.id === id);
+            if (!s) return null;
+            if (s.type === "capitolo") {
+              const num = chMap.get(id) ?? 7;
+              return <CustomCapitoloPreview key={key} section={s} displayNum={num} />;
+            }
+            const an = alMap.get(id) ?? 3;
+            return <CustomAllegatoPreview key={key} section={s} displayAllegatoNum={an} />;
+          }
+          return null;
+        })}
       </div>
 
-      {/* ALLEGATO 2 */}
-      <div id="pall2" style={{marginTop:"0",paddingTop:"28px",borderTop:"none",pageBreakBefore:"always",breakBefore:"page"}}>
-        <div style={{background:N,color:WH,padding:"9px 16px",fontSize:"13px",fontWeight:"700",...SANS,borderRadius:"6px",marginBottom:"22px",textAlign:"center",textTransform:"uppercase",letterSpacing:"0.08em"}}>
-          Allegato 2 – Planimetria Dispositivo Agenti
-        </div>
-        {(data.allegato2Files&&data.allegato2Files.length>0) ? (
-          <div style={{display:"flex",flexDirection:"column",gap:"16px"}}>
-            {data.allegato2Files.map((f,i)=>{
-              const isImg = f.type.startsWith("image/");
-              const isPdf = f.type==="application/pdf";
-              const src = f.url;
-              return (
-                <div key={f.id||i} style={{marginBottom:"12px"}}>
-                  <div style={{...SANS,fontSize:"11px",color:GR,marginBottom:"6px",fontWeight:"600"}}>📎 {f.name}</div>
-                  {isImg && <img src={src} alt={f.name} style={{width:"100%",border:`1px solid ${GB}`,borderRadius:"6px",display:"block"}}/>}
-                  {isPdf && (
-                    <div style={{border:`2px solid ${GB}`,borderRadius:"8px",overflow:"hidden"}}>
-                      <div style={{background:"#f5f7fb",padding:"16px 20px",display:"flex",alignItems:"center",gap:"14px"}}>
-                        <span style={{fontSize:"36px"}}>📄</span>
-                        <div style={{flex:1}}>
-                          <div style={{...SANS,fontWeight:"700",fontSize:"13px",color:N}}>{f.name}</div>
-                          <div style={{...SANS,fontSize:"11px",color:GR,marginTop:"2px"}}>Documento PDF allegato</div>
-                        </div>
-                        <a href={src} target="_blank" rel="noreferrer"
-                           style={{...SANS,fontSize:"12px",fontWeight:"600",color:WH,background:N,padding:"7px 14px",borderRadius:"6px",textDecoration:"none"}}>
-                          Apri PDF ↗
-                        </a>
-                      </div>
-                      <iframe src={src} style={{width:"100%",height:"500px",border:"none",display:"block"}} title={f.name}/>
-                    </div>
-                  )}
-                  {!isImg&&!isPdf&&(
-                    <div style={{background:"#f0f4f9",border:`1px solid ${GB}`,borderRadius:"6px",padding:"16px",display:"flex",alignItems:"center",gap:"10px",...SANS,fontSize:"12px",color:TX}}>
-                      <span style={{fontSize:"28px"}}>📊</span>
-                      <div style={{fontWeight:"600"}}>{f.name}</div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          <div style={{border:`2px dashed ${GB}`,borderRadius:"8px",padding:"40px",textAlign:"center",color:GR,...SANS,fontSize:"12.5px"}}>
-            <div style={{fontSize:"36px",marginBottom:"10px"}}>🗺️</div>
-            <div style={{fontWeight:"600",color:TM,marginBottom:"4px"}}>Planimetria da allegare</div>
-            <div style={{fontSize:"11px"}}>Carica la piantina dal pannello di modifica a sinistra → sezione Allegato 2</div>
-          </div>
-        )}
-      </div>
-
-      </div>{/* fine body */}
-
-      {/* ── CARTA INTESTATA FOOTER ── */}
       <div className="doc-page-footer" style={{borderTop:`1px solid ${GB}`}}>
         <div style={{display:"flex",justifyContent:"center",padding:"5px 32px",borderTop:"1px solid #0c1d3d",fontSize:"8pt",color:"#555",fontFamily:"Arial",background:"white"}}>
           DELTAgroup Security &amp; Services AG &middot; Filiale Ticino &middot; Via alla Foce 4, 6933 Muzzano &middot; T +41 91 921 49 49 &middot; ticino@delta.ch &middot; www.delta.ch
@@ -1028,8 +1227,47 @@ function DocPreview({ data }) {
   );
 }
 
+const LS_EDITOR_SECTIONS = "delta-cs-editor-sections";
+
+function loadPersistedSections(docName) {
+  try {
+    const raw = localStorage.getItem(LS_EDITOR_SECTIONS);
+    if (!raw) return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER] };
+    const p = JSON.parse(raw);
+    if (p.docKey != null && p.docKey !== (docName || "")) {
+      return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER] };
+    }
+    return {
+      customSections: Array.isArray(p.customSections) ? p.customSections : [],
+      sectionOrder: Array.isArray(p.sectionOrder) && p.sectionOrder.length ? p.sectionOrder : [...DEFAULT_SECTION_ORDER],
+    };
+  } catch {
+    return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER] };
+  }
+}
+
+function newSectionId() {
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `sec_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+const PRESET_SECTION_LABELS = {
+  ps1: "1 · Responsabilità",
+  ps2: "2 · Descrizione",
+  ps3: "3 · Analisi dei pericoli",
+  ps4: "4 · Dispositivo di sicurezza",
+  ps5: "5 · Scenari",
+  ps6: "6 · Casi d'allarme",
+  all1: "All. 1 · Formulario annunci",
+  all2: "All. 2 · Planimetria agenti",
+};
+
 function Editor({ data: initialData, onBack }) {
+  const persisted = loadPersistedSections(initialData.nomeEvento);
   const [data, setData] = useState({...initialData, allegato2Files: initialData.allegato2Files||[]});
+  const [customSections, setCustomSections] = useState(persisted.customSections);
+  const [sectionOrder, setSectionOrder] = useState(persisted.sectionOrder);
   const [history, setHistory] = useState([]);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1039,10 +1277,124 @@ function Editor({ data: initialData, onBack }) {
   const [all2Drag, setAll2Drag] = useState(false);
   const [rightDrag, setRightDrag] = useState(false);
   const [showSave, setShowSave] = useState(false);
+  const [secModalOpen, setSecModalOpen] = useState(false);
+  const [newSecType, setNewSecType] = useState("capitolo");
+  const [newSecTitle, setNewSecTitle] = useState("");
+  const [newSecContent, setNewSecContent] = useState("");
+  const [newSecAILoading, setNewSecAILoading] = useState(false);
   const addRef = React.useRef();
   const all2Ref = React.useRef();
+  const secModalFileRef = React.useRef();
   const chatEndRef = React.useRef();
   const rightDragCount = React.useRef(0);
+
+  const ord = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
+  const chMap = React.useMemo(() => getCustomChapterNumbers(ord, customSections), [ord, customSections]);
+  const alMap = React.useMemo(() => getCustomAllegatoNumbers(ord, customSections), [ord, customSections]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(LS_EDITOR_SECTIONS, JSON.stringify({
+        docKey: data.nomeEvento || "",
+        customSections,
+        sectionOrder,
+      }));
+    } catch { /* ignore quota */ }
+  }, [data.nomeEvento, customSections, sectionOrder]);
+
+  const labelForKey = (key) => {
+    if (PRESET_SECTION_LABELS[key]) return PRESET_SECTION_LABELS[key];
+    if (key.startsWith("custom:")) {
+      const id = parseCustomSectionKey(key);
+      const s = customSections.find((c) => c.id === id);
+      if (!s) return key;
+      if (s.type === "capitolo") return `${chMap.get(id) ?? 7} · ${s.title || "Capitolo"}`;
+      return `All. ${alMap.get(id) ?? 3} · ${s.title || "Allegato"}`;
+    }
+    return key;
+  };
+
+  const moveSection = (idx, dir) => {
+    setSectionOrder((prev) => {
+      const o = [...(prev?.length ? prev : DEFAULT_SECTION_ORDER)];
+      const j = idx + dir;
+      if (j < 0 || j >= o.length) return prev;
+      [o[idx], o[j]] = [o[j], o[idx]];
+      return o;
+    });
+  };
+
+  const deleteCustomKey = (key) => {
+    if (!key.startsWith("custom:")) return;
+    if (!window.confirm("Eliminare questa sezione?")) return;
+    const id = parseCustomSectionKey(key);
+    setCustomSections((prev) => {
+      const s = prev.find((c) => c.id === id);
+      if (s?.imageUrl) URL.revokeObjectURL(s.imageUrl);
+      return prev.filter((c) => c.id !== id);
+    });
+    setSectionOrder((prev) => prev.filter((k) => k !== key));
+  };
+
+  const openSecModal = () => {
+    setNewSecType("capitolo");
+    setNewSecTitle("");
+    setNewSecContent("");
+    if (secModalFileRef.current) secModalFileRef.current.value = "";
+    setSecModalOpen(true);
+  };
+
+  const generateSecAI = async () => {
+    if (!newSecTitle.trim()) return;
+    setNewSecAILoading(true);
+    setErr(null);
+    try {
+      const t = await callAIText(`Genera il contenuto per una sezione intitolata "${newSecTitle.trim()}" di un Concetto di Sicurezza`);
+      setNewSecContent(t);
+    } catch (e) {
+      setErr(e.message);
+    } finally {
+      setNewSecAILoading(false);
+    }
+  };
+
+  const confirmAddSection = () => {
+    if (!newSecTitle.trim()) {
+      setErr("Inserisci un titolo per la sezione.");
+      return;
+    }
+    if (newSecType === "allegato") {
+      const file = secModalFileRef.current?.files?.[0];
+      if (!file) {
+        setErr("Per un allegato carica un file (immagine o PDF).");
+        return;
+      }
+    }
+    setErr(null);
+    const id = newSectionId();
+    const sec = {
+      id,
+      type: newSecType,
+      title: newSecTitle.trim(),
+      content: newSecContent,
+      imageUrl: null,
+      fileMime: null,
+      order: customSections.length,
+    };
+    if (newSecType === "allegato") {
+      const file = secModalFileRef.current.files[0];
+      const t = detectType(file);
+      if (!t || (!t.startsWith("image/") && t !== "application/pdf")) {
+        setErr("Formato non supportato. Usa JPG, PNG o PDF.");
+        return;
+      }
+      sec.imageUrl = URL.createObjectURL(file);
+      sec.fileMime = t;
+    }
+    setCustomSections((prev) => [...prev, sec]);
+    setSectionOrder((prev) => [...(prev?.length ? prev : [...DEFAULT_SECTION_ORDER]), `custom:${id}`]);
+    setSecModalOpen(false);
+  };
 
   // Previeni apertura file dal browser in modo aggressivo (capture phase)
   React.useEffect(() => {
@@ -1115,6 +1467,7 @@ function Editor({ data: initialData, onBack }) {
     try {
       const newData = await callAI(editMsg, null, attachments, SYS_EDIT);
       setData({...newData, logoEvento:data.logoEvento||null, allegato2Files:data.allegato2Files||[]});
+      /* customSections + sectionOrder restano invariati */
       setHistory(prev=>[...prev,{msg:msg||"(allegati)", files:attachments.map(a=>a.name), ts:new Date()}]);
       setMsg(""); setAttachments([]);
     } catch(e) { setErr(e.message); }
@@ -1125,8 +1478,8 @@ function Editor({ data: initialData, onBack }) {
     const el = document.getElementById("doc-preview");
     if (!el) return "";
 
-    const getHTML = (id) => {
-      const node = el.querySelector(`#${id}`);
+    const getById = (rawId) => {
+      const node = el.querySelector(`#${CSS.escape(rawId)}`);
       return node ? node.innerHTML : "";
     };
 
@@ -1143,25 +1496,51 @@ function Editor({ data: initialData, onBack }) {
         <div class="pcnt">${content}</div>
       </div>`;
 
-    const coverHTML = getHTML("pc");
-    const tocHTML   = getHTML("ptoc");
+    const coverHTML = getById("pc");
+    const tocHTML = getById("ptoc");
 
-    const nPall1 = el.querySelector("#pbody > #pall1");
-    const all1HTML = nPall1 ? nPall1.innerHTML : "";
-    const nPall2 = el.querySelector("#pbody > #pall2");
-    const all2HTML = nPall2 ? nPall2.innerHTML : "";
-
-    const sectionPages = ["ps1", "ps2", "ps3", "ps4", "ps5", "ps6a", "ps6b"]
-      .map((sid) => {
-        const node = el.querySelector(`#pbody-main > #${sid}`);
-        const inner = node ? node.innerHTML : "";
-        return inner ? page(inner, "ppage-flow") : "";
-      })
-      .join("");
-
-    console.log("ALL1 length:", all1HTML.length, "| inizio:", all1HTML.substring(0, 100));
-    console.log("ALL2 length:", all2HTML.length, "| inizio:", all2HTML.substring(0, 100));
-    console.log("sectionPages length:", sectionPages.length);
+    const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
+    let flowParts = "";
+    for (const key of order) {
+      if (key === "ps1") {
+        const h = getById("ps1");
+        if (h) flowParts += page(h, "ppage-flow");
+      } else if (key === "ps2") {
+        const h = getById("ps2");
+        if (h) flowParts += page(h, "ppage-flow");
+      } else if (key === "ps3") {
+        const h = getById("ps3");
+        if (h) flowParts += page(h, "ppage-flow");
+      } else if (key === "ps4") {
+        const h = getById("ps4");
+        if (h) flowParts += page(h, "ppage-flow");
+      } else if (key === "ps5") {
+        const h = getById("ps5");
+        if (h) flowParts += page(h, "ppage-flow");
+      } else if (key === "ps6") {
+        const a = getById("ps6a");
+        if (a) flowParts += page(a, "ppage-flow");
+        const b = getById("ps6b");
+        if (b) flowParts += page(b, "ppage-flow");
+      } else if (key === "all1") {
+        const h = getById("pall1");
+        if (h) flowParts += page(h, "ppage-fixed ppage-all1");
+      } else if (key === "all2") {
+        const h = getById("pall2");
+        if (h) flowParts += page(h, "ppage-flow");
+      } else if (key.startsWith("custom:")) {
+        const id = parseCustomSectionKey(key);
+        const s = customSections.find((c) => c.id === id);
+        if (!s) continue;
+        if (s.type === "capitolo") {
+          const h = getById(`pcap-${id}`);
+          if (h) flowParts += page(h, "ppage-flow");
+        } else {
+          const h = getById(`pallc-${id}`);
+          if (h) flowParts += page(h, "ppage-flow");
+        }
+      }
+    }
 
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Concetto di Sicurezza – ${data.nomeEvento||""}</title>
@@ -1202,9 +1581,7 @@ embed{display:block;}
 <div class="print-ftr">${ftr}</div>
 ${page(coverHTML, "cover ppage-fixed ppage-first")}
 ${page(tocHTML, "ppage-fixed")}
-${sectionPages}
-${all1HTML ? page(all1HTML, "ppage-fixed ppage-all1") : ""}
-${all2HTML ? page(all2HTML, "ppage-flow") : ""}
+${flowParts}
 </body></html>`;
   };
 
@@ -1276,6 +1653,23 @@ ${all2HTML ? page(all2HTML, "ppage-flow") : ""}
         <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${GB}`}}>
           <div style={{...SERIF,fontSize:"16px",fontWeight:"700",color:N,marginBottom:"2px"}}>Modifica documento</div>
           <div style={{...SANS,fontSize:"11px",color:GR}}>Digita le modifiche · allega file · premi Applica</div>
+        </div>
+
+        <div style={{padding:"10px 14px",borderBottom:`1px solid ${GB}`,maxHeight:"200px",overflowY:"auto",background:"#fafbfd"}}>
+          <div style={{...SANS,fontSize:"11px",fontWeight:"700",color:N,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"8px"}}>Sezioni documento</div>
+          {ord.map((key, i)=>(
+            <div key={`${key}-${i}`} style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px",...SANS,fontSize:"11px"}}>
+              <button type="button" onClick={()=>moveSection(i,-1)} disabled={i===0} style={{background:i===0?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:i===0?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Su">▲</button>
+              <button type="button" onClick={()=>moveSection(i,1)} disabled={i===ord.length-1} style={{background:i===ord.length-1?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:i===ord.length-1?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Giù">▼</button>
+              {key.startsWith("custom:") && (
+                <button type="button" onClick={()=>deleteCustomKey(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"14px",padding:"0 4px",lineHeight:1}} title="Elimina">🗑</button>
+              )}
+              <span style={{flex:1,lineHeight:1.35,color:TX}}>{labelForKey(key)}</span>
+            </div>
+          ))}
+          <button type="button" onClick={openSecModal} style={{...SANS,width:"100%",marginTop:"8px",padding:"8px 10px",background:N,color:WH,border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
+            + Aggiungi sezione
+          </button>
         </div>
 
         {/* Storico modifiche */}
@@ -1389,12 +1783,58 @@ ${all2HTML ? page(all2HTML, "ppage-flow") : ""}
             <span style={{fontSize:"16px"}}>⏳</span> Aggiornamento documento in corso…
           </div>
         )}
-        <DocPreview data={data}/>
+        <DocPreview data={data} customSections={customSections} sectionOrder={sectionOrder} />
       </div>
+
+      {secModalOpen && (
+        <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={()=>setSecModalOpen(false)}>
+          <div style={{background:WH,borderRadius:"12px",maxWidth:"420px",width:"100%",boxShadow:"0 20px 50px rgba(0,0,0,0.2)",overflow:"hidden",...SANS}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${GB}`,background:GL,fontWeight:"700",fontSize:"14px",color:N}}>Aggiungi sezione</div>
+            <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:"12px"}}>
+              <div>
+                <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Tipo</div>
+                <label style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px",cursor:"pointer",fontSize:"13px"}}>
+                  <input type="radio" name="sectype" checked={newSecType==="capitolo"} onChange={()=>setNewSecType("capitolo")} /> Capitolo
+                </label>
+                <label style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer",fontSize:"13px"}}>
+                  <input type="radio" name="sectype" checked={newSecType==="allegato"} onChange={()=>setNewSecType("allegato")} /> Allegato
+                </label>
+              </div>
+              <div>
+                <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Titolo</div>
+                <input value={newSecTitle} onChange={e=>setNewSecTitle(e.target.value)} placeholder="Titolo sezione" style={{...inp,width:"100%",boxSizing:"border-box"}} />
+              </div>
+              {newSecType==="capitolo" && (
+                <div>
+                  <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Contenuto (opzionale)</div>
+                  <textarea value={newSecContent} onChange={e=>setNewSecContent(e.target.value)} placeholder="Testo da stampare nella sezione…" rows={5} style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical"}} />
+                  <button type="button" onClick={generateSecAI} disabled={newSecAILoading||!newSecTitle.trim()} style={{...SANS,marginTop:"8px",padding:"8px 12px",background:newSecAILoading||!newSecTitle.trim()?"#ccc":NM,color:WH,border:"none",borderRadius:"6px",cursor:newSecAILoading||!newSecTitle.trim()?"not-allowed":"pointer",fontSize:"12px",fontWeight:"600",width:"100%"}}>
+                    {newSecAILoading?"⏳ Generazione…":"✨ Genera contenuto con AI"}
+                  </button>
+                </div>
+              )}
+              {newSecType==="allegato" && (
+                <div>
+                  <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>File immagine o PDF</div>
+                  <input ref={secModalFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" style={{fontSize:"12px",width:"100%"}} />
+                  <div style={{fontSize:"10px",color:GR,marginTop:"4px"}}>Stesso flusso dell&apos;Allegato 2 (URL oggetto locale).</div>
+                  <div style={{marginTop:"10px"}}>
+                    <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Note (opzionale)</div>
+                    <textarea value={newSecContent} onChange={e=>setNewSecContent(e.target.value)} rows={3} style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical"}} />
+                  </div>
+                </div>
+              )}
+              <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
+                <button type="button" onClick={()=>setSecModalOpen(false)} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
+                <button type="button" onClick={confirmAddSection} style={{flex:1,padding:"10px",background:N,color:WH,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>Aggiungi</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
 function ModeCard({ icon, title, desc, color, on }) {
