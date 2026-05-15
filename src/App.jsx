@@ -783,12 +783,14 @@ function parseCustomSectionKey(key) {
   return key.slice(7);
 }
 
-/** Running chapter (ps* + custom capitolo) and allegato (all* + custom allegato) indices by sectionOrder. */
+/** Running chapter (ps* + custom capitolo), allegato (all* + custom allegato), and X.Y sotto-capitoli by sectionOrder. */
 function buildSectionNumberMaps(sectionOrder, customSections) {
   const cs = Array.isArray(customSections) ? customSections : [];
   const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
   const chapterNumByKey = new Map();
   const allegatoNumByKey = new Map();
+  const subchapterDisplayByKey = new Map();
+  const subCountByParent = new Map();
   let ch = 0;
   let al = 0;
   for (const key of order) {
@@ -809,10 +811,17 @@ function buildSectionNumberMaps(sectionOrder, customSections) {
       } else if (s.type === "allegato") {
         al += 1;
         allegatoNumByKey.set(key, al);
+      } else if (s.type === "sottocapitolo") {
+        const pkey = s.parentKey;
+        const parentNum = chapterNumByKey.get(pkey);
+        if (parentNum == null) continue;
+        const next = (subCountByParent.get(pkey) || 0) + 1;
+        subCountByParent.set(pkey, next);
+        subchapterDisplayByKey.set(key, `${parentNum}.${next}`);
       }
     }
   }
-  return { chapterNumByKey, allegatoNumByKey };
+  return { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey };
 }
 
 function remapTocPresetChapterRows(rows, chapterIndex) {
@@ -836,7 +845,7 @@ function buildTocRows(sectionOrder, customSections) {
   const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
   if (!order.length) return [];
 
-  const { chapterNumByKey, allegatoNumByKey } = buildSectionNumberMaps(order, cs);
+  const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = buildSectionNumberMaps(order, cs);
   const rows = [];
   for (const key of order) {
     if (!key) continue;
@@ -870,6 +879,10 @@ function buildTocRows(sectionOrder, customSections) {
         const n = chapterNumByKey.get(key) ?? "?";
         const title = (s.title || "Capitolo").replace(/^\d+\s+/, "");
         rows.push({ n: String(n), t: `${n} ${title}`, main: true });
+      } else if (s.type === "sottocapitolo") {
+        const nu = subchapterDisplayByKey.get(key) ?? "?";
+        const title = (s.title || "Sotto capitolo").replace(/^\d+\.\d+\s+/, "").replace(/^\d+\s+/, "");
+        rows.push({ n: nu, t: `${nu} ${title}`, main: false });
       } else {
         const na = allegatoNumByKey.get(key) ?? "?";
         const title = (s.title || "Allegato").replace(/^\d+\s+/, "");
@@ -896,7 +909,7 @@ function formatCustomBodyForPrint(htmlOrText) {
   return escapeHtmlPrint(t).replace(/\n/g, "<br/>");
 }
 
-const isMain = (n) => /^\d+$/.test(n) || n.startsWith("All.");
+const isMain = (n) => typeof n === "string" && (/^\d+$/.test(n) || n.startsWith("All."));
 
 /** Anteprima: blocchi preset (ordine gestito dal container). */
 function PresetPs1({ data, displayChapter = 1 }) {
@@ -1170,6 +1183,26 @@ function CustomCapitoloPreview({ section, displayNum }) {
   );
 }
 
+function CustomSottoCapitoloPreview({ section, displayLabel }) {
+  const id = `psub-${section.id}`;
+  const inner = section.content && /<[a-z][\s\S]*>/i.test(section.content) ? (
+    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }} dangerouslySetInnerHTML={{ __html: section.content }} />
+  ) : (
+    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS, whiteSpace:"pre-wrap" }}>{section.content || ""}</div>
+  );
+  return (
+    <div id={id} style={{ marginBottom:"22px", breakInside:"avoid", pageBreakInside:"avoid" }}>
+      <h3 style={{
+        fontWeight:"700", fontSize:"12px", textTransform:"uppercase", letterSpacing:"0.07em",
+        textDecoration:"underline", color:N, marginBottom:"7px", ...SANS, marginTop:0,
+      }}>
+        {displayLabel}&nbsp;&nbsp;{section.title || "Senza titolo"}
+      </h3>
+      <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }}>{inner}</div>
+    </div>
+  );
+}
+
 function CustomAllegatoPreview({ section, displayAllegatoNum }) {
   const pid = `pallc-${section.id}`;
   const src = section.imageUrl;
@@ -1209,7 +1242,7 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
   if (!data || !data.nomeEvento) return null;
   const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
   const tocRows = buildTocRows(sectionOrder, customSections);
-  const { chapterNumByKey, allegatoNumByKey } = buildSectionNumberMaps(order, customSections);
+  const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = buildSectionNumberMaps(order, customSections);
 
   return (
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
@@ -1237,7 +1270,7 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
         {tocRows
           .filter((e) => e != null && e.n != null && e.t != null)
           .map((e,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:isMain(e.n)?"6px":"2px",paddingLeft:isMain(e.n)?"0":"18px"}}>
+          <div key={i} style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:isMain(e.n)?"6px":"2px",paddingLeft:isMain(e.n)?"0":(e.main===false?"28px":"18px")}}>
             <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX}}>{e.t}</span>
             <span style={{flex:1,borderBottom:"1px dotted #ccc",height:"1px",marginBottom:"3px"}}/>
             <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX,minWidth:"46px",textAlign:"right"}}>{e.n}</span>
@@ -1263,6 +1296,10 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
               const num = chapterNumByKey.get(key) ?? 1;
               return <CustomCapitoloPreview key={key} section={s} displayNum={num} />;
             }
+            if (s.type === "sottocapitolo") {
+              const lab = subchapterDisplayByKey.get(key) ?? "?";
+              return <CustomSottoCapitoloPreview key={key} section={s} displayLabel={lab} />;
+            }
             const an = allegatoNumByKey.get(key) ?? 1;
             return <CustomAllegatoPreview key={key} section={s} displayAllegatoNum={an} />;
           }
@@ -1281,6 +1318,30 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
 
 const LS_EDITOR_SECTIONS = "delta-cs-editor-sections";
 
+/** Normalize persisted custom rows (migration-safe). */
+function normalizeCustomSection(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const id = raw.id != null ? String(raw.id) : "";
+  if (!id) return null;
+  let type = raw.type;
+  if (type !== "capitolo" && type !== "allegato" && type !== "sottocapitolo") type = "capitolo";
+  const pk = raw.parentKey != null ? String(raw.parentKey) : "";
+  const parentKey =
+    type === "sottocapitolo" && (/^ps[1-6]$/.test(pk) || /^custom:.+/.test(pk))
+      ? pk
+      : null;
+  return {
+    id,
+    type,
+    title: raw.title ?? "",
+    content: raw.content ?? "",
+    imageUrl: raw.imageUrl ?? null,
+    fileMime: raw.fileMime ?? null,
+    order: typeof raw.order === "number" ? raw.order : 0,
+    parentKey,
+  };
+}
+
 function loadPersistedSections(docName) {
   try {
     const raw = localStorage.getItem(LS_EDITOR_SECTIONS);
@@ -1290,10 +1351,13 @@ function loadPersistedSections(docName) {
       return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER] };
     }
     return {
-      customSections: Array.isArray(p.customSections) ? p.customSections : [],
+      customSections: Array.isArray(p.customSections)
+        ? p.customSections.map(normalizeCustomSection).filter(Boolean)
+        : [],
       sectionOrder: Array.isArray(p.sectionOrder) && p.sectionOrder.length ? p.sectionOrder : [...DEFAULT_SECTION_ORDER],
     };
-  } catch {
+  } catch (e) {
+    console.error("[loadPersistedSections]", e);
     return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER] };
   }
 }
@@ -1333,9 +1397,11 @@ function Editor({ data: initialData, onBack }) {
   const [rightDrag, setRightDrag] = useState(false);
   const [showSave, setShowSave] = useState(false);
   const [secModalOpen, setSecModalOpen] = useState(false);
+  const [secModalEditingId, setSecModalEditingId] = useState(null);
   const [newSecType, setNewSecType] = useState("capitolo");
   const [newSecTitle, setNewSecTitle] = useState("");
   const [newSecContent, setNewSecContent] = useState("");
+  const [newSecParentKey, setNewSecParentKey] = useState("ps1");
   const [newSecAILoading, setNewSecAILoading] = useState(false);
   const [renamingCustomId, setRenamingCustomId] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
@@ -1346,10 +1412,29 @@ function Editor({ data: initialData, onBack }) {
   const rightDragCount = React.useRef(0);
 
   const ord = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
-  const { chapterNumByKey, allegatoNumByKey } = React.useMemo(
+  const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = React.useMemo(
     () => buildSectionNumberMaps(ord, customSections),
     [ord, customSections],
   );
+
+  const parentCapitoloOptions = React.useMemo(() => {
+    const opts = [];
+    for (const k of ["ps1", "ps2", "ps3", "ps4", "ps5", "ps6"]) {
+      const n = chapterNumByKey.get(k);
+      const short = PRESET_SECTION_SHORT[k];
+      opts.push({ value: k, label: n != null && short ? `${n} · ${short}` : (short || k) });
+    }
+    for (const s of customSections) {
+      if (s.type !== "capitolo") continue;
+      const ck = `custom:${s.id}`;
+      const n = chapterNumByKey.get(ck);
+      opts.push({
+        value: ck,
+        label: n != null ? `${n} · ${s.title || "Capitolo"}` : (s.title || "Capitolo"),
+      });
+    }
+    return opts;
+  }, [chapterNumByKey, customSections]);
 
   React.useEffect(() => {
     try {
@@ -1358,7 +1443,9 @@ function Editor({ data: initialData, onBack }) {
         customSections,
         sectionOrder,
       }));
-    } catch { /* ignore quota */ }
+    } catch (e) {
+      console.error("[persist sections]", e);
+    }
   }, [data.nomeEvento, customSections, sectionOrder]);
 
   const labelForKey = (key) => {
@@ -1380,6 +1467,10 @@ function Editor({ data: initialData, onBack }) {
         const n = chapterNumByKey.get(key);
         return n != null ? `${n} · ${s.title || "Capitolo"}` : (s.title || "Capitolo");
       }
+      if (s.type === "sottocapitolo") {
+        const nu = subchapterDisplayByKey.get(key);
+        return nu != null ? `${nu} · ${s.title || "Sotto capitolo"}` : (s.title || "Sotto capitolo");
+      }
       const na = allegatoNumByKey.get(key);
       return na != null ? `All. ${na} · ${s.title || "Allegato"}` : (s.title || "Allegato");
     }
@@ -1400,12 +1491,28 @@ function Editor({ data: initialData, onBack }) {
     if (!key.startsWith("custom:")) return;
     if (!window.confirm("Eliminare questa sezione?")) return;
     const id = parseCustomSectionKey(key);
-    setCustomSections((prev) => {
-      const s = prev.find((c) => c.id === id);
-      if (s?.imageUrl) URL.revokeObjectURL(s.imageUrl);
-      return prev.filter((c) => c.id !== id);
-    });
-    setSectionOrder((prev) => prev.filter((k) => k !== key));
+    const section = customSections.find((c) => c.id === id);
+    const removeIds = new Set(id ? [id] : []);
+    if (section?.type === "capitolo") {
+      const pfx = `custom:${id}`;
+      customSections.forEach((c) => {
+        if (c.type === "sottocapitolo" && c.parentKey === pfx) removeIds.add(c.id);
+      });
+    }
+    setCustomSections((prev) =>
+      prev.filter((c) => {
+        if (!removeIds.has(c.id)) return true;
+        if (c.imageUrl?.startsWith("blob:")) URL.revokeObjectURL(c.imageUrl);
+        return false;
+      }),
+    );
+    setSectionOrder((prev) =>
+      prev.filter((k) => {
+        if (!k.startsWith("custom:")) return true;
+        const cid = parseCustomSectionKey(k);
+        return cid != null && !removeIds.has(cid);
+      }),
+    );
   };
 
   const startRenameCustom = (key) => {
@@ -1427,10 +1534,32 @@ function Editor({ data: initialData, onBack }) {
   };
 
   const openSecModal = () => {
+    setSecModalEditingId(null);
     setNewSecType("capitolo");
     setNewSecTitle("");
     setNewSecContent("");
+    setNewSecParentKey("ps1");
     if (secModalFileRef.current) secModalFileRef.current.value = "";
+    setErr(null);
+    setSecModalOpen(true);
+  };
+
+  const openSecModalForEdit = (orderKey) => {
+    if (!orderKey.startsWith("custom:")) return;
+    const sid = parseCustomSectionKey(orderKey);
+    const s = customSections.find((c) => c.id === sid);
+    if (!s) {
+      console.error("[openSecModalForEdit] Sezione non trovata:", orderKey);
+      setErr("Impossibile aprire la modifica: dati sezione mancanti.");
+      return;
+    }
+    setSecModalEditingId(sid);
+    setNewSecType(s.type === "allegato" ? "allegato" : s.type === "sottocapitolo" ? "sottocapitolo" : "capitolo");
+    setNewSecTitle(s.title || "");
+    setNewSecContent(s.content || "");
+    setNewSecParentKey(s.parentKey && (/^ps[1-6]$/.test(s.parentKey) || s.parentKey.startsWith("custom:")) ? s.parentKey : "ps1");
+    if (secModalFileRef.current) secModalFileRef.current.value = "";
+    setErr(null);
     setSecModalOpen(true);
   };
 
@@ -1442,47 +1571,139 @@ function Editor({ data: initialData, onBack }) {
       const prompt =
         newSecType === "allegato"
           ? `Genera il contenuto per un allegato intitolato "${newSecTitle.trim()}" di un Concetto di Sicurezza. Puoi includere checklist, tabelle, procedure operative.`
-          : `Genera il contenuto per una sezione intitolata "${newSecTitle.trim()}" di un Concetto di Sicurezza`;
+          : newSecType === "sottocapitolo"
+            ? `Genera il contenuto per un sotto-capitolo intitolato "${newSecTitle.trim()}" di un Concetto di Sicurezza (testo da inserire sotto un capitolo principale).`
+            : `Genera il contenuto per una sezione intitolata "${newSecTitle.trim()}" di un Concetto di Sicurezza`;
       const t = await callAIText(prompt);
       setNewSecContent(t);
     } catch (e) {
+      console.error("[generateSecAI]", e);
       setErr(e.message);
     } finally {
       setNewSecAILoading(false);
     }
   };
 
-  const confirmAddSection = () => {
-    if (!newSecTitle.trim()) {
-      setErr("Inserisci un titolo per la sezione.");
+  const submitSectionModal = () => {
+    const titleTrim = newSecTitle.trim();
+    if (!titleTrim) {
+      const msg = "Inserisci un titolo per la sezione.";
+      console.error("[submitSectionModal]", msg);
+      setErr(msg);
       return;
     }
     setErr(null);
-    const id = newSectionId();
-    const sec = {
-      id,
-      type: newSecType,
-      title: newSecTitle.trim(),
-      content: newSecContent,
-      imageUrl: null,
-      fileMime: null,
-      order: customSections.length,
-    };
+
+    if (secModalEditingId) {
+      const oldRow = customSections.find((c) => c.id === secModalEditingId);
+      if (oldRow?.type === "capitolo" && newSecType !== "capitolo") {
+        const pfx = `custom:${secModalEditingId}`;
+        const hasSubs = customSections.some((c) => c.type === "sottocapitolo" && c.parentKey === pfx);
+        if (hasSubs) {
+          const msg = "Non puoi cambiare tipo: esistono sotto-capitoli collegati a questo capitolo. Spostali o eliminali prima.";
+          console.error("[submitSectionModal]", msg);
+          setErr(msg);
+          return;
+        }
+      }
+    }
+
+    if (newSecType === "sottocapitolo") {
+      if (!newSecParentKey || (!/^ps[1-6]$/.test(newSecParentKey) && !newSecParentKey.startsWith("custom:"))) {
+        const msg = "Seleziona un capitolo padre per il sotto capitolo.";
+        console.error("[submitSectionModal]", msg);
+        setErr(msg);
+        return;
+      }
+      const parentValid =
+        /^ps[1-6]$/.test(newSecParentKey) ||
+        customSections.some((c) => c.type === "capitolo" && `custom:${c.id}` === newSecParentKey);
+      if (!parentValid) {
+        const msg = "Capitolo padre non valido (scegli un capitolo esistente).";
+        console.error("[submitSectionModal]", msg);
+        setErr(msg);
+        return;
+      }
+    }
+
+    let newBlobUrl = null;
+    let newMime = null;
     if (newSecType === "allegato") {
       const file = secModalFileRef.current?.files?.[0];
       if (file) {
         const t = detectType(file);
         if (!t || (!t.startsWith("image/") && t !== "application/pdf")) {
-          setErr("Formato file non supportato. Usa JPG, PNG o PDF.");
+          const msg = "Formato file non supportato. Usa JPG, PNG o PDF.";
+          console.error("[submitSectionModal]", msg);
+          setErr(msg);
           return;
         }
-        sec.imageUrl = URL.createObjectURL(file);
-        sec.fileMime = t;
+        try {
+          newBlobUrl = URL.createObjectURL(file);
+          newMime = t;
+        } catch (e) {
+          console.error("[submitSectionModal] createObjectURL", e);
+          setErr(e.message || "Errore durante il caricamento del file.");
+          return;
+        }
       }
     }
-    setCustomSections((prev) => [...prev, sec]);
-    setSectionOrder((prev) => [...(prev?.length ? prev : [...DEFAULT_SECTION_ORDER]), `custom:${id}`]);
-    setSecModalOpen(false);
+
+    try {
+      if (secModalEditingId) {
+        setCustomSections((prev) =>
+          prev.map((row) => {
+            if (row.id !== secModalEditingId) return row;
+            let imageUrl = row.imageUrl;
+            let fileMime = row.fileMime;
+            if (newSecType === "allegato") {
+              if (newBlobUrl) {
+                if (imageUrl?.startsWith("blob:")) URL.revokeObjectURL(imageUrl);
+                imageUrl = newBlobUrl;
+                fileMime = newMime;
+              }
+            } else {
+              if (imageUrl?.startsWith("blob:")) URL.revokeObjectURL(imageUrl);
+              imageUrl = null;
+              fileMime = null;
+            }
+            return {
+              ...row,
+              type: newSecType,
+              title: titleTrim,
+              content: newSecContent,
+              imageUrl,
+              fileMime,
+              parentKey: newSecType === "sottocapitolo" ? newSecParentKey : null,
+            };
+          }),
+        );
+        setSecModalOpen(false);
+        setSecModalEditingId(null);
+        if (secModalFileRef.current) secModalFileRef.current.value = "";
+        return;
+      }
+
+      const id = newSectionId();
+      const sec = {
+        id,
+        type: newSecType,
+        title: titleTrim,
+        content: newSecContent,
+        imageUrl: newBlobUrl,
+        fileMime: newMime,
+        order: 0,
+        parentKey: newSecType === "sottocapitolo" ? newSecParentKey : null,
+      };
+      setCustomSections((prev) => [...prev, { ...sec, order: prev.length }]);
+      setSectionOrder((prev) => [...(prev?.length ? prev : [...DEFAULT_SECTION_ORDER]), `custom:${id}`]);
+      setSecModalOpen(false);
+      setSecModalEditingId(null);
+      if (secModalFileRef.current) secModalFileRef.current.value = "";
+    } catch (e) {
+      console.error("[submitSectionModal]", e);
+      setErr(e.message || String(e));
+    }
   };
 
   // Previeni apertura file dal browser in modo aggressivo (capture phase)
@@ -1559,7 +1780,10 @@ function Editor({ data: initialData, onBack }) {
       /* customSections + sectionOrder restano invariati */
       setHistory(prev=>[...prev,{msg:msg||"(allegati)", files:attachments.map(a=>a.name), ts:new Date()}]);
       setMsg(""); setAttachments([]);
-    } catch(e) { setErr(e.message); }
+    } catch (e) {
+      console.error("[applyEdit]", e);
+      setErr(e.message);
+    }
     finally { setLoading(false); }
   };
 
@@ -1624,9 +1848,12 @@ function Editor({ data: initialData, onBack }) {
         if (s.type === "capitolo") {
           const h = getById(`pcap-${id}`);
           if (h) flowParts += page(h, "ppage-flow");
+        } else if (s.type === "sottocapitolo") {
+          const h = getById(`psub-${id}`);
+          if (h) flowParts += page(h, "ppage-flow");
         } else {
           const h = getById(`pallc-${id}`);
-          if (h) flowParts += page(h, "ppage-flow");
+          if (h) flowParts += page(h, "ppage-fixed ppage-allegato-custom");
         }
       }
     }
@@ -1647,6 +1874,7 @@ embed{display:block;}
 .ppage-fixed{height:297mm;overflow:hidden;}
 .ppage-flow{overflow:visible;}
 .pcnt{padding-top:0;padding-bottom:10px;padding-left:36px;padding-right:36px;overflow:visible;}
+.ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;overflow:hidden;}
 .cover .pcnt{
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
@@ -1661,6 +1889,7 @@ embed{display:block;}
   .ppage-fixed{height:297mm;overflow:hidden;}
   .pcnt{padding-top:85px;padding-bottom:40px;padding-left:36px;padding-right:36px;}
   .ppage-all1 .pcnt{font-size:7pt;line-height:1.25;overflow:hidden;max-height:calc(297mm - 130px);}
+  .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;overflow:hidden;max-height:calc(297mm - 130px);}
   .cover .pcnt{height:100%;box-sizing:border-box;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
@@ -1757,7 +1986,10 @@ ${flowParts}
                 <button type="button" onClick={()=>deleteCustomKey(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"14px",padding:"0 4px",lineHeight:1}} title="Elimina">🗑</button>
               )}
               {key.startsWith("custom:") && !isRenaming && (
-                <button type="button" onClick={()=>startRenameCustom(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"13px",padding:"0 4px",lineHeight:1}} title="Rinomina">✏️</button>
+                <button type="button" onClick={()=>startRenameCustom(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"13px",padding:"0 4px",lineHeight:1}} title="Rinomina solo titolo">✎</button>
+              )}
+              {key.startsWith("custom:") && !isRenaming && (
+                <button type="button" onClick={()=>openSecModalForEdit(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"11px",padding:"2px 6px",lineHeight:1,color:N,fontWeight:"600"}} title="Modifica contenuto e tipo">✏️ Modifica</button>
               )}
               {isRenaming ? (
                 <input
@@ -1900,24 +2132,37 @@ ${flowParts}
       </div>
 
       {secModalOpen && (
-        <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={()=>setSecModalOpen(false)}>
-          <div style={{background:WH,borderRadius:"12px",maxWidth:"420px",width:"100%",boxShadow:"0 20px 50px rgba(0,0,0,0.2)",overflow:"hidden",...SANS}} onClick={e=>e.stopPropagation()}>
-            <div style={{padding:"14px 18px",borderBottom:`1px solid ${GB}`,background:GL,fontWeight:"700",fontSize:"14px",color:N}}>Aggiungi sezione</div>
+        <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={()=>{setSecModalOpen(false);setSecModalEditingId(null);}}>
+          <div style={{background:WH,borderRadius:"12px",maxWidth:"420px",width:"100%",maxHeight:"90vh",overflow:"auto",boxShadow:"0 20px 50px rgba(0,0,0,0.2)",...SANS}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${GB}`,background:GL,fontWeight:"700",fontSize:"14px",color:N}}>{secModalEditingId?"Modifica sezione":"Aggiungi sezione"}</div>
             <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:"12px"}}>
               <div>
                 <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Tipo</div>
                 <label style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px",cursor:"pointer",fontSize:"13px"}}>
                   <input type="radio" name="sectype" checked={newSecType==="capitolo"} onChange={()=>setNewSecType("capitolo")} /> Capitolo
                 </label>
+                <label style={{display:"flex",alignItems:"center",gap:"8px",marginBottom:"6px",cursor:"pointer",fontSize:"13px"}}>
+                  <input type="radio" name="sectype" checked={newSecType==="sottocapitolo"} onChange={()=>setNewSecType("sottocapitolo")} /> Sotto Capitolo
+                </label>
                 <label style={{display:"flex",alignItems:"center",gap:"8px",cursor:"pointer",fontSize:"13px"}}>
                   <input type="radio" name="sectype" checked={newSecType==="allegato"} onChange={()=>setNewSecType("allegato")} /> Allegato
                 </label>
               </div>
+              {newSecType==="sottocapitolo" && (
+                <div>
+                  <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Capitolo padre</div>
+                  <select value={newSecParentKey} onChange={(e)=>setNewSecParentKey(e.target.value)} style={{...inp,cursor:"pointer",width:"100%",boxSizing:"border-box"}}>
+                    {parentCapitoloOptions.map((o)=>(
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Titolo</div>
                 <input value={newSecTitle} onChange={e=>setNewSecTitle(e.target.value)} placeholder="Titolo sezione" style={{...inp,width:"100%",boxSizing:"border-box"}} />
               </div>
-              {newSecType==="capitolo" && (
+              {(newSecType==="capitolo" || newSecType==="sottocapitolo") && (
                 <div>
                   <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Contenuto (opzionale)</div>
                   <textarea value={newSecContent} onChange={e=>setNewSecContent(e.target.value)} placeholder="Testo da stampare nella sezione…" rows={5} style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical"}} />
@@ -1930,7 +2175,9 @@ ${flowParts}
                 <div>
                   <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>File immagine o PDF (opzionale)</div>
                   <input ref={secModalFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" style={{fontSize:"12px",width:"100%"}} />
-                  <div style={{fontSize:"10px",color:GR,marginTop:"4px"}}>Puoi lasciare solo titolo e testo senza allegare file.</div>
+                  <div style={{fontSize:"10px",color:GR,marginTop:"4px"}}>
+                    {secModalEditingId ? "Lascia vuoto per mantenere il file attuale. Carica un nuovo file per sostituirlo." : "Puoi lasciare solo titolo e testo senza allegare file."}
+                  </div>
                   <div style={{marginTop:"10px"}}>
                     <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Testo / note (opzionale)</div>
                     <textarea value={newSecContent} onChange={e=>setNewSecContent(e.target.value)} rows={4} style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical"}} />
@@ -1941,8 +2188,8 @@ ${flowParts}
                 </div>
               )}
               <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
-                <button type="button" onClick={()=>setSecModalOpen(false)} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
-                <button type="button" onClick={confirmAddSection} style={{flex:1,padding:"10px",background:N,color:WH,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>Aggiungi</button>
+                <button type="button" onClick={()=>{setSecModalOpen(false);setSecModalEditingId(null);}} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
+                <button type="button" onClick={submitSectionModal} style={{flex:1,padding:"10px",background:N,color:WH,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>{secModalEditingId?"Salva":"Aggiungi"}</button>
               </div>
             </div>
           </div>
