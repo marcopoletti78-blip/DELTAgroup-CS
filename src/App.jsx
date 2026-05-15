@@ -1192,6 +1192,7 @@ embed{display:block;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
   .ppage-fixed{height:297mm;overflow:hidden;}
   .pcnt{padding-top:85px;padding-bottom:40px;padding-left:36px;padding-right:36px;}
+  .ppage-all1 .pcnt{font-size:7pt;line-height:1.25;overflow:hidden;max-height:calc(297mm - 130px);}
   .cover .pcnt{height:100%;box-sizing:border-box;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
@@ -1202,7 +1203,7 @@ embed{display:block;}
 ${page(coverHTML, "cover ppage-fixed ppage-first")}
 ${page(tocHTML, "ppage-fixed")}
 ${sectionPages}
-${all1HTML ? page(all1HTML, "ppage-flow") : ""}
+${all1HTML ? page(all1HTML, "ppage-fixed ppage-all1") : ""}
 ${all2HTML ? page(all2HTML, "ppage-flow") : ""}
 </body></html>`;
   };
