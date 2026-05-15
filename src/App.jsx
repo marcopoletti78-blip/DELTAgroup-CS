@@ -752,7 +752,7 @@ function DocPreview({ data }) {
 
       {/* ── CARTA INTESTATA HEADER ── */}
       <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"4px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
-        <img src={logoImg} alt="DELTAgroup" style={{height:44,display:"block"}}/>
+        <img src={logoImg} alt="DELTAgroup" style={{height:65,display:"block"}}/>
       </div>
 
       {/* ── COVER ── */}
@@ -762,13 +762,6 @@ function DocPreview({ data }) {
             <img src={data.logoEvento} alt="logo evento" style={{maxHeight:"90px",maxWidth:"220px",objectFit:"contain"}}/>
           </div>
         )}
-        <div style={{...SERIF,fontSize:"24px",fontWeight:"700",color:N,letterSpacing:"0.04em"}}>
-          DELTA<sup style={{fontSize:"10px",color:RD,verticalAlign:"super",fontWeight:"700"}}>®</sup>
-          <span style={{fontWeight:"400",fontSize:"16px"}}> group</span>
-        </div>
-        <div style={{...SANS,fontSize:"9px",color:GR,textTransform:"uppercase",letterSpacing:"0.15em",marginBottom:"28px"}}>
-          Security &amp; Services AG
-        </div>
         <div style={{...SANS,fontSize:"13px",fontWeight:"700",color:N,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:"12px"}}>
           Concetto di sicurezza
         </div>
@@ -961,10 +954,10 @@ function DocPreview({ data }) {
           Allegato 1 – Formulario Annunci d'Emergenza
         </div>
         {ANNUNCI.map(sec=>(
-          <div key={sec.n} style={{marginBottom:"22px"}}>
+          <div key={sec.n} style={{marginBottom:"22px",breakInside:"avoid",pageBreakInside:"avoid"}}>
             <div style={{fontWeight:"700",fontSize:"12.5px",textDecoration:"underline",color:N,...SANS,marginBottom:"12px"}}>{sec.n}</div>
             {sec.items.map((it,i)=>(
-              <div key={i} style={{marginBottom:"13px",paddingLeft:"8px"}}>
+              <div key={i} style={{marginBottom:"13px",paddingLeft:"8px",breakInside:"avoid",pageBreakInside:"avoid"}}>
                 <div style={{fontWeight:"700",fontSize:"11.5px",...SANS,color:TX,marginBottom:"3px"}}>Nr. – {it.l}</div>
                 <div style={{...SANS,fontSize:"11.5px",whiteSpace:"pre-line",color:TX,lineHeight:1.65,paddingLeft:"10px"}}>{it.t}</div>
               </div>
@@ -1138,7 +1131,7 @@ function Editor({ data: initialData, onBack }) {
     };
 
     const hdr = `<div style="display:flex;align-items:center;justify-content:flex-end;padding:4px 32px;border-bottom:2px solid #0c1d3d;background:white;">
-  <img src="${window.location.origin}${logoImg}" style="height:44px;display:block;"/>
+  <img src="${window.location.origin}${logoImg}" style="height:65px;display:block;"/>
 </div>`;
 
     const ftr = `<div style="display:flex;justify-content:center;padding:5px 32px;border-top:1px solid #0c1d3d;font-size:8pt;color:#555;font-family:Arial;background:white;">
