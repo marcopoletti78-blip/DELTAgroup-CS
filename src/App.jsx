@@ -1145,7 +1145,7 @@ function Editor({ data: initialData, onBack }) {
     };
 
     const hdr = `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 32px;border-bottom:2px solid #0c1d3d;background:white;">
-  <img src="${logoImg}" style="height:50px;display:block;"/>
+  <img src="${window.location.origin}${logoImg}" style="height:50px;display:block;"/>
   <div style="text-align:right;font-size:9pt;color:#0c1d3d;font-family:Arial;">
     <b>Security &amp; Services AG</b><br/>
     Filiale Tessin · Via alla Foce 4, 6933 Muzzano<br/>
