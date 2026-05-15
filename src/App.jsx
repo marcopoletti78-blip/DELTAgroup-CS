@@ -752,13 +752,8 @@ function DocPreview({ data }) {
 
       {/* ── CARTA INTESTATA HEADER ── */}
       <div className="doc-page-header" style={{padding:"0",marginBottom:"0",borderBottom:`1px solid ${GB}`}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
+        <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
           <img src={logoImg} alt="DELTAgroup" style={{height:50,display:"block"}}/>
-          <div style={{textAlign:"right",fontSize:"9pt",color:"#0c1d3d",fontFamily:"Arial"}}>
-            <b>Security &amp; Services AG</b><br/>
-            Filiale Tessin · Via alla Foce 4, 6933 Muzzano<br/>
-            T +41 91 921 49 49 · info@delta.ch
-          </div>
         </div>
       </div>
 
@@ -1035,7 +1030,7 @@ function DocPreview({ data }) {
       {/* ── CARTA INTESTATA FOOTER ── */}
       <div className="doc-page-footer" style={{borderTop:`1px solid ${GB}`}}>
         <div style={{display:"flex",justifyContent:"center",padding:"5px 32px",borderTop:"1px solid #0c1d3d",fontSize:"8pt",color:"#555",fontFamily:"Arial",background:"white"}}>
-          DELTA®group Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 91 921 49 49 · info@delta.ch · www.delta.ch
+          DELTAgroup Security &amp; Services AG &middot; Filiale Ticino &middot; Via alla Foce 4, 6933 Muzzano &middot; T +41 91 921 49 49 &middot; ticino@delta.ch &middot; www.delta.ch
         </div>
       </div>
     </div>
@@ -1144,17 +1139,12 @@ function Editor({ data: initialData, onBack }) {
       return node ? node.innerHTML : "";
     };
 
-    const hdr = `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 32px;border-bottom:2px solid #0c1d3d;background:white;">
+    const hdr = `<div style="display:flex;justify-content:flex-end;padding:8px 32px;border-bottom:2px solid #0c1d3d;background:white;">
   <img src="${window.location.origin}${logoImg}" style="height:50px;display:block;"/>
-  <div style="text-align:right;font-size:9pt;color:#0c1d3d;font-family:Arial;">
-    <b>Security &amp; Services AG</b><br/>
-    Filiale Tessin · Via alla Foce 4, 6933 Muzzano<br/>
-    T +41 91 921 49 49 · info@delta.ch
-  </div>
 </div>`;
 
     const ftr = `<div style="display:flex;justify-content:center;padding:5px 32px;border-top:1px solid #0c1d3d;font-size:8pt;color:#555;font-family:Arial;background:white;">
-  DELTA®group Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 91 921 49 49 · info@delta.ch · www.delta.ch
+  DELTAgroup Security &amp; Services AG &middot; Filiale Ticino &middot; Via alla Foce 4, 6933 Muzzano &middot; T +41 91 921 49 49 &middot; ticino@delta.ch &middot; www.delta.ch
 </div>`;
 
     const page = (content, extraClass = "") =>
