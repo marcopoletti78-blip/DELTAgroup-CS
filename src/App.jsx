@@ -1191,7 +1191,8 @@ embed{display:block;}
   .print-hdr{position:fixed;top:0;left:0;height:auto;width:100%;z-index:1000;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
   .ppage-fixed{height:297mm;overflow:hidden;}
-  .pcnt{padding-top:65px;padding-bottom:40px;padding-left:36px;padding-right:36px;}
+  .pcnt{padding-top:85px;padding-bottom:40px;padding-left:36px;padding-right:36px;}
+  .cover .pcnt{height:100%;box-sizing:border-box;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
 }
