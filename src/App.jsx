@@ -785,11 +785,13 @@ function parseCustomSectionKey(key) {
 
 function getCustomChapterNumbers(sectionOrder, customSections) {
   const m = new Map();
+  const cs = customSections ?? [];
+  if (!sectionOrder?.length) return m;
   let i = 0;
   for (const key of sectionOrder) {
     const id = parseCustomSectionKey(key);
     if (!id) continue;
-    const s = customSections.find((c) => c.id === id);
+    const s = cs.find((c) => c.id === id);
     if (s?.type === "capitolo") {
       i += 1;
       m.set(id, 6 + i);
@@ -800,11 +802,13 @@ function getCustomChapterNumbers(sectionOrder, customSections) {
 
 function getCustomAllegatoNumbers(sectionOrder, customSections) {
   const m = new Map();
+  const cs = customSections ?? [];
+  if (!sectionOrder?.length) return m;
   let i = 0;
   for (const key of sectionOrder) {
     const id = parseCustomSectionKey(key);
     if (!id) continue;
-    const s = customSections.find((c) => c.id === id);
+    const s = cs.find((c) => c.id === id);
     if (s?.type === "allegato") {
       i += 1;
       m.set(id, 2 + i);
@@ -814,22 +818,28 @@ function getCustomAllegatoNumbers(sectionOrder, customSections) {
 }
 
 function buildTocRows(sectionOrder, customSections) {
-  const ch = getCustomChapterNumbers(sectionOrder, customSections);
-  const al = getCustomAllegatoNumbers(sectionOrder, customSections);
-  const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
+  const cs = Array.isArray(customSections) ? customSections : [];
+  const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
+  if (!order.length) return [];
+
+  const ch = getCustomChapterNumbers(order, cs);
+  const al = getCustomAllegatoNumbers(order, cs);
   const rows = [];
   for (const key of order) {
-    if (key === "ps1") rows.push(...TOC_PRESET_BLOCKS.ps1);
-    else if (key === "ps2") rows.push(...TOC_PRESET_BLOCKS.ps2);
-    else if (key === "ps3") rows.push(...TOC_PRESET_BLOCKS.ps3);
-    else if (key === "ps4") rows.push(...TOC_PRESET_BLOCKS.ps4);
-    else if (key === "ps5") rows.push(...TOC_PRESET_BLOCKS.ps5);
-    else if (key === "ps6") rows.push(...TOC_PRESET_BLOCKS.ps6);
-    else if (key === "all1") rows.push(TOC_ALL1_ENTRY);
-    else if (key === "all2") rows.push(TOC_ALL2_ENTRY);
-    else if (key.startsWith("custom:")) {
+    if (!key) continue;
+    if (key === "ps1") rows.push(...(TOC_PRESET_BLOCKS.ps1 ?? []).filter(Boolean));
+    else if (key === "ps2") rows.push(...(TOC_PRESET_BLOCKS.ps2 ?? []).filter(Boolean));
+    else if (key === "ps3") rows.push(...(TOC_PRESET_BLOCKS.ps3 ?? []).filter(Boolean));
+    else if (key === "ps4") rows.push(...(TOC_PRESET_BLOCKS.ps4 ?? []).filter(Boolean));
+    else if (key === "ps5") rows.push(...(TOC_PRESET_BLOCKS.ps5 ?? []).filter(Boolean));
+    else if (key === "ps6") rows.push(...(TOC_PRESET_BLOCKS.ps6 ?? []).filter(Boolean));
+    else if (key === "all1") {
+      if (TOC_ALL1_ENTRY) rows.push(TOC_ALL1_ENTRY);
+    } else if (key === "all2") {
+      if (TOC_ALL2_ENTRY) rows.push(TOC_ALL2_ENTRY);
+    } else if (typeof key === "string" && key.startsWith("custom:")) {
       const id = parseCustomSectionKey(key);
-      const s = customSections.find((c) => c.id === id);
+      const s = cs.find((c) => c.id === id);
       if (!s) continue;
       if (s.type === "capitolo") {
         rows.push({ n: String(ch.get(id) ?? 7), t: s.title || "Capitolo", main: true });
@@ -839,7 +849,7 @@ function buildTocRows(sectionOrder, customSections) {
       }
     }
   }
-  return rows;
+  return rows.filter((e) => e != null && e.n != null && e.t != null);
 }
 
 function escapeHtmlPrint(s) {
@@ -1156,8 +1166,9 @@ function CustomAllegatoPreview({ section, displayAllegatoNum }) {
 }
 
 function DocPreview({ data, customSections = [], sectionOrder }) {
+  if (!data || !data.nomeEvento) return null;
   const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
-  const tocRows = buildTocRows(order, customSections);
+  const tocRows = buildTocRows(sectionOrder, customSections);
   const chMap = getCustomChapterNumbers(order, customSections);
   const alMap = getCustomAllegatoNumbers(order, customSections);
 
@@ -1184,7 +1195,9 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
 
       <div id="ptoc" style={{padding:"36px 48px",borderBottom:`1px solid ${GB}`}}>
         <div style={{...SANS,fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",color:N,marginBottom:"16px",borderBottom:`2px solid ${N}`,paddingBottom:"6px"}}>Indice</div>
-        {tocRows.map((e,i)=>(
+        {tocRows
+          .filter((e) => e != null && e.n != null && e.t != null)
+          .map((e,i)=>(
           <div key={i} style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:isMain(e.n)?"6px":"2px",paddingLeft:isMain(e.n)?"0":"18px"}}>
             <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX}}>{e.t}</span>
             <span style={{flex:1,borderBottom:"1px dotted #ccc",height:"1px",marginBottom:"3px"}}/>
