@@ -751,10 +751,8 @@ function DocPreview({ data }) {
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
 
       {/* ── CARTA INTESTATA HEADER ── */}
-      <div className="doc-page-header" style={{padding:"0",marginBottom:"0",borderBottom:`1px solid ${GB}`}}>
-        <div style={{display:"flex",justifyContent:"flex-end",padding:"8px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
-          <img src={logoImg} alt="DELTAgroup" style={{height:50,display:"block"}}/>
-        </div>
+      <div style={{display:"flex",justifyContent:"flex-end",padding:"4px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
+        <img src={logoImg} alt="DELTAgroup" style={{height:44,display:"block"}}/>
       </div>
 
       {/* ── COVER ── */}
@@ -1139,8 +1137,8 @@ function Editor({ data: initialData, onBack }) {
       return node ? node.innerHTML : "";
     };
 
-    const hdr = `<div style="display:flex;justify-content:flex-end;padding:8px 32px;border-bottom:2px solid #0c1d3d;background:white;">
-  <img src="${window.location.origin}${logoImg}" style="height:50px;display:block;"/>
+    const hdr = `<div style="display:flex;justify-content:flex-end;padding:4px 32px;border-bottom:2px solid #0c1d3d;background:white;">
+  <img src="${window.location.origin}${logoImg}" style="height:44px;display:block;"/>
 </div>`;
 
     const ftr = `<div style="display:flex;justify-content:center;padding:5px 32px;border-top:1px solid #0c1d3d;font-size:8pt;color:#555;font-family:Arial;background:white;">
@@ -1175,7 +1173,6 @@ function Editor({ data: initialData, onBack }) {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Concetto di Sicurezza – ${data.nomeEvento||""}</title>
 <style>
-:root{--print-hdr-h:28mm;--print-ftr-h:16mm;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:Arial,sans-serif;font-size:10pt;color:#1a2038;background:#fff;}
 table{width:100%;border-collapse:collapse;margin:4px 0;}
@@ -1188,14 +1185,14 @@ embed{display:block;}
 .ppage-first{break-before:auto;page-break-before:auto;}
 .ppage-fixed{height:297mm;overflow:hidden;}
 .ppage-flow{overflow:visible;}
-.pcnt{padding:12px 36px;overflow:visible;}
+.pcnt{padding-top:10px;padding-bottom:10px;padding-left:36px;padding-right:36px;overflow:visible;}
 .cover .pcnt{
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
   text-align:center;
 }
 @media print{
-  @page{size:A4 portrait;margin-top:var(--print-hdr-h);margin-bottom:var(--print-ftr-h);margin-left:0;margin-right:0;}
+  @page{size:A4 portrait;margin:70px 20px 45px 20px;}
   .print-hdr{position:fixed;top:0;left:0;width:100%;z-index:1000;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
   .ppage-fixed{height:auto;overflow:visible;}
