@@ -783,38 +783,52 @@ function parseCustomSectionKey(key) {
   return key.slice(7);
 }
 
-function getCustomChapterNumbers(sectionOrder, customSections) {
-  const m = new Map();
-  const cs = customSections ?? [];
-  if (!sectionOrder?.length) return m;
-  let i = 0;
-  for (const key of sectionOrder) {
-    const id = parseCustomSectionKey(key);
-    if (!id) continue;
-    const s = cs.find((c) => c.id === id);
-    if (s?.type === "capitolo") {
-      i += 1;
-      m.set(id, 6 + i);
+/** Running chapter (ps* + custom capitolo) and allegato (all* + custom allegato) indices by sectionOrder. */
+function buildSectionNumberMaps(sectionOrder, customSections) {
+  const cs = Array.isArray(customSections) ? customSections : [];
+  const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
+  const chapterNumByKey = new Map();
+  const allegatoNumByKey = new Map();
+  let ch = 0;
+  let al = 0;
+  for (const key of order) {
+    if (!key) continue;
+    if (/^ps[1-6]$/.test(key)) {
+      ch += 1;
+      chapterNumByKey.set(key, ch);
+    } else if (key === "all1" || key === "all2") {
+      al += 1;
+      allegatoNumByKey.set(key, al);
+    } else if (typeof key === "string" && key.startsWith("custom:")) {
+      const id = parseCustomSectionKey(key);
+      const s = cs.find((c) => c.id === id);
+      if (!s) continue;
+      if (s.type === "capitolo") {
+        ch += 1;
+        chapterNumByKey.set(key, ch);
+      } else if (s.type === "allegato") {
+        al += 1;
+        allegatoNumByKey.set(key, al);
+      }
     }
   }
-  return m;
+  return { chapterNumByKey, allegatoNumByKey };
 }
 
-function getCustomAllegatoNumbers(sectionOrder, customSections) {
-  const m = new Map();
-  const cs = customSections ?? [];
-  if (!sectionOrder?.length) return m;
-  let i = 0;
-  for (const key of sectionOrder) {
-    const id = parseCustomSectionKey(key);
-    if (!id) continue;
-    const s = cs.find((c) => c.id === id);
-    if (s?.type === "allegato") {
-      i += 1;
-      m.set(id, 2 + i);
+function remapTocPresetChapterRows(rows, chapterIndex) {
+  if (!rows?.length || chapterIndex == null) return [];
+  const p = String(chapterIndex);
+  return rows.map((row) => {
+    const cn = String(row.n ?? "").trim();
+    const sub = cn.match(/^(\d+)\.(\d+)$/);
+    if (sub) {
+      return { ...row, n: `${p}.${sub[2]}` };
     }
-  }
-  return m;
+    if (/^\d+$/.test(cn)) {
+      return { ...row, n: p, t: `${p} ${row.t}` };
+    }
+    return { ...row };
+  });
 }
 
 function buildTocRows(sectionOrder, customSections) {
@@ -822,30 +836,44 @@ function buildTocRows(sectionOrder, customSections) {
   const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
   if (!order.length) return [];
 
-  const ch = getCustomChapterNumbers(order, cs);
-  const al = getCustomAllegatoNumbers(order, cs);
+  const { chapterNumByKey, allegatoNumByKey } = buildSectionNumberMaps(order, cs);
   const rows = [];
   for (const key of order) {
     if (!key) continue;
-    if (key === "ps1") rows.push(...(TOC_PRESET_BLOCKS.ps1 ?? []).filter(Boolean));
-    else if (key === "ps2") rows.push(...(TOC_PRESET_BLOCKS.ps2 ?? []).filter(Boolean));
-    else if (key === "ps3") rows.push(...(TOC_PRESET_BLOCKS.ps3 ?? []).filter(Boolean));
-    else if (key === "ps4") rows.push(...(TOC_PRESET_BLOCKS.ps4 ?? []).filter(Boolean));
-    else if (key === "ps5") rows.push(...(TOC_PRESET_BLOCKS.ps5 ?? []).filter(Boolean));
-    else if (key === "ps6") rows.push(...(TOC_PRESET_BLOCKS.ps6 ?? []).filter(Boolean));
-    else if (key === "all1") {
-      if (TOC_ALL1_ENTRY) rows.push(TOC_ALL1_ENTRY);
-    } else if (key === "all2") {
-      if (TOC_ALL2_ENTRY) rows.push(TOC_ALL2_ENTRY);
+    if (/^ps[1-6]$/.test(key)) {
+      const idx = chapterNumByKey.get(key);
+      const block = TOC_PRESET_BLOCKS[key] ?? [];
+      rows.push(...remapTocPresetChapterRows(block, idx));
+    } else if (key === "all1" && TOC_ALL1_ENTRY) {
+      const a = allegatoNumByKey.get("all1");
+      const baseT = String(TOC_ALL1_ENTRY.t).replace(/^\d+\s+/, "");
+      rows.push({
+        ...TOC_ALL1_ENTRY,
+        n: `All. ${a}`,
+        t: a != null ? `${a} ${baseT}` : TOC_ALL1_ENTRY.t,
+        main: true,
+      });
+    } else if (key === "all2" && TOC_ALL2_ENTRY) {
+      const a = allegatoNumByKey.get("all2");
+      const baseT = String(TOC_ALL2_ENTRY.t).replace(/^\d+\s+/, "");
+      rows.push({
+        ...TOC_ALL2_ENTRY,
+        n: `All. ${a}`,
+        t: a != null ? `${a} ${baseT}` : TOC_ALL2_ENTRY.t,
+        main: true,
+      });
     } else if (typeof key === "string" && key.startsWith("custom:")) {
       const id = parseCustomSectionKey(key);
       const s = cs.find((c) => c.id === id);
       if (!s) continue;
       if (s.type === "capitolo") {
-        rows.push({ n: String(ch.get(id) ?? 7), t: s.title || "Capitolo", main: true });
+        const n = chapterNumByKey.get(key) ?? "?";
+        const title = (s.title || "Capitolo").replace(/^\d+\s+/, "");
+        rows.push({ n: String(n), t: `${n} ${title}`, main: true });
       } else {
-        const n = al.get(id) ?? 3;
-        rows.push({ n: `All. ${n}`, t: s.title || "Allegato", main: true });
+        const na = allegatoNumByKey.get(key) ?? "?";
+        const title = (s.title || "Allegato").replace(/^\d+\s+/, "");
+        rows.push({ n: `All. ${na}`, t: `${na} ${title}`, main: true });
       }
     }
   }
@@ -871,10 +899,11 @@ function formatCustomBodyForPrint(htmlOrText) {
 const isMain = (n) => /^\d+$/.test(n) || n.startsWith("All.");
 
 /** Anteprima: blocchi preset (ordine gestito dal container). */
-function PresetPs1({ data }) {
+function PresetPs1({ data, displayChapter = 1 }) {
   if (!data.s1) return null;
+  const p = String(displayChapter);
   return (
-    <Dsec id="ps1" n="1" t="Responsabilità">
+    <Dsec id="ps1" n={p} t="Responsabilità">
       <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:"22px", fontSize:"11.5px", border:`1px solid ${GB}` }}>
         <thead>
           <tr>
@@ -894,13 +923,13 @@ function PresetPs1({ data }) {
           ))}
         </tbody>
       </table>
-      {data.s1.sicurezza && <Dsub n="1.1" t="Servizio di sicurezza">{data.s1.sicurezza}</Dsub>}
-      {data.s1.polizia && <Dsub n="1.2" t="Polizia">{data.s1.polizia}</Dsub>}
-      {data.s1.sanitari && <Dsub n="1.3" t="Sanitari">{data.s1.sanitari}</Dsub>}
-      {data.s1.rega && <Dsub n="1.4" t="REGA">{data.s1.rega}</Dsub>}
-      {data.s1.pompieri && <Dsub n="1.5" t="Pompieri">{data.s1.pompieri}</Dsub>}
+      {data.s1.sicurezza && <Dsub n={`${p}.1`} t="Servizio di sicurezza">{data.s1.sicurezza}</Dsub>}
+      {data.s1.polizia && <Dsub n={`${p}.2`} t="Polizia">{data.s1.polizia}</Dsub>}
+      {data.s1.sanitari && <Dsub n={`${p}.3`} t="Sanitari">{data.s1.sanitari}</Dsub>}
+      {data.s1.rega && <Dsub n={`${p}.4`} t="REGA">{data.s1.rega}</Dsub>}
+      {data.s1.pompieri && <Dsub n={`${p}.5`} t="Pompieri">{data.s1.pompieri}</Dsub>}
       {data.s1.statoMaggiore && (
-        <Dsub n="1.6" t="Stato Maggiore">
+        <Dsub n={`${p}.6`} t="Stato Maggiore">
           <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12.5px" }}>
             <tbody>
               {data.s1.statoMaggiore.split("\n").map((s)=>s.trim()).filter(Boolean).map((s, i)=>{
@@ -927,52 +956,55 @@ function PresetPs1({ data }) {
   );
 }
 
-function PresetPs2({ data }) {
+function PresetPs2({ data, displayChapter = 2 }) {
   if (!data.s2) return null;
+  const p = String(displayChapter);
   return (
-    <Dsec id="ps2" n="2" t="Descrizione">
+    <Dsec id="ps2" n={p} t="Descrizione">
       {data.s2.descrizione && <p style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, marginBottom:"16px", margin:"0 0 16px" }}>{data.s2.descrizione}</p>}
       {data.s2.programma && data.s2.programma.length > 0 && (
         <div style={{ ...SANS, fontSize:"12.5px", lineHeight:2.1, marginBottom:"16px" }}>
-          {data.s2.programma.map((p, i) => <div key={i}><strong>{p.giorno}</strong>{p.giorno && p.attivita ? " — " : ""}{p.attivita}</div>)}
+          {data.s2.programma.map((row, i) => <div key={i}><strong>{row.giorno}</strong>{row.giorno && row.attivita ? " — " : ""}{row.attivita}</div>)}
         </div>
       )}
-      {data.s2.orari && <Dsub n="2.1" t="Periodo e orari d'apertura">{data.s2.orari}</Dsub>}
+      {data.s2.orari && <Dsub n={`${p}.1`} t="Periodo e orari d'apertura">{data.s2.orari}</Dsub>}
       {data.s2.location && (
-        <Dsub n="2.2" t="Location">
+        <Dsub n={`${p}.2`} t="Location">
           {data.s2.location}
           <div style={{ ...SANS, fontSize:"12px", fontStyle:"italic", color:TM, marginTop:"8px", padding:"6px 10px", background:GL, borderRadius:"4px", border:`1px solid ${GB}` }}>
             📎 La planimetria della location con il dispositivo degli agenti è riportata nell'<strong>Allegato 2</strong>.
           </div>
         </Dsub>
       )}
-      {data.s2.pattuglia && <Dsub n="2.3" t="Pattuglia esterna">{data.s2.pattuglia}</Dsub>}
-      {data.s2.visitatori && <Dsub n="2.4" t="Tipologia e numero dei visitatori">{data.s2.visitatori}</Dsub>}
-      {data.s2.minori && <Dsub n="2.5" t="Gestione dei minori">{data.s2.minori}</Dsub>}
+      {data.s2.pattuglia && <Dsub n={`${p}.3`} t="Pattuglia esterna">{data.s2.pattuglia}</Dsub>}
+      {data.s2.visitatori && <Dsub n={`${p}.4`} t="Tipologia e numero dei visitatori">{data.s2.visitatori}</Dsub>}
+      {data.s2.minori && <Dsub n={`${p}.5`} t="Gestione dei minori">{data.s2.minori}</Dsub>}
     </Dsec>
   );
 }
 
-function PresetPs3({ data }) {
+function PresetPs3({ data, displayChapter = 3 }) {
   if (!data.s3) return null;
+  const p = String(displayChapter);
   return (
-    <Dsec id="ps3" n="3" t="Analisi dei pericoli">
+    <Dsec id="ps3" n={p} t="Analisi dei pericoli">
       <p style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, margin:"0 0 16px" }}>Ad ogni evento vi sono fattori di rischio che potrebbero pregiudicare il buon esito dello stesso. Una valutazione attenta di questi fattori può influire sia sulla buona riuscita che sulle misure da adottare in caso di necessità.</p>
-      <Dsub n="3.1" t="Analisi del rischio">
+      <Dsub n={`${p}.1`} t="Analisi del rischio">
         <RiskTbl title="Lista Pericoli Passivi" rows={data.s3.passivi} />
         <RiskTbl title="Lista Pericoli Attivi" rows={data.s3.attivi} />
       </Dsub>
-      {data.s3.meteo && <Dsub n="3.2" t="Meteo">{data.s3.meteo}</Dsub>}
-      {data.s3.terrorismo && <Dsub n="3.3" t="Atto terroristico / attentato">{data.s3.terrorismo}</Dsub>}
-      {data.s3.evacuazione && <Dsub n="3.4" t="Evacuazione">{data.s3.evacuazione}</Dsub>}
+      {data.s3.meteo && <Dsub n={`${p}.2`} t="Meteo">{data.s3.meteo}</Dsub>}
+      {data.s3.terrorismo && <Dsub n={`${p}.3`} t="Atto terroristico / attentato">{data.s3.terrorismo}</Dsub>}
+      {data.s3.evacuazione && <Dsub n={`${p}.4`} t="Evacuazione">{data.s3.evacuazione}</Dsub>}
     </Dsec>
   );
 }
 
-function PresetPs4({ data }) {
+function PresetPs4({ data, displayChapter = 4 }) {
   if (!data.s4) return null;
+  const p = String(displayChapter);
   return (
-    <Dsec id="ps4" n="4" t="Dispositivo di sicurezza">
+    <Dsec id="ps4" n={p} t="Dispositivo di sicurezza">
       <p style={{ ...SANS, fontSize:"12.5px", margin:"0 0 12px" }}>La DELTAgroup Security &amp; Services AG mette a disposizione il seguente dispositivo di sicurezza. La planimetria con le posizioni degli agenti è riportata nell'<strong>Allegato 2</strong>.</p>
       <div style={{ marginBottom:"20px", border:`1px solid ${GB}`, borderRadius:"6px", overflow:"hidden" }}>
         {(data.s4.righe || []).map((r, i)=>(
@@ -983,39 +1015,41 @@ function PresetPs4({ data }) {
           </div>
         ))}
       </div>
-      {data.s4.modifiche && <Dsub n="4.1" t="Modifiche">{data.s4.modifiche}</Dsub>}
-      {data.s4.comunicazioni && <Dsub n="4.2" t="Comunicazioni">{data.s4.comunicazioni}</Dsub>}
-      <Dsub n="4.3" t="Divisa">Secondo regolamento DELTAgroup.</Dsub>
-      {data.s4.postoComando && <Dsub n="4.4" t="Posto Comando">{data.s4.postoComando}</Dsub>}
-      {data.s4.diversi && <Dsub n="4.5" t="Diversi">{data.s4.diversi}</Dsub>}
+      {data.s4.modifiche && <Dsub n={`${p}.1`} t="Modifiche">{data.s4.modifiche}</Dsub>}
+      {data.s4.comunicazioni && <Dsub n={`${p}.2`} t="Comunicazioni">{data.s4.comunicazioni}</Dsub>}
+      <Dsub n={`${p}.3`} t="Divisa">Secondo regolamento DELTAgroup.</Dsub>
+      {data.s4.postoComando && <Dsub n={`${p}.4`} t="Posto Comando">{data.s4.postoComando}</Dsub>}
+      {data.s4.diversi && <Dsub n={`${p}.5`} t="Diversi">{data.s4.diversi}</Dsub>}
     </Dsec>
   );
 }
 
-function PresetPs5({ data }) {
+function PresetPs5({ data, displayChapter = 5 }) {
   if (!data.s5) return null;
+  const p = String(displayChapter);
   return (
-    <Dsec id="ps5" n="5" t="Scenari">
-      {data.s5.incendio && <Dsub n="5.1" t="Incendio">{data.s5.incendio}</Dsub>}
-      {data.s5.intossicazione && <Dsub n="5.2" t="Intossicazione">{data.s5.intossicazione}</Dsub>}
-      {data.s5.ordine && <Dsub n="5.3" t="Problemi d'ordine">{data.s5.ordine}</Dsub>}
-      {data.s5.ferimenti && <Dsub n="5.4" t="Ferimenti / Malori">{data.s5.ferimenti}</Dsub>}
-      {data.s5.droghe && <Dsub n="5.5" t="Sostanze stupefacenti">{data.s5.droghe}</Dsub>}
+    <Dsec id="ps5" n={p} t="Scenari">
+      {data.s5.incendio && <Dsub n={`${p}.1`} t="Incendio">{data.s5.incendio}</Dsub>}
+      {data.s5.intossicazione && <Dsub n={`${p}.2`} t="Intossicazione">{data.s5.intossicazione}</Dsub>}
+      {data.s5.ordine && <Dsub n={`${p}.3`} t="Problemi d'ordine">{data.s5.ordine}</Dsub>}
+      {data.s5.ferimenti && <Dsub n={`${p}.4`} t="Ferimenti / Malori">{data.s5.ferimenti}</Dsub>}
+      {data.s5.droghe && <Dsub n={`${p}.5`} t="Sostanze stupefacenti">{data.s5.droghe}</Dsub>}
     </Dsec>
   );
 }
 
-function PresetPs6({ data }) {
+function PresetPs6({ data, displayChapter = 6 }) {
   if (!data.s6) return null;
+  const p = String(displayChapter);
   return (
     <>
-      <Dsec id="ps6a" n="6" t="Casi d'Allarme">
-        {data.s6.smc && <Dsub n="6.1" t="Stato Maggiore di Crisi">{data.s6.smc}</Dsub>}
+      <Dsec id="ps6a" n={p} t="Casi d'Allarme">
+        {data.s6.smc && <Dsub n={`${p}.1`} t="Stato Maggiore di Crisi">{data.s6.smc}</Dsub>}
         {[
-          ["6.2", "Evacuazione", "ev"],
-          ["6.3", "Allarme incendio", "inc"],
-          ["6.4", "Minaccia Bomba", "mb"],
-          ["6.5", "Allarme Bomba (indicazione precisa)", "ab"],
+          [`${p}.2`, "Evacuazione", "ev"],
+          [`${p}.3`, "Allarme incendio", "inc"],
+          [`${p}.4`, "Minaccia Bomba", "mb"],
+          [`${p}.5`, "Allarme Bomba (indicazione precisa)", "ab"],
         ].map(([n, t, k]) => (
           data.s6[k] && data.s6[k].length > 0 && (
             <Dsub key={n} n={n} t={t}>
@@ -1026,11 +1060,11 @@ function PresetPs6({ data }) {
           )
         ))}
       </Dsec>
-      <Dsec id="ps6b" n="6" t="Casi d'Allarme">
+      <Dsec id="ps6b" n={p} t="Casi d'Allarme">
         {[
-          ["6.6", "Atto Terroristico / Attentato", "at"],
-          ["6.7", "Allarme tecnico (Corrente elettrica)", "te"],
-          ["6.8", "Allarme Meteo", "me"],
+          [`${p}.6`, "Atto Terroristico / Attentato", "at"],
+          [`${p}.7`, "Allarme tecnico (Corrente elettrica)", "te"],
+          [`${p}.8`, "Allarme Meteo", "me"],
         ].map(([n, t, k]) => (
           data.s6[k] && data.s6[k].length > 0 && (
             <Dsub key={n} n={n} t={t}>
@@ -1040,7 +1074,7 @@ function PresetPs6({ data }) {
             </Dsub>
           )
         ))}
-        <Dsub n="6.9" t="Annunci d'emergenza">
+        <Dsub n={`${p}.9`} t="Annunci d'emergenza">
           La DELTA Security AG prepara e predispone il formulario degli annunci d'emergenza in prossimità di ogni palco o punto dove si possa, tramite un dispositivo audio, effettuare gli annunci. Il responsabile della sicurezza sarà pure lui in possesso di tale formulario. Il formulario con gli annunci d'emergenza è inserito nel presente protocollo di sicurezza. (Allegato 1)
         </Dsub>
       </Dsec>
@@ -1048,11 +1082,11 @@ function PresetPs6({ data }) {
   );
 }
 
-function PresetAll1() {
+function PresetAll1({ displayAllegato = 1 }) {
   return (
     <div id="pall1" style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
       <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em" }}>
-        Allegato 1 – Formulario Annunci d'Emergenza
+        Allegato {displayAllegato} – Formulario Annunci d'Emergenza
       </div>
       {ANNUNCI.map((sec)=>(
         <div key={sec.n} style={{ marginBottom:"22px", breakInside:"avoid", pageBreakInside:"avoid" }}>
@@ -1069,11 +1103,11 @@ function PresetAll1() {
   );
 }
 
-function PresetAll2({ data }) {
+function PresetAll2({ data, displayAllegato = 2 }) {
   return (
     <div id="pall2" style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
       <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em" }}>
-        Allegato 2 – Planimetria Dispositivo Agenti
+        Allegato {displayAllegato} – Planimetria Dispositivo Agenti
       </div>
       {(data.allegato2Files && data.allegato2Files.length > 0) ? (
         <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
@@ -1157,8 +1191,14 @@ function CustomAllegatoPreview({ section, displayAllegatoNum }) {
           )}
         </div>
       ) : (
-        <div style={{ border:`2px dashed ${GB}`, borderRadius:"8px", padding:"24px", textAlign:"center", color:GR, ...SANS, fontSize:"12.5px" }}>
-          Nessun file caricato per questo allegato.
+        <div style={{ border:`1px solid ${GB}`, borderRadius:"8px", padding:"16px 20px", ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX }}>
+          {section.content ? (
+            <div style={{ whiteSpace:"pre-wrap" }}>{section.content}</div>
+          ) : (
+            <div style={{ border:`2px dashed ${GB}`, borderRadius:"8px", padding:"24px", textAlign:"center", color:GR, fontSize:"12.5px" }}>
+              Nessun file allegato — usa il testo sopra o aggiungi un file dalla modifica sezione.
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -1169,8 +1209,7 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
   if (!data || !data.nomeEvento) return null;
   const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
   const tocRows = buildTocRows(sectionOrder, customSections);
-  const chMap = getCustomChapterNumbers(order, customSections);
-  const alMap = getCustomAllegatoNumbers(order, customSections);
+  const { chapterNumByKey, allegatoNumByKey } = buildSectionNumberMaps(order, customSections);
 
   return (
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
@@ -1208,23 +1247,23 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
 
       <div id="pbody" style={{padding:"36px 48px"}}>
         {order.map((key)=>{
-          if (key === "ps1") return <PresetPs1 key={key} data={data} />;
-          if (key === "ps2") return <PresetPs2 key={key} data={data} />;
-          if (key === "ps3") return <PresetPs3 key={key} data={data} />;
-          if (key === "ps4") return <PresetPs4 key={key} data={data} />;
-          if (key === "ps5") return <PresetPs5 key={key} data={data} />;
-          if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} /></React.Fragment>;
-          if (key === "all1") return <PresetAll1 key={key} />;
-          if (key === "all2") return <PresetAll2 key={key} data={data} />;
+          if (key === "ps1") return <PresetPs1 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 1} />;
+          if (key === "ps2") return <PresetPs2 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 2} />;
+          if (key === "ps3") return <PresetPs3 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 3} />;
+          if (key === "ps4") return <PresetPs4 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 4} />;
+          if (key === "ps5") return <PresetPs5 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 5} />;
+          if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} displayChapter={chapterNumByKey.get(key) ?? 6} /></React.Fragment>;
+          if (key === "all1") return <PresetAll1 key={key} displayAllegato={allegatoNumByKey.get(key) ?? 1} />;
+          if (key === "all2") return <PresetAll2 key={key} data={data} displayAllegato={allegatoNumByKey.get(key) ?? 2} />;
           if (key.startsWith("custom:")) {
             const id = parseCustomSectionKey(key);
             const s = customSections.find((c) => c.id === id);
             if (!s) return null;
             if (s.type === "capitolo") {
-              const num = chMap.get(id) ?? 7;
+              const num = chapterNumByKey.get(key) ?? 1;
               return <CustomCapitoloPreview key={key} section={s} displayNum={num} />;
             }
-            const an = alMap.get(id) ?? 3;
+            const an = allegatoNumByKey.get(key) ?? 1;
             return <CustomAllegatoPreview key={key} section={s} displayAllegatoNum={an} />;
           }
           return null;
@@ -1265,15 +1304,18 @@ function newSectionId() {
     : `sec_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-const PRESET_SECTION_LABELS = {
-  ps1: "1 · Responsabilità",
-  ps2: "2 · Descrizione",
-  ps3: "3 · Analisi dei pericoli",
-  ps4: "4 · Dispositivo di sicurezza",
-  ps5: "5 · Scenari",
-  ps6: "6 · Casi d'allarme",
-  all1: "All. 1 · Formulario annunci",
-  all2: "All. 2 · Planimetria agenti",
+const PRESET_SECTION_SHORT = {
+  ps1: "Responsabilità",
+  ps2: "Descrizione",
+  ps3: "Analisi dei pericoli",
+  ps4: "Dispositivo di sicurezza",
+  ps5: "Scenari",
+  ps6: "Casi d'allarme",
+};
+
+const ALL12_SHORT = {
+  all1: "Formulario annunci",
+  all2: "Planimetria agenti",
 };
 
 function Editor({ data: initialData, onBack }) {
@@ -1295,6 +1337,8 @@ function Editor({ data: initialData, onBack }) {
   const [newSecTitle, setNewSecTitle] = useState("");
   const [newSecContent, setNewSecContent] = useState("");
   const [newSecAILoading, setNewSecAILoading] = useState(false);
+  const [renamingCustomId, setRenamingCustomId] = useState(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const addRef = React.useRef();
   const all2Ref = React.useRef();
   const secModalFileRef = React.useRef();
@@ -1302,8 +1346,10 @@ function Editor({ data: initialData, onBack }) {
   const rightDragCount = React.useRef(0);
 
   const ord = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
-  const chMap = React.useMemo(() => getCustomChapterNumbers(ord, customSections), [ord, customSections]);
-  const alMap = React.useMemo(() => getCustomAllegatoNumbers(ord, customSections), [ord, customSections]);
+  const { chapterNumByKey, allegatoNumByKey } = React.useMemo(
+    () => buildSectionNumberMaps(ord, customSections),
+    [ord, customSections],
+  );
 
   React.useEffect(() => {
     try {
@@ -1316,13 +1362,26 @@ function Editor({ data: initialData, onBack }) {
   }, [data.nomeEvento, customSections, sectionOrder]);
 
   const labelForKey = (key) => {
-    if (PRESET_SECTION_LABELS[key]) return PRESET_SECTION_LABELS[key];
+    if (/^ps[1-6]$/.test(key)) {
+      const n = chapterNumByKey.get(key);
+      const short = PRESET_SECTION_SHORT[key];
+      return n != null && short ? `${n} · ${short}` : (short || key);
+    }
+    if (key === "all1" || key === "all2") {
+      const n = allegatoNumByKey.get(key);
+      const short = ALL12_SHORT[key];
+      return n != null && short ? `All. ${n} · ${short}` : key;
+    }
     if (key.startsWith("custom:")) {
       const id = parseCustomSectionKey(key);
       const s = customSections.find((c) => c.id === id);
       if (!s) return key;
-      if (s.type === "capitolo") return `${chMap.get(id) ?? 7} · ${s.title || "Capitolo"}`;
-      return `All. ${alMap.get(id) ?? 3} · ${s.title || "Allegato"}`;
+      if (s.type === "capitolo") {
+        const n = chapterNumByKey.get(key);
+        return n != null ? `${n} · ${s.title || "Capitolo"}` : (s.title || "Capitolo");
+      }
+      const na = allegatoNumByKey.get(key);
+      return na != null ? `All. ${na} · ${s.title || "Allegato"}` : (s.title || "Allegato");
     }
     return key;
   };
@@ -1349,6 +1408,24 @@ function Editor({ data: initialData, onBack }) {
     setSectionOrder((prev) => prev.filter((k) => k !== key));
   };
 
+  const startRenameCustom = (key) => {
+    const id = parseCustomSectionKey(key);
+    if (!id) return;
+    const s = customSections.find((c) => c.id === id);
+    if (!s) return;
+    setRenamingCustomId(id);
+    setRenameDraft(s.title || "");
+  };
+
+  const commitRenameCustom = () => {
+    if (!renamingCustomId) return;
+    const t = renameDraft.trim();
+    setCustomSections((prev) =>
+      prev.map((s) => (s.id === renamingCustomId ? { ...s, title: t || s.title } : s)),
+    );
+    setRenamingCustomId(null);
+  };
+
   const openSecModal = () => {
     setNewSecType("capitolo");
     setNewSecTitle("");
@@ -1362,7 +1439,11 @@ function Editor({ data: initialData, onBack }) {
     setNewSecAILoading(true);
     setErr(null);
     try {
-      const t = await callAIText(`Genera il contenuto per una sezione intitolata "${newSecTitle.trim()}" di un Concetto di Sicurezza`);
+      const prompt =
+        newSecType === "allegato"
+          ? `Genera il contenuto per un allegato intitolato "${newSecTitle.trim()}" di un Concetto di Sicurezza. Puoi includere checklist, tabelle, procedure operative.`
+          : `Genera il contenuto per una sezione intitolata "${newSecTitle.trim()}" di un Concetto di Sicurezza`;
+      const t = await callAIText(prompt);
       setNewSecContent(t);
     } catch (e) {
       setErr(e.message);
@@ -1376,13 +1457,6 @@ function Editor({ data: initialData, onBack }) {
       setErr("Inserisci un titolo per la sezione.");
       return;
     }
-    if (newSecType === "allegato") {
-      const file = secModalFileRef.current?.files?.[0];
-      if (!file) {
-        setErr("Per un allegato carica un file (immagine o PDF).");
-        return;
-      }
-    }
     setErr(null);
     const id = newSectionId();
     const sec = {
@@ -1395,14 +1469,16 @@ function Editor({ data: initialData, onBack }) {
       order: customSections.length,
     };
     if (newSecType === "allegato") {
-      const file = secModalFileRef.current.files[0];
-      const t = detectType(file);
-      if (!t || (!t.startsWith("image/") && t !== "application/pdf")) {
-        setErr("Formato non supportato. Usa JPG, PNG o PDF.");
-        return;
+      const file = secModalFileRef.current?.files?.[0];
+      if (file) {
+        const t = detectType(file);
+        if (!t || (!t.startsWith("image/") && t !== "application/pdf")) {
+          setErr("Formato file non supportato. Usa JPG, PNG o PDF.");
+          return;
+        }
+        sec.imageUrl = URL.createObjectURL(file);
+        sec.fileMime = t;
       }
-      sec.imageUrl = URL.createObjectURL(file);
-      sec.fileMime = t;
     }
     setCustomSections((prev) => [...prev, sec]);
     setSectionOrder((prev) => [...(prev?.length ? prev : [...DEFAULT_SECTION_ORDER]), `custom:${id}`]);
@@ -1670,16 +1746,37 @@ ${flowParts}
 
         <div style={{padding:"10px 14px",borderBottom:`1px solid ${GB}`,maxHeight:"200px",overflowY:"auto",background:"#fafbfd"}}>
           <div style={{...SANS,fontSize:"11px",fontWeight:"700",color:N,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"8px"}}>Sezioni documento</div>
-          {ord.map((key, i)=>(
+          {ord.map((key, i)=>{
+            const customId = key.startsWith("custom:") ? parseCustomSectionKey(key) : null;
+            const isRenaming = customId && renamingCustomId === customId;
+            return (
             <div key={`${key}-${i}`} style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px",...SANS,fontSize:"11px"}}>
               <button type="button" onClick={()=>moveSection(i,-1)} disabled={i===0} style={{background:i===0?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:i===0?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Su">▲</button>
               <button type="button" onClick={()=>moveSection(i,1)} disabled={i===ord.length-1} style={{background:i===ord.length-1?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:i===ord.length-1?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Giù">▼</button>
               {key.startsWith("custom:") && (
                 <button type="button" onClick={()=>deleteCustomKey(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"14px",padding:"0 4px",lineHeight:1}} title="Elimina">🗑</button>
               )}
-              <span style={{flex:1,lineHeight:1.35,color:TX}}>{labelForKey(key)}</span>
+              {key.startsWith("custom:") && !isRenaming && (
+                <button type="button" onClick={()=>startRenameCustom(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"13px",padding:"0 4px",lineHeight:1}} title="Rinomina">✏️</button>
+              )}
+              {isRenaming ? (
+                <input
+                  autoFocus
+                  value={renameDraft}
+                  onChange={(e)=>setRenameDraft(e.target.value)}
+                  onBlur={commitRenameCustom}
+                  onKeyDown={(e)=>{
+                    if (e.key === "Enter") { e.preventDefault(); commitRenameCustom(); }
+                    if (e.key === "Escape") { e.preventDefault(); setRenamingCustomId(null); }
+                  }}
+                  style={{flex:1,...inp,fontSize:"11px",padding:"4px 8px",minWidth:0}}
+                />
+              ) : (
+                <span style={{flex:1,lineHeight:1.35,color:TX}}>{labelForKey(key)}</span>
+              )}
             </div>
-          ))}
+            );
+          })}
           <button type="button" onClick={openSecModal} style={{...SANS,width:"100%",marginTop:"8px",padding:"8px 10px",background:N,color:WH,border:"none",borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"600"}}>
             + Aggiungi sezione
           </button>
@@ -1741,6 +1838,9 @@ ${flowParts}
         {/* Area input */}
         <div style={{padding:"12px 14px",borderTop:`1px solid ${GB}`,background:WH}}>
           {err&&<div style={{...SANS,fontSize:"11px",color:RD,marginBottom:"8px",background:"#fff0f0",padding:"6px 9px",borderRadius:"5px"}}>⚠ {err}</div>}
+          <div style={{...SANS,fontSize:"11px",color:TM,lineHeight:1.55,marginBottom:"10px",padding:"8px 10px",background:GL,borderRadius:"6px",border:`1px solid ${GB}`}}>
+            💡 Puoi chiedere all&apos;AI di riscrivere o integrare qualsiasi sezione — es: &quot;riscrivi il capitolo 3 aggiungendo una procedura per eventi con più di 500 persone&quot;.
+          </div>
           <textarea
             value={msg} onChange={e=>setMsg(e.target.value)}
             placeholder={"es. Cambia le date al 15-16 marzo 2026\nes. Aggiungi agente domenica ore 14-22\nes. Il nuovo capo impiego è M. Rossi\n\nCtrl+Invio per applicare"}
@@ -1828,13 +1928,16 @@ ${flowParts}
               )}
               {newSecType==="allegato" && (
                 <div>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>File immagine o PDF</div>
+                  <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>File immagine o PDF (opzionale)</div>
                   <input ref={secModalFileRef} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" style={{fontSize:"12px",width:"100%"}} />
-                  <div style={{fontSize:"10px",color:GR,marginTop:"4px"}}>Stesso flusso dell&apos;Allegato 2 (URL oggetto locale).</div>
+                  <div style={{fontSize:"10px",color:GR,marginTop:"4px"}}>Puoi lasciare solo titolo e testo senza allegare file.</div>
                   <div style={{marginTop:"10px"}}>
-                    <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Note (opzionale)</div>
-                    <textarea value={newSecContent} onChange={e=>setNewSecContent(e.target.value)} rows={3} style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical"}} />
+                    <div style={{fontSize:"11px",fontWeight:"700",color:TM,marginBottom:"6px",textTransform:"uppercase",letterSpacing:"0.06em"}}>Testo / note (opzionale)</div>
+                    <textarea value={newSecContent} onChange={e=>setNewSecContent(e.target.value)} rows={4} style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical"}} />
                   </div>
+                  <button type="button" onClick={generateSecAI} disabled={newSecAILoading||!newSecTitle.trim()} style={{...SANS,marginTop:"8px",padding:"8px 12px",background:newSecAILoading||!newSecTitle.trim()?"#ccc":NM,color:WH,border:"none",borderRadius:"6px",cursor:newSecAILoading||!newSecTitle.trim()?"not-allowed":"pointer",fontSize:"12px",fontWeight:"600",width:"100%"}}>
+                    {newSecAILoading?"⏳ Generazione…":"✨ Genera contenuto con AI"}
+                  </button>
                 </div>
               )}
               <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
