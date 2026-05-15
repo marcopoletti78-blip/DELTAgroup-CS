@@ -798,7 +798,12 @@ function buildSectionNumberMaps(sectionOrder, customSections) {
     if (/^ps[1-6]$/.test(key)) {
       ch += 1;
       chapterNumByKey.set(key, ch);
-    } else if (key === "all1" || key === "all2") {
+    } else if (key === "all1") {
+      if (!TOC_ALL1_ENTRY) continue;
+      al += 1;
+      allegatoNumByKey.set(key, al);
+    } else if (key === "all2") {
+      if (!TOC_ALL2_ENTRY) continue;
       al += 1;
       allegatoNumByKey.set(key, al);
     } else if (typeof key === "string" && key.startsWith("custom:")) {
@@ -855,20 +860,22 @@ function buildTocRows(sectionOrder, customSections) {
       rows.push(...remapTocPresetChapterRows(block, idx));
     } else if (key === "all1" && TOC_ALL1_ENTRY) {
       const a = allegatoNumByKey.get("all1");
+      if (a == null) continue;
       const baseT = String(TOC_ALL1_ENTRY.t).replace(/^\d+\s+/, "");
       rows.push({
         ...TOC_ALL1_ENTRY,
         n: `All. ${a}`,
-        t: a != null ? `${a} ${baseT}` : TOC_ALL1_ENTRY.t,
+        t: baseT,
         main: true,
       });
     } else if (key === "all2" && TOC_ALL2_ENTRY) {
       const a = allegatoNumByKey.get("all2");
+      if (a == null) continue;
       const baseT = String(TOC_ALL2_ENTRY.t).replace(/^\d+\s+/, "");
       rows.push({
         ...TOC_ALL2_ENTRY,
         n: `All. ${a}`,
-        t: a != null ? `${a} ${baseT}` : TOC_ALL2_ENTRY.t,
+        t: baseT,
         main: true,
       });
     } else if (typeof key === "string" && key.startsWith("custom:")) {
@@ -884,9 +891,10 @@ function buildTocRows(sectionOrder, customSections) {
         const title = (s.title || "Sotto capitolo").replace(/^\d+\.\d+\s+/, "").replace(/^\d+\s+/, "");
         rows.push({ n: nu, t: `${nu} ${title}`, main: false });
       } else {
-        const na = allegatoNumByKey.get(key) ?? "?";
+        const na = allegatoNumByKey.get(key);
+        if (na == null) continue;
         const title = (s.title || "Allegato").replace(/^\d+\s+/, "");
-        rows.push({ n: `All. ${na}`, t: `${na} ${title}`, main: true });
+        rows.push({ n: `All. ${na}`, t: title, main: true });
       }
     }
   }
