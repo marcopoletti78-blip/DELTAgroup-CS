@@ -1136,11 +1136,9 @@ function Editor({ data: initialData, onBack }) {
            <span>T +41 91 921 49 49 &nbsp;·&nbsp; info@delta.ch</span>
          </div>`;
 
-    const page = (content, extraClass="") =>
+    const page = (content, extraClass = "") =>
       `<div class="ppage ${extraClass}">
-        <div class="phdr">${hdr}</div>
         <div class="pcnt">${content}</div>
-        <div class="pftr">${ftr}</div>
       </div>`;
 
     const coverHTML = getHTML("pc");
@@ -1166,8 +1164,8 @@ function Editor({ data: initialData, onBack }) {
     return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
 <title>Concetto di Sicurezza – ${data.nomeEvento||""}</title>
 <style>
+:root{--print-hdr-h:28mm;--print-ftr-h:16mm;}
 *{box-sizing:border-box;margin:0;padding:0;}
-@page{size:A4 portrait;margin:0;}
 body{font-family:Arial,sans-serif;font-size:10pt;color:#1a2038;background:#fff;}
 table{width:100%;border-collapse:collapse;margin:4px 0;}
 td,th{padding:5px 9px;border:1px solid #d0dae8;font-size:9pt;}
@@ -1175,32 +1173,29 @@ th{background:#0c1d3d!important;color:#fff!important;}
 img{max-width:100%;display:block;}
 ul{margin:0;padding-left:18px;}li{line-height:1.7;}
 embed{display:block;}
-/* Pagine esplicite */
-.ppage{
-  width:210mm;
-  display:flex;flex-direction:column;
-  break-after:page;page-break-after:always;
-}
+.ppage{width:100%;break-before:page;page-break-before:always;}
+.ppage-first{break-before:auto;page-break-before:auto;}
 .ppage-fixed{height:297mm;overflow:hidden;}
-.ppage-flow{min-height:297mm;overflow:visible;}
-.ppage-flow .pcnt{overflow:visible;flex:1 1 auto;}
-.ppage:last-child{break-after:auto;page-break-after:auto;}
-.phdr{width:100%;flex-shrink:0;}
-.pftr{width:100%;flex-shrink:0;margin-top:auto;}
-.pcnt{flex:1;padding:20px 36px;overflow:hidden;}
-/* Cover centrata */
+.ppage-flow{overflow:visible;}
+.pcnt{padding:12px 36px;overflow:visible;}
 .cover .pcnt{
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
   text-align:center;
 }
 @media print{
+  @page{size:A4 portrait;margin-top:var(--print-hdr-h);margin-bottom:var(--print-ftr-h);margin-left:0;margin-right:0;}
+  .print-hdr{position:fixed;top:0;left:0;width:100%;z-index:1000;}
+  .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
+  .ppage-fixed{height:auto;overflow:visible;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
 }
 </style></head><body>
-${page(coverHTML,"cover ppage-fixed")}
-${page(tocHTML,"ppage-fixed")}
+<div class="print-hdr">${hdr}</div>
+<div class="print-ftr">${ftr}</div>
+${page(coverHTML, "cover ppage-fixed ppage-first")}
+${page(tocHTML, "ppage-fixed")}
 ${sectionPages}
 ${all1HTML ? page(all1HTML, "ppage-flow") : ""}
 ${all2HTML ? page(all2HTML, "ppage-flow") : ""}
