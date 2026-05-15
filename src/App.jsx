@@ -751,7 +751,7 @@ function DocPreview({ data }) {
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
 
       {/* ── CARTA INTESTATA HEADER ── */}
-      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"4px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
+      <div className="doc-page-header" style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"4px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
         <img src={logoImg} alt="DELTAgroup" style={{height:65,display:"block"}}/>
       </div>
 
@@ -1186,6 +1186,8 @@ embed{display:block;}
 }
 @media print{
   @page{size:A4 portrait;margin:0 10mm 0 10mm;}
+  .doc-page-header{display:none!important;}
+  .ppage-flow .pcnt>div{break-inside:avoid;page-break-inside:avoid;}
   .print-hdr{position:fixed;top:0;left:0;height:auto;width:100%;z-index:1000;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
   .ppage-fixed{height:297mm;overflow:hidden;}
