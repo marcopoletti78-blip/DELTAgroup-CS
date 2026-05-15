@@ -54,12 +54,30 @@ S6: Casi d'Allarme (6.1 SMC, 6.2 Evacuazione [passi numerati], 6.3 Incendio, 6.4
 RISPONDI SOLO con JSON valido, senza markdown, senza testo aggiuntivo:
 {"nomeEvento":"","luogo":"","anno":"","s1":{"contatti":[{"area":"","societa":"","email":"","telAzienda":"","telMobile":""}],"sicurezza":"","polizia":"","sanitari":"","rega":"","pompieri":"","statoMaggiore":"","puntoRitrovo":""},"s2":{"descrizione":"","programma":[{"giorno":"","attivita":""}],"orari":"","location":"","pattuglia":"","visitatori":"","minori":""},"s3":{"passivi":[{"nome":"","lv":"MINIMO"}],"attivi":[{"nome":"","lv":"MINIMO"}],"meteo":"","terrorismo":"","evacuazione":""},"s4":{"righe":[{"data":"","agenti":"","orario":""}],"modifiche":"","comunicazioni":"","postoComando":"","diversi":""},"s5":{"incendio":"","intossicazione":"","ordine":"","ferimenti":"","droghe":""},"s6":{"smc":"","ev":[""],"inc":[""],"mb":[""],"ab":[""],"at":[""],"te":[""],"me":[""]}}`;
 
+const WORD_LIMIT_SYS_PREFIX = "Sei un assistente preciso. Se l'utente specifica un limite di parole, DEVI rispettarlo esattamente.";
+
+function extractWordLimitInstruction(userMsg) {
+  if (!userMsg || typeof userMsg !== "string") return null;
+  const patterns = [
+    /(?:[^.\n]*\b(?:massimo|max|minimo|min|almeno|esattamente|circa|fino\s+a|non\s+pi[uù]\s+di|limite\s+di)\b[^.\n]{0,40}\b\d+\s*parol[ea]\b[^.\n]*)/i,
+    /(?:[^.\n]*\b\d+\s*parol[ea]\b[^.\n]*)/i,
+  ];
+  for (const re of patterns) {
+    const m = userMsg.match(re);
+    if (m) return m[0].trim();
+  }
+  return null;
+}
+
 function maybeAppendWordLimitNote(userMsg) {
-  if (!userMsg || typeof userMsg !== "string") return userMsg;
-  const hasWordLimit = /\b(massimo|max|minimo|min|almeno|esattamente|circa|fino\s+a|non\s+pi[uù]\s+di|limite\s+di)\b[^.\n]{0,40}\bparol[ea]\b/i.test(userMsg)
-    || /\b\d+\s*parol[ea]\b/i.test(userMsg);
-  if (!hasWordLimit) return userMsg;
-  return `${userMsg}\n\nIMPORTANTE: rispetta esattamente il limite di parole specificato dall'utente. Non superarlo.`;
+  const instruction = extractWordLimitInstruction(userMsg);
+  if (!instruction) return userMsg;
+  return `IMPORTANTE: rispetta esattamente il limite di parole specificato dall'utente: "${instruction}". Non superarlo.\n\n${userMsg}`;
+}
+
+function withWordLimitSysPrefix(sys) {
+  if (!sys) return WORD_LIMIT_SYS_PREFIX;
+  return `${WORD_LIMIT_SYS_PREFIX}\n\n${sys}`;
 }
 
 // attachments = [{ data:base64, type:"application/pdf"|"image/jpeg"|..., name }]
@@ -91,7 +109,7 @@ async function callAI(userMsg, mainDoc=null, attachments=[], sysOverride=null) {
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 8000,
-      system: sysOverride||SYS_PROMPT,
+      system: withWordLimitSysPrefix(sysOverride||SYS_PROMPT),
       messages: [{ role: "user", content }]
     })
   });
@@ -115,7 +133,7 @@ async function callAIText(userMsg, sysOverride = null) {
     body: JSON.stringify({
       model: "claude-sonnet-4-20250514",
       max_tokens: 4000,
-      system: sysOverride || "Sei un redattore tecnico italiano. Rispondi SOLO con il testo richiesto, senza markdown fence, senza commenti introduttivi.",
+      system: withWordLimitSysPrefix(sysOverride || "Sei un redattore tecnico italiano. Rispondi SOLO con il testo richiesto, senza markdown fence, senza commenti introduttivi."),
       messages: [{ role: "user", content: userMsg }],
     }),
   });
@@ -788,6 +806,9 @@ const TOC_PRESET_BLOCKS = {
 const TOC_ALL1_ENTRY = TOC_ENTRIES[42];
 const TOC_ALL2_ENTRY = TOC_ENTRIES[43];
 
+// Quanti sotto-capitoli preset ha ciascun capitolo preset (i custom partono da X.(PRESET+1)).
+const PRESET_SUB_COUNT = { ps1: 6, ps2: 5, ps3: 4, ps4: 5, ps5: 5, ps6: 9 };
+
 function parseCustomSectionKey(key) {
   if (!key?.startsWith("custom:")) return null;
   return key.slice(7);
@@ -805,27 +826,57 @@ function buildSectionNumberMaps(sectionOrder, customSections) {
   // I custom allegati partono da All.3.
   allegatoNumByKey.set("all1", 1);
   allegatoNumByKey.set("all2", 2);
+  // Pre-pass 1: numeri capitolo (ps* + custom capitolo) per garantire che parentNum
+  // sia disponibile anche se un sub appare nell'order PRIMA del suo padre.
   let ch = 0;
-  let al = 2;
   for (const key of order) {
     if (!key) continue;
     if (/^ps[1-6]$/.test(key)) {
       ch += 1;
       chapterNumByKey.set(key, ch);
-    } else if (key === "all1" || key === "all2") {
-      // numero già riservato; no-op
     } else if (typeof key === "string" && key.startsWith("custom:")) {
+      const id = parseCustomSectionKey(key);
+      const s = cs.find((c) => c.id === id);
+      if (s?.type === "capitolo") {
+        ch += 1;
+        chapterNumByKey.set(key, ch);
+      }
+    }
+  }
+  // Pre-pass 2: numeri allegato (custom). All.1 e All.2 già riservati.
+  let al = 2;
+  for (const key of order) {
+    if (typeof key !== "string" || !key.startsWith("custom:")) continue;
+    const id = parseCustomSectionKey(key);
+    const s = cs.find((c) => c.id === id);
+    if (s?.type === "allegato") {
+      al += 1;
+      allegatoNumByKey.set(key, al);
+    }
+  }
+  // Pass principale: sotto-capitoli. Base count = sub preset già esistenti del padre.
+  // Per i capitoli custom il base è 0. Se parentKey non esiste più, fallback all'ultimo
+  // capitolo visto nell'order.
+  for (const [pkey, base] of Object.entries(PRESET_SUB_COUNT)) {
+    subCountByParent.set(pkey, base);
+  }
+  let lastChapterKey = null;
+  for (const key of order) {
+    if (!key) continue;
+    if (/^ps[1-6]$/.test(key)) {
+      lastChapterKey = key;
+      continue;
+    }
+    if (typeof key === "string" && key.startsWith("custom:")) {
       const id = parseCustomSectionKey(key);
       const s = cs.find((c) => c.id === id);
       if (!s) continue;
       if (s.type === "capitolo") {
-        ch += 1;
-        chapterNumByKey.set(key, ch);
-      } else if (s.type === "allegato") {
-        al += 1;
-        allegatoNumByKey.set(key, al);
+        lastChapterKey = key;
       } else if (s.type === "sottocapitolo") {
-        const pkey = s.parentKey;
+        let pkey = s.parentKey;
+        if (!pkey || !chapterNumByKey.has(pkey)) pkey = lastChapterKey;
+        if (!pkey) continue;
         const parentNum = chapterNumByKey.get(pkey);
         if (parentNum == null) continue;
         const next = (subCountByParent.get(pkey) || 0) + 1;
@@ -1823,14 +1874,52 @@ function Editor({ data: initialData, onBack }) {
   const applyEdit = async () => {
     if (!msg.trim() && attachments.length===0) return;
     setLoading(true); setErr(null);
-    const SYS_EDIT = SYS_PROMPT+"\n\nTi viene passato il JSON attuale del documento e la modifica richiesta. Restituisci il JSON completo aggiornato con le modifiche applicate, mantenendo tutti i campi esistenti.";
+    const { chapterNumByKey } = buildSectionNumberMaps(sectionOrder, customSections);
+    const customSectionsForAI = customSections.map((c) => {
+      const ck = `custom:${c.id}`;
+      const num = chapterNumByKey.get(ck);
+      return {
+        id: c.id,
+        type: c.type,
+        title: c.title || "",
+        content: c.content || "",
+        parentKey: c.parentKey || null,
+        displayNumber: num != null ? num : undefined,
+        hasFile: !!c.imageUrl,
+      };
+    });
+    const SYS_EDIT = SYS_PROMPT+`
+
+Ti viene passato il JSON attuale del documento e la modifica richiesta. Restituisci il JSON completo aggiornato con le modifiche applicate, mantenendo tutti i campi esistenti.
+
+Il JSON include anche un campo \`customSections\` che è un array di sezioni custom (capitoli, sotto-capitoli, allegati creati dall'utente) con i campi: id, type ("capitolo"|"sottocapitolo"|"allegato"), title, content, parentKey, displayNumber (numero del capitolo nell'ordine visivo, es. 7), hasFile (boolean — informativo).
+
+Se la modifica richiesta riguarda una sezione custom (es. "togli la frase X dal capitolo 7", "aggiungi un paragrafo al capitolo intitolato Y", "rinomina il sotto-capitolo Z"), aggiorna il titolo e/o il content della voce corrispondente in \`customSections\` (identifica la voce per displayNumber, title o parentKey). MANTIENI sempre lo stesso id e gli altri campi invariati. NON modificare hasFile. Restituisci \`customSections\` completo nel JSON di risposta.`;
     const attList = attachments.map(a=>`- ${a.name} (${a.type.startsWith("image/")?"immagine/piantina":"documento PDF"})`).join("\n");
-    const dataClean = {...data, logoEvento: data.logoEvento ? "[logo_caricato]" : null};
+    const dataClean = {...data, logoEvento: data.logoEvento ? "[logo_caricato]" : null, customSections: customSectionsForAI };
     const editMsg = `DOCUMENTO ATTUALE (JSON):\n${JSON.stringify(dataClean,null,2)}\n\nMODIFICA RICHIESTA:\n${msg||"(vedi allegati)"}${attachments.length>0?`\n\nALLEGATI (${attachments.length}):\n${attList}\nAnalizza gli allegati e integra le informazioni nei capitoli corretti.`:""}`;
     try {
       const newData = await callAI(editMsg, null, attachments, SYS_EDIT);
-      setData({...newData, logoEvento:data.logoEvento||null, allegato2Files:data.allegato2Files||[]});
-      /* customSections + sectionOrder restano invariati */
+      const { customSections: newCS, ...rest } = newData || {};
+      setData({...rest, logoEvento:data.logoEvento||null, allegato2Files:data.allegato2Files||[]});
+      if (Array.isArray(newCS)) {
+        const updatesById = new Map();
+        for (const entry of newCS) {
+          if (!entry || typeof entry !== "object" || !entry.id) continue;
+          updatesById.set(entry.id, entry);
+        }
+        setCustomSections((prev) =>
+          prev.map((old) => {
+            const entry = updatesById.get(old.id);
+            if (!entry) return old;
+            return {
+              ...old,
+              title: typeof entry.title === "string" ? entry.title : old.title,
+              content: typeof entry.content === "string" ? entry.content : old.content,
+            };
+          }),
+        );
+      }
       setHistory(prev=>[...prev,{msg:msg||"(allegati)", files:attachments.map(a=>a.name), ts:new Date()}]);
       setMsg(""); setAttachments([]);
     } catch (e) {
