@@ -751,7 +751,7 @@ function DocPreview({ data }) {
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
 
       {/* ── CARTA INTESTATA HEADER ── */}
-      <div style={{display:"flex",justifyContent:"flex-end",padding:"4px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",padding:"4px 32px",borderBottom:"2px solid #0c1d3d",background:"white"}}>
         <img src={logoImg} alt="DELTAgroup" style={{height:44,display:"block"}}/>
       </div>
 
@@ -1137,7 +1137,7 @@ function Editor({ data: initialData, onBack }) {
       return node ? node.innerHTML : "";
     };
 
-    const hdr = `<div style="display:flex;justify-content:flex-end;padding:4px 32px;border-bottom:2px solid #0c1d3d;background:white;">
+    const hdr = `<div style="display:flex;align-items:center;justify-content:flex-end;padding:4px 32px;border-bottom:2px solid #0c1d3d;background:white;">
   <img src="${window.location.origin}${logoImg}" style="height:44px;display:block;"/>
 </div>`;
 
@@ -1181,19 +1181,19 @@ th{background:#0c1d3d!important;color:#fff!important;}
 img{max-width:100%;display:block;}
 ul{margin:0;padding-left:18px;}li{line-height:1.7;}
 embed{display:block;}
-.ppage{width:100%;break-before:page;page-break-before:always;}
+.ppage{width:100%;padding-top:0;break-before:page;page-break-before:always;}
 .ppage-first{break-before:auto;page-break-before:auto;}
 .ppage-fixed{height:297mm;overflow:hidden;}
 .ppage-flow{overflow:visible;}
-.pcnt{padding-top:10px;padding-bottom:10px;padding-left:36px;padding-right:36px;overflow:visible;}
+.pcnt{padding-top:0;padding-bottom:10px;padding-left:36px;padding-right:36px;overflow:visible;}
 .cover .pcnt{
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
   text-align:center;
 }
 @media print{
-  @page{size:A4 portrait;margin:70px 20px 45px 20px;}
-  .print-hdr{position:fixed;top:0;left:0;width:100%;z-index:1000;}
+  @page{size:A4 portrait;margin:75px 15px 50px 15px;}
+  .print-hdr{position:fixed;top:0;left:0;height:auto;width:100%;z-index:1000;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
   .ppage-fixed{height:auto;overflow:visible;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
