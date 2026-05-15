@@ -54,8 +54,17 @@ S6: Casi d'Allarme (6.1 SMC, 6.2 Evacuazione [passi numerati], 6.3 Incendio, 6.4
 RISPONDI SOLO con JSON valido, senza markdown, senza testo aggiuntivo:
 {"nomeEvento":"","luogo":"","anno":"","s1":{"contatti":[{"area":"","societa":"","email":"","telAzienda":"","telMobile":""}],"sicurezza":"","polizia":"","sanitari":"","rega":"","pompieri":"","statoMaggiore":"","puntoRitrovo":""},"s2":{"descrizione":"","programma":[{"giorno":"","attivita":""}],"orari":"","location":"","pattuglia":"","visitatori":"","minori":""},"s3":{"passivi":[{"nome":"","lv":"MINIMO"}],"attivi":[{"nome":"","lv":"MINIMO"}],"meteo":"","terrorismo":"","evacuazione":""},"s4":{"righe":[{"data":"","agenti":"","orario":""}],"modifiche":"","comunicazioni":"","postoComando":"","diversi":""},"s5":{"incendio":"","intossicazione":"","ordine":"","ferimenti":"","droghe":""},"s6":{"smc":"","ev":[""],"inc":[""],"mb":[""],"ab":[""],"at":[""],"te":[""],"me":[""]}}`;
 
+function maybeAppendWordLimitNote(userMsg) {
+  if (!userMsg || typeof userMsg !== "string") return userMsg;
+  const hasWordLimit = /\b(massimo|max|minimo|min|almeno|esattamente|circa|fino\s+a|non\s+pi[uù]\s+di|limite\s+di)\b[^.\n]{0,40}\bparol[ea]\b/i.test(userMsg)
+    || /\b\d+\s*parol[ea]\b/i.test(userMsg);
+  if (!hasWordLimit) return userMsg;
+  return `${userMsg}\n\nIMPORTANTE: rispetta esattamente il limite di parole specificato dall'utente. Non superarlo.`;
+}
+
 // attachments = [{ data:base64, type:"application/pdf"|"image/jpeg"|..., name }]
 async function callAI(userMsg, mainDoc=null, attachments=[], sysOverride=null) {
+  userMsg = maybeAppendWordLimitNote(userMsg);
   const blocks = [];
   if (mainDoc) {
     blocks.push({ type:"document", source:{ type:"base64", media_type:"application/pdf", data:mainDoc } });
@@ -93,6 +102,7 @@ async function callAI(userMsg, mainDoc=null, attachments=[], sysOverride=null) {
 }
 
 async function callAIText(userMsg, sysOverride = null) {
+  userMsg = maybeAppendWordLimitNote(userMsg);
   const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || "";
   const r = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
@@ -791,21 +801,19 @@ function buildSectionNumberMaps(sectionOrder, customSections) {
   const allegatoNumByKey = new Map();
   const subchapterDisplayByKey = new Map();
   const subCountByParent = new Map();
+  // All.1 e All.2 sono riservati ai preset all1/all2 anche se non presenti nell'order.
+  // I custom allegati partono da All.3.
+  allegatoNumByKey.set("all1", 1);
+  allegatoNumByKey.set("all2", 2);
   let ch = 0;
-  let al = 0;
+  let al = 2;
   for (const key of order) {
     if (!key) continue;
     if (/^ps[1-6]$/.test(key)) {
       ch += 1;
       chapterNumByKey.set(key, ch);
-    } else if (key === "all1") {
-      if (!TOC_ALL1_ENTRY) continue;
-      al += 1;
-      allegatoNumByKey.set(key, al);
-    } else if (key === "all2") {
-      if (!TOC_ALL2_ENTRY) continue;
-      al += 1;
-      allegatoNumByKey.set(key, al);
+    } else if (key === "all1" || key === "all2") {
+      // numero già riservato; no-op
     } else if (typeof key === "string" && key.startsWith("custom:")) {
       const id = parseCustomSectionKey(key);
       const s = cs.find((c) => c.id === id);
@@ -920,7 +928,7 @@ function formatCustomBodyForPrint(htmlOrText) {
 const isMain = (n) => typeof n === "string" && (/^\d+$/.test(n) || n.startsWith("All."));
 
 /** Anteprima: blocchi preset (ordine gestito dal container). */
-function PresetPs1({ data, displayChapter = 1 }) {
+function PresetPs1({ data, displayChapter = 1, customSubs = null }) {
   if (!data.s1) return null;
   const p = String(displayChapter);
   return (
@@ -973,11 +981,12 @@ function PresetPs1({ data, displayChapter = 1 }) {
           PUNTO DI RITROVO: {data.s1.puntoRitrovo}
         </div>
       )}
+      {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs2({ data, displayChapter = 2 }) {
+function PresetPs2({ data, displayChapter = 2, customSubs = null }) {
   if (!data.s2) return null;
   const p = String(displayChapter);
   return (
@@ -1000,11 +1009,12 @@ function PresetPs2({ data, displayChapter = 2 }) {
       {data.s2.pattuglia && <Dsub n={`${p}.3`} t="Pattuglia esterna">{data.s2.pattuglia}</Dsub>}
       {data.s2.visitatori && <Dsub n={`${p}.4`} t="Tipologia e numero dei visitatori">{data.s2.visitatori}</Dsub>}
       {data.s2.minori && <Dsub n={`${p}.5`} t="Gestione dei minori">{data.s2.minori}</Dsub>}
+      {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs3({ data, displayChapter = 3 }) {
+function PresetPs3({ data, displayChapter = 3, customSubs = null }) {
   if (!data.s3) return null;
   const p = String(displayChapter);
   return (
@@ -1017,11 +1027,12 @@ function PresetPs3({ data, displayChapter = 3 }) {
       {data.s3.meteo && <Dsub n={`${p}.2`} t="Meteo">{data.s3.meteo}</Dsub>}
       {data.s3.terrorismo && <Dsub n={`${p}.3`} t="Atto terroristico / attentato">{data.s3.terrorismo}</Dsub>}
       {data.s3.evacuazione && <Dsub n={`${p}.4`} t="Evacuazione">{data.s3.evacuazione}</Dsub>}
+      {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs4({ data, displayChapter = 4 }) {
+function PresetPs4({ data, displayChapter = 4, customSubs = null }) {
   if (!data.s4) return null;
   const p = String(displayChapter);
   return (
@@ -1041,11 +1052,12 @@ function PresetPs4({ data, displayChapter = 4 }) {
       <Dsub n={`${p}.3`} t="Divisa">Secondo regolamento DELTAgroup.</Dsub>
       {data.s4.postoComando && <Dsub n={`${p}.4`} t="Posto Comando">{data.s4.postoComando}</Dsub>}
       {data.s4.diversi && <Dsub n={`${p}.5`} t="Diversi">{data.s4.diversi}</Dsub>}
+      {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs5({ data, displayChapter = 5 }) {
+function PresetPs5({ data, displayChapter = 5, customSubs = null }) {
   if (!data.s5) return null;
   const p = String(displayChapter);
   return (
@@ -1055,11 +1067,12 @@ function PresetPs5({ data, displayChapter = 5 }) {
       {data.s5.ordine && <Dsub n={`${p}.3`} t="Problemi d'ordine">{data.s5.ordine}</Dsub>}
       {data.s5.ferimenti && <Dsub n={`${p}.4`} t="Ferimenti / Malori">{data.s5.ferimenti}</Dsub>}
       {data.s5.droghe && <Dsub n={`${p}.5`} t="Sostanze stupefacenti">{data.s5.droghe}</Dsub>}
+      {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs6({ data, displayChapter = 6 }) {
+function PresetPs6({ data, displayChapter = 6, customSubs = null }) {
   if (!data.s6) return null;
   const p = String(displayChapter);
   return (
@@ -1098,6 +1111,7 @@ function PresetPs6({ data, displayChapter = 6 }) {
         <Dsub n={`${p}.9`} t="Annunci d'emergenza">
           La DELTA Security AG prepara e predispone il formulario degli annunci d'emergenza in prossimità di ogni palco o punto dove si possa, tramite un dispositivo audio, effettuare gli annunci. Il responsabile della sicurezza sarà pure lui in possesso di tale formulario. Il formulario con gli annunci d'emergenza è inserito nel presente protocollo di sicurezza. (Allegato 1)
         </Dsub>
+        {customSubs}
       </Dsec>
     </>
   );
@@ -1177,7 +1191,7 @@ function PresetAll2({ data, displayAllegato = 2 }) {
   );
 }
 
-function CustomCapitoloPreview({ section, displayNum }) {
+function CustomCapitoloPreview({ section, displayNum, customSubs = null }) {
   const id = `pcap-${section.id}`;
   const inner = section.content && /<[a-z][\s\S]*>/i.test(section.content) ? (
     <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }} dangerouslySetInnerHTML={{ __html: section.content }} />
@@ -1187,6 +1201,7 @@ function CustomCapitoloPreview({ section, displayNum }) {
   return (
     <Dsec id={id} n={String(displayNum)} t={section.title || "Senza titolo"}>
       {inner}
+      {customSubs}
     </Dsec>
   );
 }
@@ -1215,27 +1230,35 @@ function CustomAllegatoPreview({ section, displayAllegatoNum }) {
   const pid = `pallc-${section.id}`;
   const src = section.imageUrl;
   const isPdf = section.fileMime === "application/pdf";
+  const paragraphs = (section.content || "")
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  const renderContent = (extraStyle = {}) =>
+    paragraphs.length ? (
+      <div style={{ display:"flex", flexDirection:"column", gap:"10px", ...extraStyle }}>
+        {paragraphs.map((p, i) => (
+          <div key={i} style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX, whiteSpace:"pre-wrap", breakInside:"avoid", pageBreakInside:"avoid" }}>{p}</div>
+        ))}
+      </div>
+    ) : null;
   return (
     <div id={pid} style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
-      <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+      <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em", breakInside:"avoid", pageBreakInside:"avoid" }}>
         Allegato {displayAllegatoNum} – {section.title || "Allegato"}
       </div>
       {src ? (
         <div style={{ display:"flex", flexDirection:"column", gap:"12px" }}>
           {isPdf ? (
-            <iframe src={src} style={{ width:"100%", height:"500px", border:`1px solid ${GB}`, borderRadius:"6px" }} title={section.title || "PDF"} />
+            <iframe src={src} style={{ width:"100%", height:"500px", border:`1px solid ${GB}`, borderRadius:"6px", breakInside:"avoid", pageBreakInside:"avoid" }} title={section.title || "PDF"} />
           ) : (
-            <img src={src} alt={section.title || ""} style={{ width:"100%", border:`1px solid ${GB}`, borderRadius:"6px", display:"block" }} />
+            <img src={src} alt={section.title || ""} style={{ width:"100%", border:`1px solid ${GB}`, borderRadius:"6px", display:"block", breakInside:"avoid", pageBreakInside:"avoid" }} />
           )}
-          {section.content && (
-            <div style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX, whiteSpace:"pre-wrap" }}>{section.content}</div>
-          )}
+          {renderContent()}
         </div>
       ) : (
         <div style={{ border:`1px solid ${GB}`, borderRadius:"8px", padding:"16px 20px", ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX }}>
-          {section.content ? (
-            <div style={{ whiteSpace:"pre-wrap" }}>{section.content}</div>
-          ) : (
+          {paragraphs.length ? renderContent() : (
             <div style={{ border:`2px dashed ${GB}`, borderRadius:"8px", padding:"24px", textAlign:"center", color:GR, fontSize:"12.5px" }}>
               Nessun file allegato — usa il testo sopra o aggiungi un file dalla modifica sezione.
             </div>
@@ -1287,32 +1310,54 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
       </div>
 
       <div id="pbody" style={{padding:"36px 48px"}}>
-        {order.map((key)=>{
-          if (key === "ps1") return <PresetPs1 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 1} />;
-          if (key === "ps2") return <PresetPs2 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 2} />;
-          if (key === "ps3") return <PresetPs3 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 3} />;
-          if (key === "ps4") return <PresetPs4 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 4} />;
-          if (key === "ps5") return <PresetPs5 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 5} />;
-          if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} displayChapter={chapterNumByKey.get(key) ?? 6} /></React.Fragment>;
-          if (key === "all1") return <PresetAll1 key={key} displayAllegato={allegatoNumByKey.get(key) ?? 1} />;
-          if (key === "all2") return <PresetAll2 key={key} data={data} displayAllegato={allegatoNumByKey.get(key) ?? 2} />;
-          if (key.startsWith("custom:")) {
+        {(() => {
+          const subsByParent = new Map();
+          for (const key of order) {
+            if (typeof key !== "string" || !key.startsWith("custom:")) continue;
             const id = parseCustomSectionKey(key);
             const s = customSections.find((c) => c.id === id);
-            if (!s) return null;
-            if (s.type === "capitolo") {
-              const num = chapterNumByKey.get(key) ?? 1;
-              return <CustomCapitoloPreview key={key} section={s} displayNum={num} />;
-            }
-            if (s.type === "sottocapitolo") {
-              const lab = subchapterDisplayByKey.get(key) ?? "?";
-              return <CustomSottoCapitoloPreview key={key} section={s} displayLabel={lab} />;
-            }
-            const an = allegatoNumByKey.get(key) ?? 1;
-            return <CustomAllegatoPreview key={key} section={s} displayAllegatoNum={an} />;
+            if (!s || s.type !== "sottocapitolo") continue;
+            const pk = s.parentKey;
+            if (!pk) continue;
+            const arr = subsByParent.get(pk) || [];
+            arr.push({ key, section: s });
+            subsByParent.set(pk, arr);
           }
-          return null;
-        })}
+          const renderSubs = (parentKey) => {
+            const list = subsByParent.get(parentKey);
+            if (!list || !list.length) return null;
+            return list.map(({ key, section }) => {
+              const lab = subchapterDisplayByKey.get(key) ?? "?";
+              return <CustomSottoCapitoloPreview key={key} section={section} displayLabel={lab} />;
+            });
+          };
+          return order.map((key) => {
+            if (key === "ps1") return <PresetPs1 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 1} customSubs={renderSubs("ps1")} />;
+            if (key === "ps2") return <PresetPs2 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 2} customSubs={renderSubs("ps2")} />;
+            if (key === "ps3") return <PresetPs3 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 3} customSubs={renderSubs("ps3")} />;
+            if (key === "ps4") return <PresetPs4 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 4} customSubs={renderSubs("ps4")} />;
+            if (key === "ps5") return <PresetPs5 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 5} customSubs={renderSubs("ps5")} />;
+            if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} displayChapter={chapterNumByKey.get(key) ?? 6} customSubs={renderSubs("ps6")} /></React.Fragment>;
+            if (key === "all1") return <PresetAll1 key={key} displayAllegato={allegatoNumByKey.get(key) ?? 1} />;
+            if (key === "all2") return <PresetAll2 key={key} data={data} displayAllegato={allegatoNumByKey.get(key) ?? 2} />;
+            if (key.startsWith("custom:")) {
+              const id = parseCustomSectionKey(key);
+              const s = customSections.find((c) => c.id === id);
+              if (!s) return null;
+              if (s.type === "capitolo") {
+                const num = chapterNumByKey.get(key) ?? 1;
+                return <CustomCapitoloPreview key={key} section={s} displayNum={num} customSubs={renderSubs(`custom:${id}`)} />;
+              }
+              if (s.type === "sottocapitolo") {
+                // renderizzato dentro il Dsec del capitolo padre
+                return null;
+              }
+              const an = allegatoNumByKey.get(key) ?? 1;
+              return <CustomAllegatoPreview key={key} section={s} displayAllegatoNum={an} />;
+            }
+            return null;
+          });
+        })()}
       </div>
 
       <div className="doc-page-footer" style={{borderTop:`1px solid ${GB}`}}>
@@ -1857,11 +1902,10 @@ function Editor({ data: initialData, onBack }) {
           const h = getById(`pcap-${id}`);
           if (h) flowParts += page(h, "ppage-flow");
         } else if (s.type === "sottocapitolo") {
-          const h = getById(`psub-${id}`);
-          if (h) flowParts += page(h, "ppage-flow");
+          // già renderizzato dentro la pagina del capitolo padre
         } else {
           const h = getById(`pallc-${id}`);
-          if (h) flowParts += page(h, "ppage-fixed ppage-allegato-custom");
+          if (h) flowParts += page(h, "ppage-flow ppage-allegato-custom");
         }
       }
     }
@@ -1882,7 +1926,8 @@ embed{display:block;}
 .ppage-fixed{height:297mm;overflow:hidden;}
 .ppage-flow{overflow:visible;}
 .pcnt{padding-top:0;padding-bottom:10px;padding-left:36px;padding-right:36px;overflow:visible;}
-.ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;overflow:hidden;}
+.ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;}
+.ppage-allegato-custom .pcnt p,.ppage-allegato-custom .pcnt>div{break-inside:avoid;page-break-inside:avoid;}
 .cover .pcnt{
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
@@ -1897,7 +1942,8 @@ embed{display:block;}
   .ppage-fixed{height:297mm;overflow:hidden;}
   .pcnt{padding-top:85px;padding-bottom:40px;padding-left:36px;padding-right:36px;}
   .ppage-all1 .pcnt{font-size:7pt;line-height:1.25;overflow:hidden;max-height:calc(297mm - 130px);}
-  .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;overflow:hidden;max-height:calc(297mm - 130px);}
+  .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;}
+  .ppage-allegato-custom .pcnt p,.ppage-allegato-custom .pcnt>div{break-inside:avoid;page-break-inside:avoid;}
   .cover .pcnt{height:100%;box-sizing:border-box;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
