@@ -482,7 +482,7 @@ function Wizard({ onBack, onDone }) {
     try {
       const fClean = {...f, logoEvento: f.logoEvento ? "[logo_caricato]" : null};
 const data = await callAI(`Crea un Concetto di Sicurezza completo per:\n${JSON.stringify(fClean,null,2)}`);
-      onDone({...data, logoEvento: f.logoEvento||null});
+      onDone({...data, logoEvento: f.logoEvento||null, eventSettings: {...f}});
     } catch(e) { setErr(e.message); }
     finally { setLoading(false); }
   };
@@ -1715,6 +1715,9 @@ function Editor({ data: initialData, onBack }) {
   const [newSecAILoading, setNewSecAILoading] = useState(false);
   const [renamingCustomId, setRenamingCustomId] = useState(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [settingsStep, setSettingsStep] = useState(0);
+  const [settingsDraft, setSettingsDraft] = useState(null);
   const addRef = React.useRef();
   const all2Ref = React.useRef();
   const secModalFileRef = React.useRef();
@@ -1850,11 +1853,79 @@ function Editor({ data: initialData, onBack }) {
     return key;
   };
 
+  // Parent effettivo di un sottocapitolo nell'order: il parentKey dichiarato se è nell'order,
+  // altrimenti l'ultimo capitolo (preset o custom) che lo precede.
+  const effectiveParentKey = (order, idx) => {
+    const key = order[idx];
+    if (!key?.startsWith("custom:")) return null;
+    const id = parseCustomSectionKey(key);
+    const s = customSections.find((c) => c.id === id);
+    if (s?.type !== "sottocapitolo") return null;
+    if (s.parentKey && order.includes(s.parentKey)) return s.parentKey;
+    for (let i = idx - 1; i >= 0; i--) {
+      const k = order[i];
+      if (!k) continue;
+      if (/^ps[1-6]$/.test(k)) return k;
+      if (k.startsWith("custom:")) {
+        const cid = parseCustomSectionKey(k);
+        const cs = customSections.find((c) => c.id === cid);
+        if (cs?.type === "capitolo") return k;
+      }
+    }
+    return null;
+  };
+
+  // Per un sottocapitolo all'indice idx, trova l'indice del fratello (stesso parent effettivo)
+  // immediatamente prima (dir<0) o dopo (dir>0). Si ferma al primo capitolo/allegato incontrato.
+  const findSiblingSubchapterIdx = (order, idx, dir) => {
+    const parentKey = effectiveParentKey(order, idx);
+    if (!parentKey) return -1;
+    const step = dir > 0 ? 1 : -1;
+    for (let j = idx + step; j >= 0 && j < order.length; j += step) {
+      const k = order[j];
+      if (!k) continue;
+      if (/^ps[1-6]$/.test(k) || k === "all1" || k === "all2") return -1;
+      if (!k.startsWith("custom:")) continue;
+      const cid = parseCustomSectionKey(k);
+      const cs = customSections.find((c) => c.id === cid);
+      if (!cs) continue;
+      if (cs.type !== "sottocapitolo") return -1;
+      if (effectiveParentKey(order, j) === parentKey) return j;
+    }
+    return -1;
+  };
+
+  const canMoveSection = (order, idx, dir) => {
+    const key = order[idx];
+    if (key?.startsWith("custom:")) {
+      const id = parseCustomSectionKey(key);
+      const s = customSections.find((c) => c.id === id);
+      if (s?.type === "sottocapitolo") {
+        return findSiblingSubchapterIdx(order, idx, dir) >= 0;
+      }
+    }
+    const j = idx + dir;
+    return j >= 0 && j < order.length;
+  };
+
   const moveSection = (idx, dir) => {
     setSectionOrder((prev) => {
       const o = [...(prev?.length ? prev : DEFAULT_SECTION_ORDER)];
-      const j = idx + dir;
-      if (j < 0 || j >= o.length) return prev;
+      const key = o[idx];
+      let j;
+      if (key?.startsWith("custom:")) {
+        const id = parseCustomSectionKey(key);
+        const s = customSections.find((c) => c.id === id);
+        if (s?.type === "sottocapitolo") {
+          j = findSiblingSubchapterIdx(o, idx, dir);
+          if (j < 0) return prev;
+        } else {
+          j = idx + dir;
+        }
+      } else {
+        j = idx + dir;
+      }
+      if (j < 0 || j >= o.length || j === idx) return prev;
       [o[idx], o[j]] = [o[j], o[idx]];
       return o;
     });
@@ -2140,9 +2211,9 @@ function Editor({ data: initialData, onBack }) {
     });
   };
 
-  const applyEdit = async () => {
-    if (!msg.trim() && attachments.length===0) return;
+  const runEdit = async (effectiveMsg, effectiveAttachments, dataOverride = null) => {
     setLoading(true); setErr(null);
+    const baseData = dataOverride || data;
     const { chapterNumByKey } = buildSectionNumberMaps(sectionOrder, customSections, presetDeletedItems);
     const customSectionsForAI = customSections.map((c) => {
       const ck = `custom:${c.id}`;
@@ -2174,13 +2245,13 @@ Se la modifica richiesta è di INSERIRE una nuova sezione (es. "inserisci sottoc
 NON inserire numerazione manuale: il sistema calcola "2.6" automaticamente dal parentKey.
 
 Restituisci \`customSections\` completo (esistenti + nuovi) nel JSON di risposta.`;
-    const attList = attachments.map(a=>`- ${a.name} (${a.type.startsWith("image/")?"immagine/piantina":"documento PDF"})`).join("\n");
-    const dataClean = {...data, logoEvento: data.logoEvento ? "[logo_caricato]" : null, customSections: customSectionsForAI };
-    const editMsg = `DOCUMENTO ATTUALE (JSON):\n${JSON.stringify(dataClean,null,2)}\n\nMODIFICA RICHIESTA:\n${msg||"(vedi allegati)"}${attachments.length>0?`\n\nALLEGATI (${attachments.length}):\n${attList}\nAnalizza gli allegati e integra le informazioni nei capitoli corretti.`:""}`;
+    const attList = effectiveAttachments.map(a=>`- ${a.name} (${a.type.startsWith("image/")?"immagine/piantina":"documento PDF"})`).join("\n");
+    const dataClean = {...baseData, logoEvento: baseData.logoEvento ? "[logo_caricato]" : null, customSections: customSectionsForAI };
+    const editMsg = `DOCUMENTO ATTUALE (JSON):\n${JSON.stringify(dataClean,null,2)}\n\nMODIFICA RICHIESTA:\n${effectiveMsg||"(vedi allegati)"}${effectiveAttachments.length>0?`\n\nALLEGATI (${effectiveAttachments.length}):\n${attList}\nAnalizza gli allegati e integra le informazioni nei capitoli corretti.`:""}`;
     try {
-      const newData = await callAI(editMsg, null, attachments, SYS_EDIT);
+      const newData = await callAI(editMsg, null, effectiveAttachments, SYS_EDIT);
       const { customSections: newCS, ...rest } = newData || {};
-      setData({...rest, logoEvento:data.logoEvento||null, allegato2Files:data.allegato2Files||[]});
+      setData({...rest, logoEvento:baseData.logoEvento||null, allegato2Files:baseData.allegato2Files||[], eventSettings: baseData.eventSettings || null});
       let newlyCreated = [];
       if (Array.isArray(newCS)) {
         const existingIds = new Set(customSections.map((c) => c.id));
@@ -2221,13 +2292,97 @@ Restituisci \`customSections\` completo (esistenti + nuovi) nel JSON di risposta
           setSectionOrder((prev) => insertNewCustomKeysInOrder(prev, newlyCreated));
         }
       }
-      setHistory(prev=>[...prev,{msg:msg||"(allegati)", files:attachments.map(a=>a.name), ts:new Date()}]);
-      setMsg(""); setAttachments([]);
+      setHistory(prev=>[...prev,{msg:effectiveMsg||"(allegati)", files:effectiveAttachments.map(a=>a.name), ts:new Date()}]);
     } catch (e) {
-      console.error("[applyEdit]", e);
+      console.error("[runEdit]", e);
       setErr(e.message);
     }
     finally { setLoading(false); }
+  };
+
+  const applyEdit = async () => {
+    if (!msg.trim() && attachments.length===0) return;
+    const m = msg;
+    const att = attachments;
+    setMsg(""); setAttachments([]);
+    await runEdit(m, att);
+  };
+
+  // ── Modifica impostazioni evento (form iniziale) ────────────────────────
+  const buildDefaultSettings = (d) => ({
+    ...INIT,
+    name: d?.nomeEvento || INIT.name,
+    anno: d?.anno || INIT.anno,
+    luogo: d?.luogo || INIT.luogo,
+    logoEvento: d?.logoEvento || null,
+  });
+
+  const openSettingsModal = () => {
+    const initial = data.eventSettings ? {...data.eventSettings} : buildDefaultSettings(data);
+    if (!Array.isArray(initial.strutture)) initial.strutture = [];
+    setSettingsDraft(initial);
+    setSettingsStep(0);
+    setErr(null);
+    setSettingsModalOpen(true);
+  };
+
+  const updateSettingsDraft = (k, v) => setSettingsDraft((p) => ({...p, [k]: v}));
+
+  const SETTINGS_FIELD_LABELS = {
+    name: "Nome evento", anno: "Anno", tipo: "Tipo evento", date: "Date evento",
+    affluenza: "Affluenza prevista", orari: "Orari", programma: "Programma / Serate",
+    noteEvento: "Note evento",
+    orgNome: "Nome società organizzatrice", orgContatto: "Contatto principale",
+    orgAddr: "Indirizzo organizzazione", orgEmail: "Email organizzazione",
+    orgTelAz: "Tel. ufficio organizzazione", orgTelMob: "Tel. mobile organizzazione",
+    gerente: "Gerente / Referente serale",
+    ci: "Capo impiego DELTA", ciTel: "Tel. capo impiego", ciEmail: "Email capo impiego",
+    municipio: "Municipio / comune", municipioTel: "Tel. municipio",
+    polCant: "Polizia cantonale", polCom: "Polizia comunale",
+    pomp: "Pompieri", san: "Sanitari / Croce Verde", sama: "Samaritani",
+    luogo: "Indirizzo / area evento", comune: "Comune", areaDesc: "Descrizione area",
+    entrata: "Tipo entrata", strutture: "Strutture e servizi",
+    altreStr: "Altre strutture", minori: "Sistema identificazione minori",
+    noteAccessi: "Note accessi / F&B",
+    disp: "Agenti per data e fascia oraria", pos: "Posizioni previste",
+    pc: "Posto comando", comm: "Sistema comunicazioni", pompSer: "Pompieri in servizio",
+    noteDisp: "Note dispositivo",
+  };
+
+  const computeSettingsDiff = (prev, next) => {
+    const lines = [];
+    const keys = Array.from(new Set([...Object.keys(prev || {}), ...Object.keys(next || {})]));
+    for (const k of keys) {
+      if (k === "logoEvento") continue;
+      const a = prev?.[k];
+      const b = next?.[k];
+      if (JSON.stringify(a) === JSON.stringify(b)) continue;
+      const label = SETTINGS_FIELD_LABELS[k] || k;
+      const fmt = (v) => {
+        if (v == null || v === "") return "(vuoto)";
+        if (Array.isArray(v)) return v.length ? v.join(", ") : "(nessuno)";
+        return String(v);
+      };
+      lines.push(`- ${label}: "${fmt(a)}" → "${fmt(b)}"`);
+    }
+    return lines;
+  };
+
+  const applyEventSettings = async () => {
+    if (!settingsDraft) { setSettingsModalOpen(false); return; }
+    const prev = data.eventSettings || buildDefaultSettings(data);
+    const next = {...settingsDraft};
+    const diff = computeSettingsDiff(prev, next);
+    const newData = {
+      ...data,
+      eventSettings: next,
+      logoEvento: next.logoEvento ?? data.logoEvento ?? null,
+    };
+    setData(newData);
+    setSettingsModalOpen(false);
+    if (!diff.length) return;
+    const editMsg = `IMPOSTAZIONI EVENTO AGGIORNATE DAL FORM INIZIALE.\n\nCampi modificati:\n${diff.join("\n")}\n\nAggiorna in modo coerente i campi e i testi del documento che dipendono da queste impostazioni (es. nomeEvento, luogo, anno, s1 contatti/responsabili, s2 descrizione/programma/orari/location/visitatori/minori, s3 analisi pericoli se cambia affluenza/tipo, s4 dispositivo/comunicazioni/posto comando, ecc.). Mantieni invariati i campi non interessati.`;
+    await runEdit(editMsg, [], newData);
   };
 
   const buildPrintHTML = () => {
@@ -2416,7 +2571,10 @@ ${flowParts}
         {/* Header pannello */}
         <div style={{padding:"14px 16px 10px",borderBottom:`1px solid ${GB}`}}>
           <div style={{...SERIF,fontSize:"16px",fontWeight:"700",color:N,marginBottom:"2px"}}>Modifica documento</div>
-          <div style={{...SANS,fontSize:"11px",color:GR}}>Digita le modifiche · allega file · premi Applica</div>
+          <div style={{...SANS,fontSize:"11px",color:GR,marginBottom:"8px"}}>Digita le modifiche · allega file · premi Applica</div>
+          <button type="button" onClick={openSettingsModal} style={{...SANS,width:"100%",padding:"8px 10px",background:WH,color:N,border:`1px solid ${N}`,borderRadius:"6px",cursor:"pointer",fontSize:"12px",fontWeight:"600",display:"flex",alignItems:"center",justifyContent:"center",gap:"6px"}} title="Riapri il form iniziale con i campi compilati">
+            ⚙️ Modifica impostazioni evento
+          </button>
         </div>
 
         <div style={{padding:"10px 14px",borderBottom:`1px solid ${GB}`,maxHeight:"200px",overflowY:"auto",background:"#fafbfd"}}>
@@ -2424,10 +2582,12 @@ ${flowParts}
           {ord.map((key, i)=>{
             const customId = key.startsWith("custom:") ? parseCustomSectionKey(key) : null;
             const isRenaming = customId && renamingCustomId === customId;
+            const canUp = canMoveSection(ord, i, -1);
+            const canDown = canMoveSection(ord, i, 1);
             return (
             <div key={`${key}-${i}`} style={{display:"flex",alignItems:"center",gap:"4px",marginBottom:"6px",...SANS,fontSize:"11px"}}>
-              <button type="button" onClick={()=>moveSection(i,-1)} disabled={i===0} style={{background:i===0?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:i===0?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Su">▲</button>
-              <button type="button" onClick={()=>moveSection(i,1)} disabled={i===ord.length-1} style={{background:i===ord.length-1?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:i===ord.length-1?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Giù">▼</button>
+              <button type="button" onClick={()=>moveSection(i,-1)} disabled={!canUp} style={{background:!canUp?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:!canUp?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Su">▲</button>
+              <button type="button" onClick={()=>moveSection(i,1)} disabled={!canDown} style={{background:!canDown?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:!canDown?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Giù">▼</button>
               {key.startsWith("custom:") && (
                 <button type="button" onClick={()=>deleteCustomKey(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"14px",padding:"0 4px",lineHeight:1}} title="Elimina">🗑</button>
               )}
@@ -2693,6 +2853,36 @@ ${flowParts}
                 <button type="button" onClick={()=>{setSecModalOpen(false);setSecModalEditingId(null);}} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
                 <button type="button" onClick={submitSectionModal} style={{flex:1,padding:"10px",background:N,color:WH,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>{secModalEditingId?"Salva":"Aggiungi"}</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsModalOpen && settingsDraft && (
+        <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={()=>setSettingsModalOpen(false)}>
+          <div style={{background:WH,borderRadius:"12px",maxWidth:"760px",width:"100%",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 50px rgba(0,0,0,0.2)",...SANS}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${GB}`,background:GL,fontWeight:"700",fontSize:"14px",color:N,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>⚙️ Modifica impostazioni evento</span>
+              <button type="button" onClick={()=>setSettingsModalOpen(false)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"20px",color:TM,padding:0,lineHeight:1}} title="Chiudi">×</button>
+            </div>
+            <div style={{padding:"16px 18px",overflowY:"auto",flex:1}}>
+              <div style={{...SANS,fontSize:"11px",color:GR,marginBottom:"14px",lineHeight:1.6}}>
+                Modifica i campi del form iniziale. Al salvataggio le modifiche verranno applicate al documento in tempo reale tramite l'AI.
+              </div>
+              <StepBar steps={STEPS.slice(0,4)} cur={settingsStep}/>
+              {settingsStep===0 && <Step0 f={settingsDraft} u={updateSettingsDraft}/>}
+              {settingsStep===1 && <Step1 f={settingsDraft} u={updateSettingsDraft}/>}
+              {settingsStep===2 && <Step2 f={settingsDraft} u={updateSettingsDraft}/>}
+              {settingsStep===3 && <Step3 f={settingsDraft} u={updateSettingsDraft}/>}
+            </div>
+            <div style={{padding:"12px 18px",borderTop:`1px solid ${GB}`,background:"#fafbfd",display:"flex",gap:"10px",alignItems:"center"}}>
+              <button type="button" onClick={()=>setSettingsStep(Math.max(0,settingsStep-1))} disabled={settingsStep===0} style={{padding:"9px 14px",background:WH,border:`1px solid ${GB}`,borderRadius:"7px",cursor:settingsStep===0?"not-allowed":"pointer",fontSize:"13px",fontWeight:"600",color:settingsStep===0?GR:TM}}>← Precedente</button>
+              {settingsStep<3 && (
+                <button type="button" onClick={()=>setSettingsStep(settingsStep+1)} style={{padding:"9px 14px",background:WH,border:`1px solid ${GB}`,borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:N}}>Avanti →</button>
+              )}
+              <div style={{flex:1}}/>
+              <button type="button" onClick={()=>setSettingsModalOpen(false)} style={{padding:"9px 14px",background:WH,border:`1px solid ${GB}`,borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
+              <button type="button" onClick={applyEventSettings} disabled={loading} style={{padding:"9px 18px",background:loading?"#ccc":RD,color:WH,border:"none",borderRadius:"7px",cursor:loading?"not-allowed":"pointer",fontSize:"13px",fontWeight:"700"}}>{loading?"⏳ Applicazione…":"💾 Salva e applica"}</button>
             </div>
           </div>
         </div>
