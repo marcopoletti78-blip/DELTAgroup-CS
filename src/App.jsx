@@ -795,16 +795,24 @@ const TOC_ENTRIES = [
 ];
 
 const DEFAULT_SECTION_ORDER = ["ps1", "ps2", "ps3", "ps4", "ps5", "ps6", "all1", "all2"];
+// Indici TOC_ENTRIES per preset:
+// ps1: 0 (main) + 1..6 (6 sub)        → slice(0, 7)
+// ps2: 7 (main) + 8..12 (5 sub)       → slice(7, 13)
+// ps3: 13 (main) + 14..17 (4 sub)     → slice(13, 18)
+// ps4: 18 (main) + 19..23 (5 sub)     → slice(18, 24)
+// ps5: 24 (main) + 25..29 (5 sub)     → slice(24, 30)
+// ps6: 30 (main) + 31..39 (9 sub)     → slice(30, 40)
+// All. 1 = TOC_ENTRIES[40], All. 2 = TOC_ENTRIES[41]
 const TOC_PRESET_BLOCKS = {
   ps1: TOC_ENTRIES.slice(0, 7),
-  ps2: TOC_ENTRIES.slice(7, 14),
-  ps3: TOC_ENTRIES.slice(14, 19),
-  ps4: TOC_ENTRIES.slice(19, 26),
-  ps5: TOC_ENTRIES.slice(26, 32),
-  ps6: TOC_ENTRIES.slice(32, 42),
+  ps2: TOC_ENTRIES.slice(7, 13),
+  ps3: TOC_ENTRIES.slice(13, 18),
+  ps4: TOC_ENTRIES.slice(18, 24),
+  ps5: TOC_ENTRIES.slice(24, 30),
+  ps6: TOC_ENTRIES.slice(30, 40),
 };
-const TOC_ALL1_ENTRY = TOC_ENTRIES[42];
-const TOC_ALL2_ENTRY = TOC_ENTRIES[43];
+const TOC_ALL1_ENTRY = TOC_ENTRIES[40];
+const TOC_ALL2_ENTRY = TOC_ENTRIES[41];
 
 // Quanti sotto-capitoli preset ha ciascun capitolo preset (i custom partono da X.(PRESET+1)).
 const PRESET_SUB_COUNT = { ps1: 6, ps2: 5, ps3: 4, ps4: 5, ps5: 5, ps6: 9 };
@@ -2543,8 +2551,8 @@ embed{display:block;}
   .print-hdr{position:fixed;top:0;left:0;height:auto;width:100%;z-index:1000;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
   .ppage-fixed{height:297mm;overflow:hidden;}
-  .pcnt{padding-top:85px;padding-bottom:40px;padding-left:36px;padding-right:36px;}
-  .ppage-all1 .pcnt{font-size:7pt;line-height:1.25;overflow:hidden;max-height:calc(297mm - 130px);}
+  .pcnt{padding-top:85px;padding-bottom:60px;padding-left:36px;padding-right:36px;}
+  .ppage-all1 .pcnt{font-size:7pt;line-height:1.25;overflow:hidden;max-height:calc(297mm - 150px);}
   .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;}
   .cover .pcnt{height:100%;box-sizing:border-box;}
   .pcnt h2,.pcnt h3{break-after:avoid;page-break-after:avoid;break-inside:avoid;page-break-inside:avoid;}
