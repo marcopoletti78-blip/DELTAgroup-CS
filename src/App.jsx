@@ -736,8 +736,8 @@ function RiskTbl({ title, rows }) {
 
 function Dsec({ n, t, children, id }) {
   return (
-    <div id={id} style={{marginBottom:"28px",breakInside:"avoid"}}>
-      <div style={{background:N,color:WH,padding:"9px 16px",fontSize:"13px",fontWeight:"700",...SANS,borderRadius:"6px 6px 0 0"}}>{n}&nbsp;&nbsp;{t}</div>
+    <div id={id} style={{marginBottom:"28px"}}>
+      <div style={{background:N,color:WH,padding:"9px 16px",fontSize:"13px",fontWeight:"700",...SANS,borderRadius:"6px 6px 0 0",breakAfter:"avoid",pageBreakAfter:"avoid"}}>{n}&nbsp;&nbsp;{t}</div>
       <div style={{border:`1px solid ${GB}`,borderTop:"none",borderRadius:"0 0 6px 6px",padding:"20px",background:WH}}>{children}</div>
     </div>
   );
@@ -954,6 +954,54 @@ function applyPresetDeletedAndRenumber(presetKey, rows, chapterIndex, presetDele
   });
 }
 
+// Stima del numero pagina di partenza per ogni "owner" key dell'order.
+// Copertina=1, Indice=2, le sezioni flow partono da pagina 3, una per chiave (eccetto i sottocapitoli che ereditano dal padre).
+function buildPageMapByOrderKey(sectionOrder, customSections) {
+  const cs = Array.isArray(customSections) ? customSections : [];
+  const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
+  const map = new Map();
+  let p = 3;
+  for (const key of order) {
+    if (!key) continue;
+    if (/^ps[1-6]$/.test(key) || key === "all1" || key === "all2") {
+      map.set(key, p);
+      p += 1;
+      continue;
+    }
+    if (typeof key === "string" && key.startsWith("custom:")) {
+      const id = parseCustomSectionKey(key);
+      const s = cs.find((c) => c.id === id);
+      if (!s) continue;
+      if (s.type === "sottocapitolo") continue;
+      map.set(key, p);
+      p += 1;
+    }
+  }
+  return map;
+}
+
+// Parent effettivo nell'order di un sottocapitolo (parentKey dichiarato se presente nell'order,
+// altrimenti l'ultimo capitolo che lo precede). Funzione pura, usata dal TOC.
+function effectiveParentKeyInOrder(order, idx, customSections) {
+  const key = order[idx];
+  if (typeof key !== "string" || !key.startsWith("custom:")) return null;
+  const id = parseCustomSectionKey(key);
+  const s = customSections.find((c) => c.id === id);
+  if (s?.type !== "sottocapitolo") return null;
+  if (s.parentKey && order.includes(s.parentKey)) return s.parentKey;
+  for (let i = idx - 1; i >= 0; i--) {
+    const k = order[i];
+    if (!k) continue;
+    if (/^ps[1-6]$/.test(k)) return k;
+    if (k.startsWith("custom:")) {
+      const cid = parseCustomSectionKey(k);
+      const cs = customSections.find((c) => c.id === cid);
+      if (cs?.type === "capitolo") return k;
+    }
+  }
+  return null;
+}
+
 function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}) {
   const cs = Array.isArray(customSections) ? customSections : [];
   const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
@@ -961,12 +1009,14 @@ function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}) {
 
   const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = buildSectionNumberMaps(order, cs, presetDeletedItems);
   const rows = [];
-  for (const key of order) {
+  for (let i = 0; i < order.length; i++) {
+    const key = order[i];
     if (!key) continue;
     if (/^ps[1-6]$/.test(key)) {
       const idx = chapterNumByKey.get(key);
       const block = TOC_PRESET_BLOCKS[key] ?? [];
-      rows.push(...applyPresetDeletedAndRenumber(key, block, idx, presetDeletedItems));
+      const renumbered = applyPresetDeletedAndRenumber(key, block, idx, presetDeletedItems);
+      rows.push(...renumbered.map((r) => ({ ...r, ownerKey: key })));
     } else if (key === "all1" && TOC_ALL1_ENTRY) {
       const deletedAll = new Set((presetDeletedItems.all1) || []);
       if (deletedAll.has(String(TOC_ALL1_ENTRY.n))) continue;
@@ -978,6 +1028,7 @@ function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}) {
         n: `All. ${a}`,
         t: baseT,
         main: true,
+        ownerKey: "all1",
       });
     } else if (key === "all2" && TOC_ALL2_ENTRY) {
       const deletedAll = new Set((presetDeletedItems.all2) || []);
@@ -990,6 +1041,7 @@ function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}) {
         n: `All. ${a}`,
         t: baseT,
         main: true,
+        ownerKey: "all2",
       });
     } else if (typeof key === "string" && key.startsWith("custom:")) {
       const id = parseCustomSectionKey(key);
@@ -998,16 +1050,17 @@ function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}) {
       if (s.type === "capitolo") {
         const n = chapterNumByKey.get(key) ?? "?";
         const title = (s.title || "Capitolo").replace(/^\d+\s+/, "");
-        rows.push({ n: String(n), t: title, main: true });
+        rows.push({ n: String(n), t: title, main: true, ownerKey: key });
       } else if (s.type === "sottocapitolo") {
         const nu = subchapterDisplayByKey.get(key) ?? "?";
         const title = (s.title || "Sotto capitolo").replace(/^\d+\.\d+\s+/, "").replace(/^\d+\s+/, "");
-        rows.push({ n: nu, t: title, main: false });
+        const owner = effectiveParentKeyInOrder(order, i, cs) || key;
+        rows.push({ n: nu, t: title, main: false, ownerKey: owner });
       } else {
         const na = allegatoNumByKey.get(key);
         if (na == null) continue;
         const title = (s.title || "Allegato").replace(/^\d+\s+/, "");
-        rows.push({ n: `All. ${na}`, t: title, main: true });
+        rows.push({ n: `All. ${na}`, t: title, main: true, ownerKey: key });
       }
     }
   }
@@ -1461,10 +1514,11 @@ function CustomSottoCapitoloPreview({ section, displayLabel }) {
     <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }} dangerouslySetInnerHTML={{ __html: html }} />
   );
   return (
-    <div id={id} style={{ marginBottom:"22px", breakInside:"avoid", pageBreakInside:"avoid" }}>
+    <div id={id} style={{ marginBottom:"22px" }}>
       <h3 style={{
         fontWeight:"700", fontSize:"12px", textTransform:"uppercase", letterSpacing:"0.07em",
         textDecoration:"underline", color:N, marginBottom:"7px", ...SANS, marginTop:0,
+        breakAfter:"avoid", pageBreakAfter:"avoid",
       }}>
         {displayLabel}&nbsp;&nbsp;{section.title || "Senza titolo"}
       </h3>
@@ -1481,14 +1535,14 @@ function CustomAllegatoPreview({ section, displayAllegatoNum }) {
   const renderContent = (extraStyle = {}) =>
     rawHtml ? (
       <div
-        style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX, breakInside:"avoid", pageBreakInside:"avoid", ...extraStyle }}
+        style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX, ...extraStyle }}
         dangerouslySetInnerHTML={{ __html: rawHtml }}
       />
     ) : null;
   const hasContent = !!(section.content && String(section.content).trim());
   return (
     <div id={pid} style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
-      <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em", breakInside:"avoid", pageBreakInside:"avoid" }}>
+      <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em", breakInside:"avoid", pageBreakInside:"avoid", breakAfter:"avoid", pageBreakAfter:"avoid" }}>
         Allegato {displayAllegatoNum} – {section.title || "Allegato"}
       </div>
       {src ? (
@@ -1524,6 +1578,10 @@ function DocPreview({ data, customSections = [], sectionOrder, presetOverrides =
     () => buildSectionNumberMaps(order, customSections, presetDeletedItems),
     [order, customSections, presetDeletedItems],
   );
+  const pageMapByOrderKey = React.useMemo(
+    () => buildPageMapByOrderKey(order, customSections),
+    [order, customSections],
+  );
 
   return (
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
@@ -1550,13 +1608,16 @@ function DocPreview({ data, customSections = [], sectionOrder, presetOverrides =
         <div style={{...SANS,fontSize:"13px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.1em",color:N,marginBottom:"16px",borderBottom:`2px solid ${N}`,paddingBottom:"6px"}}>Indice</div>
         {tocRows
           .filter((e) => e != null && e.n != null && e.t != null)
-          .map((e,i)=>(
+          .map((e,i)=>{
+            const pageNum = e.ownerKey ? pageMapByOrderKey.get(e.ownerKey) : null;
+            return (
           <div key={i} style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:isMain(e.n)?"6px":"2px",paddingLeft:isMain(e.n)?"0":"24px"}}>
             <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX}}>{e.n} {e.t}</span>
             <span style={{flex:1,borderBottom:"1px dotted #ccc",height:"1px",marginBottom:"3px"}}/>
-            <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX,minWidth:"46px",textAlign:"right"}}>{e.n}</span>
+            <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX,minWidth:"30px",textAlign:"right"}}>{pageNum ?? ""}</span>
           </div>
-        ))}
+            );
+          })}
       </div>
 
       <div id="pbody" style={{padding:"36px 48px"}}>
@@ -2471,7 +2532,6 @@ embed{display:block;}
 .ppage-flow{overflow:visible;}
 .pcnt{padding-top:0;padding-bottom:10px;padding-left:36px;padding-right:36px;overflow:visible;}
 .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;}
-.ppage-allegato-custom .pcnt p,.ppage-allegato-custom .pcnt>div{break-inside:avoid;page-break-inside:avoid;}
 .cover .pcnt{
   display:flex;flex-direction:column;
   align-items:center;justify-content:center;
@@ -2480,18 +2540,15 @@ embed{display:block;}
 @media print{
   @page{size:A4 portrait;margin:0 10mm 0 10mm;}
   .doc-page-header{display:none!important;}
-  .ppage-flow .pcnt>div{break-inside:avoid;page-break-inside:avoid;}
   .print-hdr{position:fixed;top:0;left:0;height:auto;width:100%;z-index:1000;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
   .ppage-fixed{height:297mm;overflow:hidden;}
   .pcnt{padding-top:85px;padding-bottom:40px;padding-left:36px;padding-right:36px;}
   .ppage-all1 .pcnt{font-size:7pt;line-height:1.25;overflow:hidden;max-height:calc(297mm - 130px);}
   .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;}
-  .ppage-allegato-custom .pcnt p,.ppage-allegato-custom .pcnt>div{break-inside:avoid;page-break-inside:avoid;}
   .cover .pcnt{height:100%;box-sizing:border-box;}
-  .pcnt h2{break-before:page;page-break-before:always;break-inside:avoid;page-break-inside:avoid;}
-  .pcnt h3{break-before:auto;page-break-before:auto;break-inside:avoid;page-break-inside:avoid;}
-  .pcnt p,.pcnt ul,.pcnt li{break-inside:avoid;page-break-inside:avoid;}
+  .pcnt h2,.pcnt h3{break-after:avoid;page-break-after:avoid;break-inside:avoid;page-break-inside:avoid;}
+  .pcnt p,.pcnt li,.pcnt tr{break-inside:avoid;page-break-inside:avoid;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
 }
