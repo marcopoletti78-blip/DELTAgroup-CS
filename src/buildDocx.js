@@ -122,12 +122,13 @@ function markdownToDocx(src) {
   };
   const flushList = () => {
     if (!listBuf.length) return;
+    // Tutti i punti elenco diventano bullet (anche le liste "1. 2. 3." del
+    // markdown). Evita la numerazione che continua tra sub diversi nel DOCX.
     for (const item of listBuf) {
-      out.push(para(parseInline(item), {
-        numbering: listOrdered
-          ? { reference: "numList", level: 0 }
-          : undefined,
-        bullet: !listOrdered ? { level: 0 } : undefined,
+      // Strip prefisso "1. " o "1) " dall'item se è una lista ordinata.
+      const clean = listOrdered ? item.replace(/^\s*\d+[\.\)]\s+/, "") : item;
+      out.push(para(parseInline(clean), {
+        bullet: { level: 0 },
         spacing: { after: 60 },
       }));
     }
@@ -613,7 +614,7 @@ function bodyForPs6Full(data, chapterDisplay, deletedSet, subOrder) {
     const arr = data.s6?.[k];
     if (!arr || !arr.length) return null;
     return arr.map((s) => para([txt(String(s).replace(/^\s*\d+[\.\)]\s+/, ""))], {
-      numbering: { reference: "numList", level: 0 },
+      bullet: { level: 0 },
       spacing: { after: 60 },
     }));
   };
@@ -732,6 +733,8 @@ async function bodyForAll2(data, allegatoNum, prefetched) {
 // ── Cover ───────────────────────────────────────────────────────────────────
 async function buildCover(data, prefetched) {
   const out = [];
+  // Spacer per spingere il contenuto verso il centro verticale della pagina.
+  out.push(para([], { spacing: { before: 3600 } }));
   if (prefetched.logoEvento) {
     const dims = await getImageDimensions(prefetched.logoEvento, { w: 200, h: 80 });
     const fit = fitImageInsidePage(dims.w, dims.h, 220, 90);
@@ -739,20 +742,18 @@ async function buildCover(data, prefetched) {
       data: prefetched.logoEvento,
       transformation: fit,
       type: "png",
-    })], { alignment: AlignmentType.CENTER, spacing: { after: 240, before: 1200 } }));
-  } else {
-    out.push(para([], { spacing: { before: 1600 } }));
+    })], { alignment: AlignmentType.CENTER, spacing: { after: 360 } }));
   }
-  out.push(para([txt("CONCETTO DI SICUREZZA", { bold: true, color: NAVY, size: 26 })], {
-    alignment: AlignmentType.CENTER, spacing: { after: 160 },
+  out.push(para([txt("CONCETTO DI SICUREZZA", { bold: true, color: NAVY, size: 28 })], {
+    alignment: AlignmentType.CENTER, spacing: { after: 240 },
   }));
-  out.push(para([txt(data.nomeEvento || "", { bold: true, color: NAVY, size: 44 })], {
+  out.push(para([txt(data.nomeEvento || "", { bold: true, color: NAVY, size: 48 })], {
+    alignment: AlignmentType.CENTER, spacing: { after: 200 },
+  }));
+  if (data.luogo) out.push(para([txt(data.luogo, { color: MUTED, size: 28 })], {
     alignment: AlignmentType.CENTER, spacing: { after: 120 },
   }));
-  if (data.luogo) out.push(para([txt(data.luogo, { color: MUTED, size: 24 })], {
-    alignment: AlignmentType.CENTER, spacing: { after: 80 },
-  }));
-  if (data.anno) out.push(para([txt(`Edizione ${data.anno}`, { color: MUTED, size: 22 })], {
+  if (data.anno) out.push(para([txt(`Edizione ${data.anno}`, { color: MUTED, size: 24 })], {
     alignment: AlignmentType.CENTER,
   }));
   return out;
@@ -1062,6 +1063,24 @@ export async function generateDocxBlob({
           paragraph: { spacing: { before: 120, after: 40 }, keepNext: true },
         },
       },
+      paragraphStyles: [
+        {
+          id: "TOC1",
+          name: "toc 1",
+          basedOn: "Normal",
+          next: "Normal",
+          run: { font: "Arial", size: 20, bold: true, color: NAVY },
+          paragraph: { spacing: { before: 0, after: 40, line: 260 } },
+        },
+        {
+          id: "TOC2",
+          name: "toc 2",
+          basedOn: "Normal",
+          next: "Normal",
+          run: { font: "Arial", size: 18, color: TEXT },
+          paragraph: { spacing: { before: 0, after: 0, line: 240 }, indent: { left: 280 } },
+        },
+      ],
     },
     numbering,
     sections: [
