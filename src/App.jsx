@@ -914,6 +914,49 @@ function remapTocPresetChapterRows(rows, chapterIndex) {
   });
 }
 
+// Riordina sectionOrder mettendo ogni sottocapitolo custom subito dopo il
+// proprio parent valido (preset ps* o capitolo custom presente nell'order).
+// I sottocapitoli senza parent valido restano in fondo come orfani.
+function normalizeSectionOrder(order, customSections) {
+  const cs = Array.isArray(customSections) ? customSections : [];
+  if (!Array.isArray(order) || !order.length) return order;
+  const findSection = (key) => {
+    if (typeof key !== "string" || !key.startsWith("custom:")) return null;
+    const id = parseCustomSectionKey(key);
+    return cs.find((c) => c.id === id) || null;
+  };
+  const isCapOrAll = (key) => {
+    if (/^ps[1-6]$/.test(key) || key === "all1" || key === "all2") return true;
+    const s = findSection(key);
+    return s?.type === "capitolo" || s?.type === "allegato";
+  };
+  const isSub = (key) => findSection(key)?.type === "sottocapitolo";
+  const skeleton = order.filter((k) => isCapOrAll(k));
+  const skeletonKeys = new Set(skeleton);
+  const subsByParent = new Map();
+  const orphanSubs = [];
+  for (const k of order) {
+    if (!isSub(k)) continue;
+    const s = findSection(k);
+    const pk = s?.parentKey;
+    if (pk && skeletonKeys.has(pk)) {
+      const arr = subsByParent.get(pk) || [];
+      arr.push(k);
+      subsByParent.set(pk, arr);
+    } else {
+      orphanSubs.push(k);
+    }
+  }
+  const result = [];
+  for (const k of skeleton) {
+    result.push(k);
+    const subs = subsByParent.get(k);
+    if (subs && subs.length) result.push(...subs);
+  }
+  if (orphanSubs.length) result.push(...orphanSubs);
+  return result;
+}
+
 function insertNewCustomKeysInOrder(prevOrder, newSections) {
   const base = Array.isArray(prevOrder) && prevOrder.length ? [...prevOrder] : [...DEFAULT_SECTION_ORDER];
   for (const s of newSections) {
@@ -1133,8 +1176,10 @@ function plainTextToPresetHtml(text) {
   return `<div class="preset-override">${inner}</div>`;
 }
 
-// Markdown → HTML semplice (h2, h3, b, ul/li, p).
+// Markdown → HTML semplice (h2, h3, h4, b, ul/li, p).
 // Per testo che non contiene già tag HTML. Escape applicato all'input prima del parsing.
+// Liste accettano spazi iniziali (es. "    - voce").
+// `#` viene mappato a <h2> (un solo livello di top heading, allineato a <h2>).
 function markdownToHtml(src) {
   if (!src) return "";
   const escaped = escapeHtmlPrint(String(src));
@@ -1165,19 +1210,33 @@ function markdownToHtml(src) {
       flushPara();
       continue;
     }
-    const h3m = line.match(/^###\s+(.*)$/);
+    const h1m = line.match(/^#\s+(.*)$/);
     const h2m = line.match(/^##\s+(.*)$/);
-    const lim = line.match(/^[-*]\s+(.*)$/);
-    if (h2m) {
+    const h3m = line.match(/^###\s+(.*)$/);
+    const h4m = line.match(/^####\s+(.*)$/);
+    const lim = line.match(/^\s*[-*]\s+(.*)$/);
+    if (h4m) {
       flushList();
       flushPara();
-      out.push(`<h2>${h2m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h2>`);
+      out.push(`<h4>${h4m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h4>`);
       continue;
     }
     if (h3m) {
       flushList();
       flushPara();
       out.push(`<h3>${h3m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h3>`);
+      continue;
+    }
+    if (h2m) {
+      flushList();
+      flushPara();
+      out.push(`<h2>${h2m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h2>`);
+      continue;
+    }
+    if (h1m) {
+      flushList();
+      flushPara();
+      out.push(`<h2>${h1m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h2>`);
       continue;
     }
     if (lim) {
@@ -1831,6 +1890,17 @@ function Editor({ data: initialData, onBack }) {
       console.error("[persist sections]", e);
     }
   }, [data.nomeEvento, customSections, sectionOrder, presetOverrides, presetDeletedItems]);
+
+  // Tiene i sottocapitoli custom sempre subito dopo il loro parent nell'order.
+  // Evita che restino "in fondo" quando l'AI o l'utente li aggiungono in posizioni innaturali.
+  React.useEffect(() => {
+    setSectionOrder((prev) => {
+      if (!Array.isArray(prev) || !prev.length) return prev;
+      const normalized = normalizeSectionOrder(prev, customSections);
+      if (normalized.length === prev.length && normalized.every((k, i) => k === prev[i])) return prev;
+      return normalized;
+    });
+  }, [customSections]);
 
   const togglePresetItemDeleted = (presetKey, itemN) => {
     setPresetDeletedItems((prev) => {
@@ -2555,8 +2625,8 @@ embed{display:block;}
   .ppage-all1 .pcnt{font-size:7pt;line-height:1.25;overflow:hidden;max-height:calc(297mm - 150px);}
   .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;}
   .cover .pcnt{height:100%;box-sizing:border-box;}
-  .pcnt h2,.pcnt h3{break-after:avoid;page-break-after:avoid;break-inside:avoid;page-break-inside:avoid;}
-  .pcnt p,.pcnt li,.pcnt tr{break-inside:avoid;page-break-inside:avoid;}
+  .pcnt h2,.pcnt h3,.pcnt h4{break-after:avoid;page-break-after:avoid;break-inside:avoid;page-break-inside:avoid;}
+  .pcnt p,.pcnt li,.pcnt tr{break-inside:avoid;page-break-inside:avoid;orphans:3;widows:3;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
 }
