@@ -1148,10 +1148,50 @@ function formatCustomBodyForPrint(htmlOrText) {
 
 const isMain = (n) => typeof n === "string" && (/^\d+$/.test(n) || n.startsWith("All."));
 
+// Filtra i sub di un preset rimuovendo quelli eliminati, quelli senza body, e
+// rinumerando contigualmente i rimanenti (X.1, X.2, ...).
+function renderPresetSubs(items, p, deletedSet) {
+  const visible = items.filter((s) => s.body != null && s.body !== false && s.body !== "");
+  let counter = 0;
+  return visible.map((s) => {
+    const origN = `${p}.${s.origIdx}`;
+    if (deletedSet && deletedSet.has(origN)) return null;
+    counter += 1;
+    const n = `${p}.${counter}`;
+    return <Dsub key={origN} n={n} t={s.t}>{s.body}</Dsub>;
+  }).filter(Boolean);
+}
+
 /** Anteprima: blocchi preset (ordine gestito dal container). */
-function PresetPs1({ data, displayChapter = 1, customSubs = null }) {
+function PresetPs1({ data, displayChapter = 1, customSubs = null, deletedItems = [] }) {
   if (!data.s1) return null;
   const p = String(displayChapter);
+  const deletedSet = new Set(deletedItems);
+  const statoMagBody = data.s1.statoMaggiore ? (
+    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12.5px" }}>
+      <tbody>
+        {data.s1.statoMaggiore.split("\n").map((s)=>s.trim()).filter(Boolean).map((s, i)=>{
+          const sep = s.indexOf(":");
+          const org = sep > -1 ? s.slice(0, sep).trim() : s;
+          const nom = sep > -1 ? s.slice(sep + 1).trim() : "";
+          return (
+            <tr key={i}>
+              <td style={{padding:"3px 24px 3px 0", width:"44%", ...SANS, fontWeight:"700", color:TX, verticalAlign:"top", whiteSpace:"nowrap"}}>{org}{sep > -1 ? ":" : ""}</td>
+              <td style={{padding:"3px 0", ...SANS, color:TX, verticalAlign:"top"}}>{nom}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  ) : null;
+  const subs = [
+    { origIdx: 1, t: "Servizio di sicurezza", body: data.s1.sicurezza },
+    { origIdx: 2, t: "Polizia", body: data.s1.polizia },
+    { origIdx: 3, t: "Sanitari", body: data.s1.sanitari },
+    { origIdx: 4, t: "REGA", body: data.s1.rega },
+    { origIdx: 5, t: "Pompieri", body: data.s1.pompieri },
+    { origIdx: 6, t: "Stato Maggiore", body: statoMagBody },
+  ];
   return (
     <Dsec id="ps1" n={p} t="Responsabilità">
       <table style={{ width:"100%", borderCollapse:"collapse", marginBottom:"22px", fontSize:"11.5px", border:`1px solid ${GB}` }}>
@@ -1173,30 +1213,7 @@ function PresetPs1({ data, displayChapter = 1, customSubs = null }) {
           ))}
         </tbody>
       </table>
-      {data.s1.sicurezza && <Dsub n={`${p}.1`} t="Servizio di sicurezza">{data.s1.sicurezza}</Dsub>}
-      {data.s1.polizia && <Dsub n={`${p}.2`} t="Polizia">{data.s1.polizia}</Dsub>}
-      {data.s1.sanitari && <Dsub n={`${p}.3`} t="Sanitari">{data.s1.sanitari}</Dsub>}
-      {data.s1.rega && <Dsub n={`${p}.4`} t="REGA">{data.s1.rega}</Dsub>}
-      {data.s1.pompieri && <Dsub n={`${p}.5`} t="Pompieri">{data.s1.pompieri}</Dsub>}
-      {data.s1.statoMaggiore && (
-        <Dsub n={`${p}.6`} t="Stato Maggiore">
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:"12.5px" }}>
-            <tbody>
-              {data.s1.statoMaggiore.split("\n").map((s)=>s.trim()).filter(Boolean).map((s, i)=>{
-                const sep = s.indexOf(":");
-                const org = sep > -1 ? s.slice(0, sep).trim() : s;
-                const nom = sep > -1 ? s.slice(sep + 1).trim() : "";
-                return (
-                  <tr key={i}>
-                    <td style={{padding:"3px 24px 3px 0", width:"44%", ...SANS, fontWeight:"700", color:TX, verticalAlign:"top", whiteSpace:"nowrap"}}>{org}{sep > -1 ? ":" : ""}</td>
-                    <td style={{padding:"3px 0", ...SANS, color:TX, verticalAlign:"top"}}>{nom}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </Dsub>
-      )}
+      {renderPresetSubs(subs, p, deletedSet)}
       {data.s1.puntoRitrovo && (
         <div style={{background:GL,border:`1px solid ${GB}`,borderRadius:"6px",padding:"10px 16px",fontWeight:"700",fontSize:"12.5px",...SANS,color:N,textAlign:"center",textTransform:"uppercase",letterSpacing:"0.07em"}}>
           PUNTO DI RITROVO: {data.s1.puntoRitrovo}
@@ -1207,9 +1224,25 @@ function PresetPs1({ data, displayChapter = 1, customSubs = null }) {
   );
 }
 
-function PresetPs2({ data, displayChapter = 2, customSubs = null }) {
+function PresetPs2({ data, displayChapter = 2, customSubs = null, deletedItems = [] }) {
   if (!data.s2) return null;
   const p = String(displayChapter);
+  const deletedSet = new Set(deletedItems);
+  const locationBody = data.s2.location ? (
+    <>
+      {data.s2.location}
+      <div style={{ ...SANS, fontSize:"12px", fontStyle:"italic", color:TM, marginTop:"8px", padding:"6px 10px", background:GL, borderRadius:"4px", border:`1px solid ${GB}` }}>
+        📎 La planimetria della location con il dispositivo degli agenti è riportata nell'<strong>Allegato 2</strong>.
+      </div>
+    </>
+  ) : null;
+  const subs = [
+    { origIdx: 1, t: "Periodo e orari d'apertura", body: data.s2.orari },
+    { origIdx: 2, t: "Location", body: locationBody },
+    { origIdx: 3, t: "Pattuglia esterna", body: data.s2.pattuglia },
+    { origIdx: 4, t: "Tipologia e numero dei visitatori", body: data.s2.visitatori },
+    { origIdx: 5, t: "Gestione dei minori", body: data.s2.minori },
+  ];
   return (
     <Dsec id="ps2" n={p} t="Descrizione">
       {data.s2.descrizione && <p style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, marginBottom:"16px", margin:"0 0 16px" }}>{data.s2.descrizione}</p>}
@@ -1218,44 +1251,51 @@ function PresetPs2({ data, displayChapter = 2, customSubs = null }) {
           {data.s2.programma.map((row, i) => <div key={i}><strong>{row.giorno}</strong>{row.giorno && row.attivita ? " — " : ""}{row.attivita}</div>)}
         </div>
       )}
-      {data.s2.orari && <Dsub n={`${p}.1`} t="Periodo e orari d'apertura">{data.s2.orari}</Dsub>}
-      {data.s2.location && (
-        <Dsub n={`${p}.2`} t="Location">
-          {data.s2.location}
-          <div style={{ ...SANS, fontSize:"12px", fontStyle:"italic", color:TM, marginTop:"8px", padding:"6px 10px", background:GL, borderRadius:"4px", border:`1px solid ${GB}` }}>
-            📎 La planimetria della location con il dispositivo degli agenti è riportata nell'<strong>Allegato 2</strong>.
-          </div>
-        </Dsub>
-      )}
-      {data.s2.pattuglia && <Dsub n={`${p}.3`} t="Pattuglia esterna">{data.s2.pattuglia}</Dsub>}
-      {data.s2.visitatori && <Dsub n={`${p}.4`} t="Tipologia e numero dei visitatori">{data.s2.visitatori}</Dsub>}
-      {data.s2.minori && <Dsub n={`${p}.5`} t="Gestione dei minori">{data.s2.minori}</Dsub>}
+      {renderPresetSubs(subs, p, deletedSet)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs3({ data, displayChapter = 3, customSubs = null }) {
+function PresetPs3({ data, displayChapter = 3, customSubs = null, deletedItems = [] }) {
   if (!data.s3) return null;
   const p = String(displayChapter);
+  const deletedSet = new Set(deletedItems);
+  const subs = [
+    {
+      origIdx: 1,
+      t: "Analisi del rischio",
+      body: (
+        <>
+          <RiskTbl title="Lista Pericoli Passivi" rows={data.s3.passivi} />
+          <RiskTbl title="Lista Pericoli Attivi" rows={data.s3.attivi} />
+        </>
+      ),
+    },
+    { origIdx: 2, t: "Meteo", body: data.s3.meteo },
+    { origIdx: 3, t: "Atto terroristico / attentato", body: data.s3.terrorismo },
+    { origIdx: 4, t: "Evacuazione", body: data.s3.evacuazione },
+  ];
   return (
     <Dsec id="ps3" n={p} t="Analisi dei pericoli">
       <p style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, margin:"0 0 16px" }}>Ad ogni evento vi sono fattori di rischio che potrebbero pregiudicare il buon esito dello stesso. Una valutazione attenta di questi fattori può influire sia sulla buona riuscita che sulle misure da adottare in caso di necessità.</p>
-      <Dsub n={`${p}.1`} t="Analisi del rischio">
-        <RiskTbl title="Lista Pericoli Passivi" rows={data.s3.passivi} />
-        <RiskTbl title="Lista Pericoli Attivi" rows={data.s3.attivi} />
-      </Dsub>
-      {data.s3.meteo && <Dsub n={`${p}.2`} t="Meteo">{data.s3.meteo}</Dsub>}
-      {data.s3.terrorismo && <Dsub n={`${p}.3`} t="Atto terroristico / attentato">{data.s3.terrorismo}</Dsub>}
-      {data.s3.evacuazione && <Dsub n={`${p}.4`} t="Evacuazione">{data.s3.evacuazione}</Dsub>}
+      {renderPresetSubs(subs, p, deletedSet)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs4({ data, displayChapter = 4, customSubs = null }) {
+function PresetPs4({ data, displayChapter = 4, customSubs = null, deletedItems = [] }) {
   if (!data.s4) return null;
   const p = String(displayChapter);
+  const deletedSet = new Set(deletedItems);
+  const subs = [
+    { origIdx: 1, t: "Modifiche", body: data.s4.modifiche },
+    { origIdx: 2, t: "Comunicazioni", body: data.s4.comunicazioni },
+    { origIdx: 3, t: "Divisa", body: "Secondo regolamento DELTAgroup." },
+    { origIdx: 4, t: "Posto Comando", body: data.s4.postoComando },
+    { origIdx: 5, t: "Diversi", body: data.s4.diversi },
+  ];
   return (
     <Dsec id="ps4" n={p} t="Dispositivo di sicurezza">
       <p style={{ ...SANS, fontSize:"12.5px", margin:"0 0 12px" }}>La DELTAgroup Security &amp; Services AG mette a disposizione il seguente dispositivo di sicurezza. La planimetria con le posizioni degli agenti è riportata nell'<strong>Allegato 2</strong>.</p>
@@ -1268,73 +1308,61 @@ function PresetPs4({ data, displayChapter = 4, customSubs = null }) {
           </div>
         ))}
       </div>
-      {data.s4.modifiche && <Dsub n={`${p}.1`} t="Modifiche">{data.s4.modifiche}</Dsub>}
-      {data.s4.comunicazioni && <Dsub n={`${p}.2`} t="Comunicazioni">{data.s4.comunicazioni}</Dsub>}
-      <Dsub n={`${p}.3`} t="Divisa">Secondo regolamento DELTAgroup.</Dsub>
-      {data.s4.postoComando && <Dsub n={`${p}.4`} t="Posto Comando">{data.s4.postoComando}</Dsub>}
-      {data.s4.diversi && <Dsub n={`${p}.5`} t="Diversi">{data.s4.diversi}</Dsub>}
+      {renderPresetSubs(subs, p, deletedSet)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs5({ data, displayChapter = 5, customSubs = null }) {
+function PresetPs5({ data, displayChapter = 5, customSubs = null, deletedItems = [] }) {
   if (!data.s5) return null;
   const p = String(displayChapter);
+  const deletedSet = new Set(deletedItems);
+  const subs = [
+    { origIdx: 1, t: "Incendio", body: data.s5.incendio },
+    { origIdx: 2, t: "Intossicazione", body: data.s5.intossicazione },
+    { origIdx: 3, t: "Problemi d'ordine", body: data.s5.ordine },
+    { origIdx: 4, t: "Ferimenti / Malori", body: data.s5.ferimenti },
+    { origIdx: 5, t: "Sostanze stupefacenti", body: data.s5.droghe },
+  ];
   return (
     <Dsec id="ps5" n={p} t="Scenari">
-      {data.s5.incendio && <Dsub n={`${p}.1`} t="Incendio">{data.s5.incendio}</Dsub>}
-      {data.s5.intossicazione && <Dsub n={`${p}.2`} t="Intossicazione">{data.s5.intossicazione}</Dsub>}
-      {data.s5.ordine && <Dsub n={`${p}.3`} t="Problemi d'ordine">{data.s5.ordine}</Dsub>}
-      {data.s5.ferimenti && <Dsub n={`${p}.4`} t="Ferimenti / Malori">{data.s5.ferimenti}</Dsub>}
-      {data.s5.droghe && <Dsub n={`${p}.5`} t="Sostanze stupefacenti">{data.s5.droghe}</Dsub>}
+      {renderPresetSubs(subs, p, deletedSet)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs6({ data, displayChapter = 6, customSubs = null }) {
+function PresetPs6({ data, displayChapter = 6, customSubs = null, deletedItems = [] }) {
   if (!data.s6) return null;
   const p = String(displayChapter);
+  const deletedSet = new Set(deletedItems);
+  const orderedList = (k) =>
+    data.s6[k] && data.s6[k].length > 0 ? (
+      <ol style={{ margin:0, paddingLeft:"18px" }}>
+        {data.s6[k].map((s, i) => <li key={i} style={{ marginBottom:"3px" }}>{s}</li>)}
+      </ol>
+    ) : null;
+  const subs = [
+    { origIdx: 1, t: "Stato Maggiore di Crisi", body: data.s6.smc },
+    { origIdx: 2, t: "Evacuazione", body: orderedList("ev") },
+    { origIdx: 3, t: "Allarme incendio", body: orderedList("inc") },
+    { origIdx: 4, t: "Minaccia Bomba", body: orderedList("mb") },
+    { origIdx: 5, t: "Allarme Bomba (indicazione precisa)", body: orderedList("ab") },
+    { origIdx: 6, t: "Atto Terroristico / Attentato", body: orderedList("at") },
+    { origIdx: 7, t: "Allarme tecnico (Corrente elettrica)", body: orderedList("te") },
+    { origIdx: 8, t: "Allarme Meteo", body: orderedList("me") },
+    {
+      origIdx: 9,
+      t: "Annunci d'emergenza",
+      body: "La DELTA Security AG prepara e predispone il formulario degli annunci d'emergenza in prossimità di ogni palco o punto dove si possa, tramite un dispositivo audio, effettuare gli annunci. Il responsabile della sicurezza sarà pure lui in possesso di tale formulario. Il formulario con gli annunci d'emergenza è inserito nel presente protocollo di sicurezza. (Allegato 1)",
+    },
+  ];
   return (
-    <>
-      <Dsec id="ps6a" n={p} t="Casi d'Allarme">
-        {data.s6.smc && <Dsub n={`${p}.1`} t="Stato Maggiore di Crisi">{data.s6.smc}</Dsub>}
-        {[
-          [`${p}.2`, "Evacuazione", "ev"],
-          [`${p}.3`, "Allarme incendio", "inc"],
-          [`${p}.4`, "Minaccia Bomba", "mb"],
-          [`${p}.5`, "Allarme Bomba (indicazione precisa)", "ab"],
-        ].map(([n, t, k]) => (
-          data.s6[k] && data.s6[k].length > 0 && (
-            <Dsub key={n} n={n} t={t}>
-              <ol style={{ margin:0, paddingLeft:"18px" }}>
-                {data.s6[k].map((s, i) => <li key={i} style={{ marginBottom:"3px" }}>{s}</li>)}
-              </ol>
-            </Dsub>
-          )
-        ))}
-      </Dsec>
-      <Dsec id="ps6b" n={p} t="Casi d'Allarme">
-        {[
-          [`${p}.6`, "Atto Terroristico / Attentato", "at"],
-          [`${p}.7`, "Allarme tecnico (Corrente elettrica)", "te"],
-          [`${p}.8`, "Allarme Meteo", "me"],
-        ].map(([n, t, k]) => (
-          data.s6[k] && data.s6[k].length > 0 && (
-            <Dsub key={n} n={n} t={t}>
-              <ol style={{ margin:0, paddingLeft:"18px" }}>
-                {data.s6[k].map((s, i) => <li key={i} style={{ marginBottom:"3px" }}>{s}</li>)}
-              </ol>
-            </Dsub>
-          )
-        ))}
-        <Dsub n={`${p}.9`} t="Annunci d'emergenza">
-          La DELTA Security AG prepara e predispone il formulario degli annunci d'emergenza in prossimità di ogni palco o punto dove si possa, tramite un dispositivo audio, effettuare gli annunci. Il responsabile della sicurezza sarà pure lui in possesso di tale formulario. Il formulario con gli annunci d'emergenza è inserito nel presente protocollo di sicurezza. (Allegato 1)
-        </Dsub>
-        {customSubs}
-      </Dsec>
-    </>
+    <Dsec id="ps6a" n={p} t="Casi d'Allarme">
+      {renderPresetSubs(subs, p, deletedSet)}
+      {customSubs}
+    </Dsec>
   );
 }
 
@@ -1554,12 +1582,12 @@ function DocPreview({ data, customSections = [], sectionOrder, presetOverrides =
             });
           };
           return order.map((key) => {
-            if (key === "ps1") return <PresetPs1 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 1} customSubs={renderSubs("ps1")} />;
-            if (key === "ps2") return <PresetPs2 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 2} customSubs={renderSubs("ps2")} />;
-            if (key === "ps3") return <PresetPs3 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 3} customSubs={renderSubs("ps3")} />;
-            if (key === "ps4") return <PresetPs4 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 4} customSubs={renderSubs("ps4")} />;
-            if (key === "ps5") return <PresetPs5 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 5} customSubs={renderSubs("ps5")} />;
-            if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} displayChapter={chapterNumByKey.get(key) ?? 6} customSubs={renderSubs("ps6")} /></React.Fragment>;
+            if (key === "ps1") return <PresetPs1 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 1} customSubs={renderSubs("ps1")} deletedItems={presetDeletedItems.ps1 || []} />;
+            if (key === "ps2") return <PresetPs2 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 2} customSubs={renderSubs("ps2")} deletedItems={presetDeletedItems.ps2 || []} />;
+            if (key === "ps3") return <PresetPs3 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 3} customSubs={renderSubs("ps3")} deletedItems={presetDeletedItems.ps3 || []} />;
+            if (key === "ps4") return <PresetPs4 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 4} customSubs={renderSubs("ps4")} deletedItems={presetDeletedItems.ps4 || []} />;
+            if (key === "ps5") return <PresetPs5 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 5} customSubs={renderSubs("ps5")} deletedItems={presetDeletedItems.ps5 || []} />;
+            if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} displayChapter={chapterNumByKey.get(key) ?? 6} customSubs={renderSubs("ps6")} deletedItems={presetDeletedItems.ps6 || []} /></React.Fragment>;
             if (key === "all1") return <PresetAll1 key={key} displayAllegato={allegatoNumByKey.get(key) ?? 1} />;
             if (key === "all2") return <PresetAll2 key={key} data={data} displayAllegato={allegatoNumByKey.get(key) ?? 2} />;
             if (key.startsWith("custom:")) {
