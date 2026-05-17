@@ -1,5 +1,7 @@
 import React, { useState } from "react";
 import logoImg from "./assets/logo.jpg";
+import { generateDocxBlob } from "./buildDocx";
+import { saveAs } from "file-saver";
 
 // ── PALETTE ──────────────────────────────────────────────────────────────────
 const N = "#0c1d3d";    // navy
@@ -2833,6 +2835,31 @@ ${flowParts}
     setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 500);
   };
 
+  const [docxLoading, setDocxLoading] = useState(false);
+  const doDownloadDocx = async () => {
+    setDocxLoading(true);
+    setErr(null);
+    try {
+      const nomeFile = (data.nomeEvento||"concetto").replace(/[^a-zA-Z0-9_\-]/g,"_");
+      const blob = await generateDocxBlob({
+        data,
+        customSections,
+        sectionOrder,
+        presetDeletedItems,
+        presetSubOrder,
+        headerLogoUrl: `${window.location.origin}${logoImg}`,
+        PRESET_SUB_COUNT,
+        DEFAULT_SECTION_ORDER,
+      });
+      saveAs(blob, `${nomeFile}.docx`);
+    } catch (e) {
+      console.error("[doDownloadDocx]", e);
+      setErr(`Errore generazione DOCX: ${e.message}`);
+    } finally {
+      setDocxLoading(false);
+    }
+  };
+
   
 
   const dropBase = (drag) => ({
@@ -2865,6 +2892,9 @@ ${flowParts}
                 </button>
                 <button onClick={()=>{doPrint();setShowSave(false);}} style={{...SANS,width:"100%",padding:"11px 16px",background:"none",border:"none",borderBottom:`1px solid ${GB}`,cursor:"pointer",textAlign:"left",fontSize:"13px",color:TX,display:"flex",gap:"10px",alignItems:"center"}}>
                   <span>📄</span><div><div style={{fontWeight:"600"}}>Salva come PDF</div><div style={{fontSize:"10px",color:GR}}>Stampa → Salva come PDF</div></div>
+                </button>
+                <button onClick={()=>{doDownloadDocx();setShowSave(false);}} disabled={docxLoading} style={{...SANS,width:"100%",padding:"11px 16px",background:"none",border:"none",borderBottom:`1px solid ${GB}`,cursor:docxLoading?"wait":"pointer",textAlign:"left",fontSize:"13px",color:TX,display:"flex",gap:"10px",alignItems:"center"}}>
+                  <span>📝</span><div><div style={{fontWeight:"600"}}>{docxLoading?"Generazione in corso…":"Scarica Word (DOCX)"}</div><div style={{fontSize:"10px",color:GR}}>Modificabile in Word, converti in PDF da lì</div></div>
                 </button>
                 <button onClick={()=>{doDownloadHTML();setShowSave(false);}} style={{...SANS,width:"100%",padding:"11px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:"13px",color:TX,display:"flex",gap:"10px",alignItems:"center"}}>
                   <span>🌐</span><div><div style={{fontWeight:"600"}}>Scarica HTML</div><div style={{fontSize:"10px",color:GR}}>File completo con immagini</div></div>
