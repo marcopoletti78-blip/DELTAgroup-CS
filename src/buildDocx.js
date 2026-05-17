@@ -283,8 +283,17 @@ function buildFooter() {
     children: [
       para([txt(FOOTER_TEXT, { size: 14, color: MUTED })], {
         alignment: AlignmentType.CENTER,
-        spacing: { before: 60 },
+        spacing: { before: 60, after: 40 },
         border: { top: { color: NAVY, space: 1, style: BorderStyle.SINGLE, size: 6 } },
+      }),
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        children: [
+          new TextRun({ text: "Pagina ", size: 14, color: MUTED }),
+          new TextRun({ children: [PageNumber.CURRENT], size: 14, color: MUTED }),
+          new TextRun({ text: " di ", size: 14, color: MUTED }),
+          new TextRun({ children: [PageNumber.TOTAL_PAGES], size: 14, color: MUTED }),
+        ],
       }),
     ],
   });

@@ -1873,11 +1873,13 @@ function loadPersistedSections(docName) {
     if (!raw) return empty;
     const p = JSON.parse(raw);
     if (p.docKey != null && p.docKey !== (docName || "")) return empty;
+    const cs = Array.isArray(p.customSections)
+      ? p.customSections.map(normalizeCustomSection).filter(Boolean)
+      : [];
+    const rawOrder = Array.isArray(p.sectionOrder) && p.sectionOrder.length ? p.sectionOrder : [...DEFAULT_SECTION_ORDER];
     return {
-      customSections: Array.isArray(p.customSections)
-        ? p.customSections.map(normalizeCustomSection).filter(Boolean)
-        : [],
-      sectionOrder: Array.isArray(p.sectionOrder) && p.sectionOrder.length ? p.sectionOrder : [...DEFAULT_SECTION_ORDER],
+      customSections: cs,
+      sectionOrder: normalizeSectionOrder(rawOrder, cs),
       presetOverrides: (p.presetOverrides && typeof p.presetOverrides === "object") ? p.presetOverrides : {},
       presetDeletedItems: (p.presetDeletedItems && typeof p.presetDeletedItems === "object") ? p.presetDeletedItems : {},
       presetSubOrder: (p.presetSubOrder && typeof p.presetSubOrder === "object") ? p.presetSubOrder : {},
@@ -2434,8 +2436,14 @@ FORMATO DI RISPOSTA OBBLIGATORIO (Markdown):
         order: 0,
         parentKey: newSecType === "sottocapitolo" ? newSecParentKey : null,
       };
-      setCustomSections((prev) => [...prev, { ...sec, order: prev.length }]);
-      setSectionOrder((prev) => [...(prev?.length ? prev : [...DEFAULT_SECTION_ORDER]), `custom:${id}`]);
+      const newSec = { ...sec, order: customSections.length };
+      const updatedCustomList = [...customSections, newSec];
+      setCustomSections(updatedCustomList);
+      setSectionOrder((prev) => {
+        const base = prev?.length ? prev : [...DEFAULT_SECTION_ORDER];
+        const inserted = insertNewCustomKeysInOrder(base, [newSec]);
+        return normalizeSectionOrder(inserted, updatedCustomList);
+      });
       setSecModalOpen(false);
       setSecModalEditingId(null);
       if (secModalFileRef.current) secModalFileRef.current.value = "";
@@ -2589,20 +2597,22 @@ Restituisci \`customSections\` completo (esistenti + nuovi) nel JSON di risposta
             });
           }
         }
-        setCustomSections((prev) => {
-          const updated = prev.map((old) => {
-            const entry = updatesById.get(old.id);
-            if (!entry) return old;
-            return {
-              ...old,
-              title: typeof entry.title === "string" ? entry.title : old.title,
-              content: typeof entry.content === "string" ? entry.content : old.content,
-            };
-          });
-          return [...updated, ...newlyCreated];
+        const updatedExisting = customSections.map((old) => {
+          const entry = updatesById.get(old.id);
+          if (!entry) return old;
+          return {
+            ...old,
+            title: typeof entry.title === "string" ? entry.title : old.title,
+            content: typeof entry.content === "string" ? entry.content : old.content,
+          };
         });
+        const updatedCustomList = [...updatedExisting, ...newlyCreated];
+        setCustomSections(updatedCustomList);
         if (newlyCreated.length) {
-          setSectionOrder((prev) => insertNewCustomKeysInOrder(prev, newlyCreated));
+          setSectionOrder((prev) => {
+            const inserted = insertNewCustomKeysInOrder(prev, newlyCreated);
+            return normalizeSectionOrder(inserted, updatedCustomList);
+          });
         }
       }
       setHistory(prev=>[...prev,{msg:effectiveMsg||"(allegati)", files:effectiveAttachments.map(a=>a.name), ts:new Date()}]);
