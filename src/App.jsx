@@ -815,7 +815,7 @@ function parseCustomSectionKey(key) {
 }
 
 /** Running chapter (ps* + custom capitolo), allegato (all* + custom allegato), and X.Y sotto-capitoli by sectionOrder. */
-function buildSectionNumberMaps(sectionOrder, customSections) {
+function buildSectionNumberMaps(sectionOrder, customSections, presetDeletedItems = {}) {
   const cs = Array.isArray(customSections) ? customSections : [];
   const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
   const chapterNumByKey = new Map();
@@ -854,11 +854,13 @@ function buildSectionNumberMaps(sectionOrder, customSections) {
       allegatoNumByKey.set(key, al);
     }
   }
-  // Pass principale: sotto-capitoli. Base count = sub preset già esistenti del padre.
-  // Per i capitoli custom il base è 0. Se parentKey non esiste più, fallback all'ultimo
-  // capitolo visto nell'order.
+  // Pass principale: sotto-capitoli. Base count = sub preset già esistenti del padre
+  // meno i punti eliminati. Per i capitoli custom il base è 0. Se parentKey non esiste
+  // più, fallback all'ultimo capitolo visto nell'order.
   for (const [pkey, base] of Object.entries(PRESET_SUB_COUNT)) {
-    subCountByParent.set(pkey, base);
+    const deletedSubs = ((presetDeletedItems[pkey] || [])
+      .filter((n) => /^\d+\.\d+$/.test(String(n)))).length;
+    subCountByParent.set(pkey, Math.max(0, base - deletedSubs));
   }
   let lastChapterKey = null;
   for (const key of order) {
@@ -895,10 +897,10 @@ function remapTocPresetChapterRows(rows, chapterIndex) {
     const cn = String(row.n ?? "").trim();
     const sub = cn.match(/^(\d+)\.(\d+)$/);
     if (sub) {
-      return { ...row, n: `${p}.${sub[2]}` };
+      return { ...row, n: `${p}.${sub[2]}`, t: String(row.t || "").replace(/^\d+(\.\d+)?\s+/, "") };
     }
     if (/^\d+$/.test(cn)) {
-      return { ...row, n: p, t: `${p} ${row.t}` };
+      return { ...row, n: p, t: String(row.t || "").replace(/^\d+\s+/, "") };
     }
     return { ...row };
   });
@@ -932,20 +934,42 @@ function insertNewCustomKeysInOrder(prevOrder, newSections) {
   return base;
 }
 
-function buildTocRows(sectionOrder, customSections) {
+function applyPresetDeletedAndRenumber(presetKey, rows, chapterIndex, presetDeletedItems) {
+  const deleted = new Set((presetDeletedItems && presetDeletedItems[presetKey]) || []);
+  // Filtra le righe con n originale (pre-remap) in `deleted`.
+  const filtered = rows.filter((r) => !deleted.has(String(r.n)));
+  // Rinumerazione contigua dei sub (X.Y) mantenendo il main chapter X.
+  let subCounter = 0;
+  return filtered.map((row) => {
+    const cn = String(row.n ?? "").trim();
+    const sub = cn.match(/^(\d+)\.(\d+)$/);
+    if (sub) {
+      subCounter += 1;
+      return { ...row, n: `${chapterIndex}.${subCounter}`, t: String(row.t || "").replace(/^\d+(\.\d+)?\s+/, "") };
+    }
+    if (/^\d+$/.test(cn)) {
+      return { ...row, n: String(chapterIndex), t: String(row.t || "").replace(/^\d+\s+/, "") };
+    }
+    return { ...row };
+  });
+}
+
+function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}) {
   const cs = Array.isArray(customSections) ? customSections : [];
   const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
   if (!order.length) return [];
 
-  const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = buildSectionNumberMaps(order, cs);
+  const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = buildSectionNumberMaps(order, cs, presetDeletedItems);
   const rows = [];
   for (const key of order) {
     if (!key) continue;
     if (/^ps[1-6]$/.test(key)) {
       const idx = chapterNumByKey.get(key);
       const block = TOC_PRESET_BLOCKS[key] ?? [];
-      rows.push(...remapTocPresetChapterRows(block, idx));
+      rows.push(...applyPresetDeletedAndRenumber(key, block, idx, presetDeletedItems));
     } else if (key === "all1" && TOC_ALL1_ENTRY) {
+      const deletedAll = new Set((presetDeletedItems.all1) || []);
+      if (deletedAll.has(String(TOC_ALL1_ENTRY.n))) continue;
       const a = allegatoNumByKey.get("all1");
       if (a == null) continue;
       const baseT = String(TOC_ALL1_ENTRY.t).replace(/^\d+\s+/, "");
@@ -956,6 +980,8 @@ function buildTocRows(sectionOrder, customSections) {
         main: true,
       });
     } else if (key === "all2" && TOC_ALL2_ENTRY) {
+      const deletedAll = new Set((presetDeletedItems.all2) || []);
+      if (deletedAll.has(String(TOC_ALL2_ENTRY.n))) continue;
       const a = allegatoNumByKey.get("all2");
       if (a == null) continue;
       const baseT = String(TOC_ALL2_ENTRY.t).replace(/^\d+\s+/, "");
@@ -972,11 +998,11 @@ function buildTocRows(sectionOrder, customSections) {
       if (s.type === "capitolo") {
         const n = chapterNumByKey.get(key) ?? "?";
         const title = (s.title || "Capitolo").replace(/^\d+\s+/, "");
-        rows.push({ n: String(n), t: `${n} ${title}`, main: true });
+        rows.push({ n: String(n), t: title, main: true });
       } else if (s.type === "sottocapitolo") {
         const nu = subchapterDisplayByKey.get(key) ?? "?";
         const title = (s.title || "Sotto capitolo").replace(/^\d+\.\d+\s+/, "").replace(/^\d+\s+/, "");
-        rows.push({ n: nu, t: `${nu} ${title}`, main: false });
+        rows.push({ n: nu, t: title, main: false });
       } else {
         const na = allegatoNumByKey.get(key);
         if (na == null) continue;
@@ -1003,6 +1029,47 @@ function escapeHtmlPrint(s) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+// Estrae il testo leggibile da un frammento HTML preservando le interruzioni
+// di paragrafo (blocchi → \n\n, br → \n).
+function htmlToPlainText(html) {
+  if (!html) return "";
+  if (typeof document !== "undefined") {
+    const tmp = document.createElement("div");
+    tmp.innerHTML = String(html);
+    tmp.querySelectorAll("script,style").forEach((el) => el.remove());
+    tmp.querySelectorAll("br").forEach((el) => el.replaceWith("\n"));
+    const blockSel = "p,div,h1,h2,h3,h4,h5,h6,li,tr";
+    tmp.querySelectorAll(blockSel).forEach((el) => {
+      el.append("\n");
+    });
+    const text = (tmp.textContent || "").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+    return text;
+  }
+  // Fallback senza DOM
+  return String(html)
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|h[1-6]|li|tr)>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+// Avvolge il testo plain dell'override preset in HTML sicuro per la stampa.
+function plainTextToPresetHtml(text) {
+  if (!text || !String(text).trim()) return "";
+  const paras = String(text).split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  if (!paras.length) return "";
+  const inner = paras
+    .map((p) => `<p>${escapeHtmlPrint(p).replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+  return `<div class="preset-override">${inner}</div>`;
 }
 
 // Markdown → HTML semplice (h2, h3, b, ul/li, p).
@@ -1418,11 +1485,17 @@ function CustomAllegatoPreview({ section, displayAllegatoNum }) {
   );
 }
 
-function DocPreview({ data, customSections = [], sectionOrder }) {
+function DocPreview({ data, customSections = [], sectionOrder, presetOverrides = {}, presetDeletedItems = {} }) {
   if (!data || !data.nomeEvento) return null;
   const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
-  const tocRows = buildTocRows(sectionOrder, customSections);
-  const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = buildSectionNumberMaps(order, customSections);
+  const tocRows = React.useMemo(
+    () => buildTocRows(sectionOrder, customSections, presetDeletedItems),
+    [sectionOrder, customSections, presetOverrides, presetDeletedItems],
+  );
+  const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = React.useMemo(
+    () => buildSectionNumberMaps(order, customSections, presetDeletedItems),
+    [order, customSections, presetDeletedItems],
+  );
 
   return (
     <div id="doc-preview" style={{background:WH,borderRadius:"10px",border:`1px solid ${GB}`,padding:"0 0 0"}}>
@@ -1450,8 +1523,8 @@ function DocPreview({ data, customSections = [], sectionOrder }) {
         {tocRows
           .filter((e) => e != null && e.n != null && e.t != null)
           .map((e,i)=>(
-          <div key={i} style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:isMain(e.n)?"6px":"2px",paddingLeft:isMain(e.n)?"0":(e.main===false?"28px":"18px")}}>
-            <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX}}>{e.t}</span>
+          <div key={i} style={{display:"flex",alignItems:"baseline",gap:"4px",marginBottom:isMain(e.n)?"6px":"2px",paddingLeft:isMain(e.n)?"0":"24px"}}>
+            <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX}}>{e.n} {e.t}</span>
             <span style={{flex:1,borderBottom:"1px dotted #ccc",height:"1px",marginBottom:"3px"}}/>
             <span style={{...SANS,fontSize:isMain(e.n)?"12px":"11px",fontWeight:isMain(e.n)?"700":"400",color:isMain(e.n)?N:TX,minWidth:"46px",textAlign:"right"}}>{e.n}</span>
           </div>
@@ -1547,10 +1620,10 @@ function normalizeCustomSection(raw) {
 function loadPersistedSections(docName) {
   try {
     const raw = localStorage.getItem(LS_EDITOR_SECTIONS);
-    if (!raw) return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {} };
+    if (!raw) return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {}, presetDeletedItems: {} };
     const p = JSON.parse(raw);
     if (p.docKey != null && p.docKey !== (docName || "")) {
-      return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {} };
+      return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {}, presetDeletedItems: {} };
     }
     return {
       customSections: Array.isArray(p.customSections)
@@ -1558,10 +1631,11 @@ function loadPersistedSections(docName) {
         : [],
       sectionOrder: Array.isArray(p.sectionOrder) && p.sectionOrder.length ? p.sectionOrder : [...DEFAULT_SECTION_ORDER],
       presetOverrides: (p.presetOverrides && typeof p.presetOverrides === "object") ? p.presetOverrides : {},
+      presetDeletedItems: (p.presetDeletedItems && typeof p.presetDeletedItems === "object") ? p.presetDeletedItems : {},
     };
   } catch (e) {
     console.error("[loadPersistedSections]", e);
-    return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {} };
+    return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {}, presetDeletedItems: {} };
   }
 }
 
@@ -1591,6 +1665,7 @@ function Editor({ data: initialData, onBack }) {
   const [customSections, setCustomSections] = useState(persisted.customSections);
   const [sectionOrder, setSectionOrder] = useState(persisted.sectionOrder);
   const [presetOverrides, setPresetOverrides] = useState(persisted.presetOverrides || {});
+  const [presetDeletedItems, setPresetDeletedItems] = useState(persisted.presetDeletedItems || {});
   const [presetEditOpen, setPresetEditOpen] = useState(false);
   const [presetEditKey, setPresetEditKey] = useState(null);
   const [presetEditDraft, setPresetEditDraft] = useState("");
@@ -1620,8 +1695,8 @@ function Editor({ data: initialData, onBack }) {
 
   const ord = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
   const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = React.useMemo(
-    () => buildSectionNumberMaps(ord, customSections),
-    [ord, customSections],
+    () => buildSectionNumberMaps(ord, customSections, presetDeletedItems),
+    [ord, customSections, presetDeletedItems],
   );
 
   const parentCapitoloOptions = React.useMemo(() => {
@@ -1650,31 +1725,58 @@ function Editor({ data: initialData, onBack }) {
         customSections,
         sectionOrder,
         presetOverrides,
+        presetDeletedItems,
       }));
     } catch (e) {
       console.error("[persist sections]", e);
     }
-  }, [data.nomeEvento, customSections, sectionOrder, presetOverrides]);
+  }, [data.nomeEvento, customSections, sectionOrder, presetOverrides, presetDeletedItems]);
+
+  const togglePresetItemDeleted = (presetKey, itemN) => {
+    setPresetDeletedItems((prev) => {
+      const list = Array.isArray(prev[presetKey]) ? prev[presetKey].slice() : [];
+      const idx = list.indexOf(itemN);
+      if (idx >= 0) list.splice(idx, 1);
+      else list.push(itemN);
+      return { ...prev, [presetKey]: list };
+    });
+  };
+
+  // Lista dei punti TOC originali per un preset (per la UI di eliminazione).
+  const getPresetItemsForKey = (presetKey) => {
+    if (presetKey === "all1") {
+      return TOC_ALL1_ENTRY ? [TOC_ALL1_ENTRY] : [];
+    }
+    if (presetKey === "all2") {
+      return TOC_ALL2_ENTRY ? [TOC_ALL2_ENTRY] : [];
+    }
+    return TOC_PRESET_BLOCKS[presetKey] || [];
+  };
 
   const openPresetEdit = (key) => {
     const idMap = { ps1: "ps1", ps2: "ps2", ps3: "ps3", ps4: "ps4", ps5: "ps5", ps6: "ps6", all1: "pall1", all2: "pall2" };
     const domId = idMap[key];
     if (!domId) return;
-    let html = presetOverrides[key];
-    if (html == null) {
+    let text;
+    const existing = presetOverrides[key];
+    if (typeof existing === "string" && existing.trim()) {
+      text = htmlToPlainText(existing);
+    } else {
       const el = document.getElementById("doc-preview");
       const node = el ? el.querySelector(`#${CSS.escape(domId)}`) : null;
-      html = node ? node.innerHTML : "";
+      text = node ? htmlToPlainText(node.innerHTML) : "";
     }
     setPresetEditKey(key);
-    setPresetEditDraft(html);
+    setPresetEditDraft(text);
     setPresetEditOpen(true);
     setErr(null);
   };
 
   const savePresetEdit = () => {
     if (!presetEditKey) return;
-    setPresetOverrides((prev) => ({ ...prev, [presetEditKey]: presetEditDraft }));
+    const text = presetEditDraft || "";
+    const html = plainTextToPresetHtml(text);
+    setPresetOverrides((prev) => ({ ...prev, [presetEditKey]: html }));
     setPresetEditOpen(false);
     setPresetEditKey(null);
     setPresetEditDraft("");
@@ -2013,7 +2115,7 @@ function Editor({ data: initialData, onBack }) {
   const applyEdit = async () => {
     if (!msg.trim() && attachments.length===0) return;
     setLoading(true); setErr(null);
-    const { chapterNumByKey } = buildSectionNumberMaps(sectionOrder, customSections);
+    const { chapterNumByKey } = buildSectionNumberMaps(sectionOrder, customSections, presetDeletedItems);
     const customSectionsForAI = customSections.map((c) => {
       const ck = `custom:${c.id}`;
       const num = chapterNumByKey.get(ck);
@@ -2449,7 +2551,7 @@ ${flowParts}
             <span style={{fontSize:"16px"}}>⏳</span> Aggiornamento documento in corso…
           </div>
         )}
-        <DocPreview data={data} customSections={customSections} sectionOrder={sectionOrder} />
+        <DocPreview data={data} customSections={customSections} sectionOrder={sectionOrder} presetOverrides={presetOverrides} presetDeletedItems={presetDeletedItems} />
       </div>
 
       {presetEditOpen && (
@@ -2460,15 +2562,39 @@ ${flowParts}
             </div>
             <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:"10px"}}>
               <div style={{fontSize:"11px",color:GR,lineHeight:1.5}}>
-                Modifica l'HTML catturato dalla preview. Il testo modificato sostituirà il contenuto preset solo in stampa. Premi "Ripristina" per tornare al preset originale.
+                Modifica il testo della sezione. Separa i paragrafi con una riga vuota. Il testo modificato sostituirà il contenuto preset solo in stampa. Premi "Ripristina" per tornare al preset originale.
               </div>
               <textarea
                 value={presetEditDraft}
                 onChange={(e) => setPresetEditDraft(e.target.value)}
-                rows={20}
-                spellCheck={false}
-                style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:"ui-monospace,Menlo,Consolas,monospace",fontSize:"12px",lineHeight:1.5}}
+                rows={16}
+                spellCheck
+                style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical",fontSize:"13px",lineHeight:1.6}}
               />
+              {getPresetItemsForKey(presetEditKey).length > 0 && (
+                <div style={{border:`1px solid ${GB}`,borderRadius:"8px",padding:"10px 12px",background:GL}}>
+                  <div style={{fontSize:"11px",fontWeight:"700",color:N,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"8px"}}>
+                    Elimina punti — i rimanenti vengono rinumerati
+                  </div>
+                  <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+                    {getPresetItemsForKey(presetEditKey).map((item) => {
+                      const itemN = String(item.n);
+                      const isDeleted = (presetDeletedItems[presetEditKey] || []).includes(itemN);
+                      return (
+                        <label key={itemN} style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px",cursor:"pointer",color:isDeleted?GR:TX,textDecoration:isDeleted?"line-through":"none"}}>
+                          <input
+                            type="checkbox"
+                            checked={isDeleted}
+                            onChange={() => togglePresetItemDeleted(presetEditKey, itemN)}
+                          />
+                          <span style={{minWidth:"36px",fontWeight:"600",color:isDeleted?GR:N}}>{itemN}</span>
+                          <span>{item.t}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
                 <button type="button" onClick={resetPresetEdit} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:RD}}>Ripristina preset</button>
                 <button type="button" onClick={()=>setPresetEditOpen(false)} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
