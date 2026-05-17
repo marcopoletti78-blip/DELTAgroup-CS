@@ -904,6 +904,34 @@ function remapTocPresetChapterRows(rows, chapterIndex) {
   });
 }
 
+function insertNewCustomKeysInOrder(prevOrder, newSections) {
+  const base = Array.isArray(prevOrder) && prevOrder.length ? [...prevOrder] : [...DEFAULT_SECTION_ORDER];
+  for (const s of newSections) {
+    const key = `custom:${s.id}`;
+    if (s.type === "sottocapitolo" && s.parentKey) {
+      const parentIdx = base.indexOf(s.parentKey);
+      if (parentIdx < 0) {
+        base.push(key);
+        continue;
+      }
+      // Trova l'ultimo sub esistente con stesso parentKey contiguo dopo parentIdx.
+      let insertAt = parentIdx + 1;
+      for (let i = parentIdx + 1; i < base.length; i++) {
+        const k = base[i];
+        if (typeof k === "string" && k.startsWith("custom:")) {
+          insertAt = i + 1;
+          continue;
+        }
+        break;
+      }
+      base.splice(insertAt, 0, key);
+    } else {
+      base.push(key);
+    }
+  }
+  return base;
+}
+
 function buildTocRows(sectionOrder, customSections) {
   const cs = Array.isArray(customSections) ? customSections : [];
   const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
@@ -957,7 +985,15 @@ function buildTocRows(sectionOrder, customSections) {
       }
     }
   }
-  return rows.filter((e) => e != null && e.n != null && e.t != null);
+  // Dedupe difensiva: rimuove righe con stessa coppia (n, t) — mantiene la prima.
+  const seen = new Set();
+  return rows.filter((e) => {
+    if (e == null || e.n == null || e.t == null) return false;
+    const k = `${e.n} ${e.t}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
 }
 
 function escapeHtmlPrint(s) {
@@ -969,11 +1005,78 @@ function escapeHtmlPrint(s) {
     .replace(/"/g, "&quot;");
 }
 
+// Markdown → HTML semplice (h2, h3, b, ul/li, p).
+// Per testo che non contiene già tag HTML. Escape applicato all'input prima del parsing.
+function markdownToHtml(src) {
+  if (!src) return "";
+  const escaped = escapeHtmlPrint(String(src));
+  const lines = escaped.split(/\r?\n/);
+  const out = [];
+  let paraBuf = [];
+  let listBuf = [];
+  const flushPara = () => {
+    if (!paraBuf.length) return;
+    let txt = paraBuf.join(" ").trim();
+    txt = txt.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+    if (txt) out.push(`<p>${txt}</p>`);
+    paraBuf = [];
+  };
+  const flushList = () => {
+    if (!listBuf.length) return;
+    const items = listBuf
+      .map((li) => li.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>"))
+      .map((li) => `<li>${li}</li>`)
+      .join("");
+    out.push(`<ul>${items}</ul>`);
+    listBuf = [];
+  };
+  for (const rawLine of lines) {
+    const line = rawLine.replace(/\s+$/g, "");
+    if (!line.trim()) {
+      flushList();
+      flushPara();
+      continue;
+    }
+    const h3m = line.match(/^###\s+(.*)$/);
+    const h2m = line.match(/^##\s+(.*)$/);
+    const lim = line.match(/^[-*]\s+(.*)$/);
+    if (h2m) {
+      flushList();
+      flushPara();
+      out.push(`<h2>${h2m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h2>`);
+      continue;
+    }
+    if (h3m) {
+      flushList();
+      flushPara();
+      out.push(`<h3>${h3m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h3>`);
+      continue;
+    }
+    if (lim) {
+      flushPara();
+      listBuf.push(lim[1]);
+      continue;
+    }
+    flushList();
+    paraBuf.push(line);
+  }
+  flushList();
+  flushPara();
+  return out.join("\n");
+}
+
+function renderCustomContent(content) {
+  if (!content) return "";
+  const t = String(content);
+  if (/<[a-z][\s\S]*>/i.test(t)) return t;
+  return markdownToHtml(t);
+}
+
 function formatCustomBodyForPrint(htmlOrText) {
   if (!htmlOrText) return "";
   const t = String(htmlOrText);
   if (/<[a-z][\s\S]*>/i.test(t)) return t;
-  return escapeHtmlPrint(t).replace(/\n/g, "<br/>");
+  return markdownToHtml(t);
 }
 
 const isMain = (n) => typeof n === "string" && (/^\d+$/.test(n) || n.startsWith("All."));
@@ -1244,10 +1347,9 @@ function PresetAll2({ data, displayAllegato = 2 }) {
 
 function CustomCapitoloPreview({ section, displayNum, customSubs = null }) {
   const id = `pcap-${section.id}`;
-  const inner = section.content && /<[a-z][\s\S]*>/i.test(section.content) ? (
-    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }} dangerouslySetInnerHTML={{ __html: section.content }} />
-  ) : (
-    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS, whiteSpace:"pre-wrap" }}>{section.content || ""}</div>
+  const html = renderCustomContent(section.content);
+  const inner = (
+    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }} dangerouslySetInnerHTML={{ __html: html }} />
   );
   return (
     <Dsec id={id} n={String(displayNum)} t={section.title || "Senza titolo"}>
@@ -1259,10 +1361,9 @@ function CustomCapitoloPreview({ section, displayNum, customSubs = null }) {
 
 function CustomSottoCapitoloPreview({ section, displayLabel }) {
   const id = `psub-${section.id}`;
-  const inner = section.content && /<[a-z][\s\S]*>/i.test(section.content) ? (
-    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }} dangerouslySetInnerHTML={{ __html: section.content }} />
-  ) : (
-    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS, whiteSpace:"pre-wrap" }}>{section.content || ""}</div>
+  const html = renderCustomContent(section.content);
+  const inner = (
+    <div style={{ fontSize:"12.5px", lineHeight:1.75, color:TX, ...SANS }} dangerouslySetInnerHTML={{ __html: html }} />
   );
   return (
     <div id={id} style={{ marginBottom:"22px", breakInside:"avoid", pageBreakInside:"avoid" }}>
@@ -1281,18 +1382,15 @@ function CustomAllegatoPreview({ section, displayAllegatoNum }) {
   const pid = `pallc-${section.id}`;
   const src = section.imageUrl;
   const isPdf = section.fileMime === "application/pdf";
-  const paragraphs = (section.content || "")
-    .split(/\n\s*\n/)
-    .map((p) => p.trim())
-    .filter(Boolean);
+  const rawHtml = renderCustomContent(section.content);
   const renderContent = (extraStyle = {}) =>
-    paragraphs.length ? (
-      <div style={{ display:"flex", flexDirection:"column", gap:"10px", ...extraStyle }}>
-        {paragraphs.map((p, i) => (
-          <div key={i} style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX, whiteSpace:"pre-wrap", breakInside:"avoid", pageBreakInside:"avoid" }}>{p}</div>
-        ))}
-      </div>
+    rawHtml ? (
+      <div
+        style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX, breakInside:"avoid", pageBreakInside:"avoid", ...extraStyle }}
+        dangerouslySetInnerHTML={{ __html: rawHtml }}
+      />
     ) : null;
+  const hasContent = !!(section.content && String(section.content).trim());
   return (
     <div id={pid} style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
       <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em", breakInside:"avoid", pageBreakInside:"avoid" }}>
@@ -1309,7 +1407,7 @@ function CustomAllegatoPreview({ section, displayAllegatoNum }) {
         </div>
       ) : (
         <div style={{ border:`1px solid ${GB}`, borderRadius:"8px", padding:"16px 20px", ...SANS, fontSize:"12.5px", lineHeight:1.75, color:TX }}>
-          {paragraphs.length ? renderContent() : (
+          {hasContent ? renderContent() : (
             <div style={{ border:`2px dashed ${GB}`, borderRadius:"8px", padding:"24px", textAlign:"center", color:GR, fontSize:"12.5px" }}>
               Nessun file allegato — usa il testo sopra o aggiungi un file dalla modifica sezione.
             </div>
@@ -1449,20 +1547,21 @@ function normalizeCustomSection(raw) {
 function loadPersistedSections(docName) {
   try {
     const raw = localStorage.getItem(LS_EDITOR_SECTIONS);
-    if (!raw) return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER] };
+    if (!raw) return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {} };
     const p = JSON.parse(raw);
     if (p.docKey != null && p.docKey !== (docName || "")) {
-      return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER] };
+      return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {} };
     }
     return {
       customSections: Array.isArray(p.customSections)
         ? p.customSections.map(normalizeCustomSection).filter(Boolean)
         : [],
       sectionOrder: Array.isArray(p.sectionOrder) && p.sectionOrder.length ? p.sectionOrder : [...DEFAULT_SECTION_ORDER],
+      presetOverrides: (p.presetOverrides && typeof p.presetOverrides === "object") ? p.presetOverrides : {},
     };
   } catch (e) {
     console.error("[loadPersistedSections]", e);
-    return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER] };
+    return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {} };
   }
 }
 
@@ -1491,6 +1590,10 @@ function Editor({ data: initialData, onBack }) {
   const [data, setData] = useState({...initialData, allegato2Files: initialData.allegato2Files||[]});
   const [customSections, setCustomSections] = useState(persisted.customSections);
   const [sectionOrder, setSectionOrder] = useState(persisted.sectionOrder);
+  const [presetOverrides, setPresetOverrides] = useState(persisted.presetOverrides || {});
+  const [presetEditOpen, setPresetEditOpen] = useState(false);
+  const [presetEditKey, setPresetEditKey] = useState(null);
+  const [presetEditDraft, setPresetEditDraft] = useState("");
   const [history, setHistory] = useState([]);
   const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(false);
@@ -1546,11 +1649,47 @@ function Editor({ data: initialData, onBack }) {
         docKey: data.nomeEvento || "",
         customSections,
         sectionOrder,
+        presetOverrides,
       }));
     } catch (e) {
       console.error("[persist sections]", e);
     }
-  }, [data.nomeEvento, customSections, sectionOrder]);
+  }, [data.nomeEvento, customSections, sectionOrder, presetOverrides]);
+
+  const openPresetEdit = (key) => {
+    const idMap = { ps1: "ps1", ps2: "ps2", ps3: "ps3", ps4: "ps4", ps5: "ps5", ps6: "ps6", all1: "pall1", all2: "pall2" };
+    const domId = idMap[key];
+    if (!domId) return;
+    let html = presetOverrides[key];
+    if (html == null) {
+      const el = document.getElementById("doc-preview");
+      const node = el ? el.querySelector(`#${CSS.escape(domId)}`) : null;
+      html = node ? node.innerHTML : "";
+    }
+    setPresetEditKey(key);
+    setPresetEditDraft(html);
+    setPresetEditOpen(true);
+    setErr(null);
+  };
+
+  const savePresetEdit = () => {
+    if (!presetEditKey) return;
+    setPresetOverrides((prev) => ({ ...prev, [presetEditKey]: presetEditDraft }));
+    setPresetEditOpen(false);
+    setPresetEditKey(null);
+    setPresetEditDraft("");
+  };
+
+  const resetPresetEdit = () => {
+    if (!presetEditKey) return;
+    setPresetOverrides((prev) => {
+      const { [presetEditKey]: _, ...rest } = prev;
+      return rest;
+    });
+    setPresetEditOpen(false);
+    setPresetEditKey(null);
+    setPresetEditDraft("");
+  };
 
   const labelForKey = (key) => {
     if (/^ps[1-6]$/.test(key)) {
@@ -1894,7 +2033,17 @@ Ti viene passato il JSON attuale del documento e la modifica richiesta. Restitui
 
 Il JSON include anche un campo \`customSections\` che è un array di sezioni custom (capitoli, sotto-capitoli, allegati creati dall'utente) con i campi: id, type ("capitolo"|"sottocapitolo"|"allegato"), title, content, parentKey, displayNumber (numero del capitolo nell'ordine visivo, es. 7), hasFile (boolean — informativo).
 
-Se la modifica richiesta riguarda una sezione custom (es. "togli la frase X dal capitolo 7", "aggiungi un paragrafo al capitolo intitolato Y", "rinomina il sotto-capitolo Z"), aggiorna il titolo e/o il content della voce corrispondente in \`customSections\` (identifica la voce per displayNumber, title o parentKey). MANTIENI sempre lo stesso id e gli altri campi invariati. NON modificare hasFile. Restituisci \`customSections\` completo nel JSON di risposta.`;
+Se la modifica richiesta riguarda una sezione custom (es. "togli la frase X dal capitolo 7", "aggiungi un paragrafo al capitolo intitolato Y", "rinomina il sotto-capitolo Z"), aggiorna il titolo e/o il content della voce corrispondente in \`customSections\` (identifica la voce per displayNumber, title o parentKey). MANTIENI sempre lo stesso id e gli altri campi invariati. NON modificare hasFile.
+
+Se la modifica richiesta è di INSERIRE una nuova sezione (es. "inserisci sottocapitolo 2.6", "aggiungi un capitolo dopo il 4", "aggiungi un allegato"), aggiungi una nuova voce all'array \`customSections\` con:
+- id: "new" (verrà rimpiazzato con un id univoco)
+- type: "capitolo" | "sottocapitolo" | "allegato"
+- title: titolo della nuova voce
+- content: contenuto in markdown (## titolo, ### sottotitolo, **grassetto**, - elenco)
+- parentKey: per i sottocapitoli SOLO, usa "ps1".."ps6" per i capitoli preset o l'id del capitolo padre (es. "custom:abc123"). Per "sottocapitolo 2.6" il parentKey è "ps2".
+NON inserire numerazione manuale: il sistema calcola "2.6" automaticamente dal parentKey.
+
+Restituisci \`customSections\` completo (esistenti + nuovi) nel JSON di risposta.`;
     const attList = attachments.map(a=>`- ${a.name} (${a.type.startsWith("image/")?"immagine/piantina":"documento PDF"})`).join("\n");
     const dataClean = {...data, logoEvento: data.logoEvento ? "[logo_caricato]" : null, customSections: customSectionsForAI };
     const editMsg = `DOCUMENTO ATTUALE (JSON):\n${JSON.stringify(dataClean,null,2)}\n\nMODIFICA RICHIESTA:\n${msg||"(vedi allegati)"}${attachments.length>0?`\n\nALLEGATI (${attachments.length}):\n${attList}\nAnalizza gli allegati e integra le informazioni nei capitoli corretti.`:""}`;
@@ -1902,14 +2051,32 @@ Se la modifica richiesta riguarda una sezione custom (es. "togli la frase X dal 
       const newData = await callAI(editMsg, null, attachments, SYS_EDIT);
       const { customSections: newCS, ...rest } = newData || {};
       setData({...rest, logoEvento:data.logoEvento||null, allegato2Files:data.allegato2Files||[]});
+      let newlyCreated = [];
       if (Array.isArray(newCS)) {
+        const existingIds = new Set(customSections.map((c) => c.id));
         const updatesById = new Map();
         for (const entry of newCS) {
-          if (!entry || typeof entry !== "object" || !entry.id) continue;
-          updatesById.set(entry.id, entry);
+          if (!entry || typeof entry !== "object") continue;
+          if (entry.id && existingIds.has(entry.id)) {
+            updatesById.set(entry.id, entry);
+          } else if (entry.type && entry.title) {
+            // Nuovo customSection creato dall'AI
+            const newId = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+            const safeType = ["capitolo", "sottocapitolo", "allegato"].includes(entry.type) ? entry.type : "capitolo";
+            const parentKey = safeType === "sottocapitolo" && typeof entry.parentKey === "string" ? entry.parentKey : null;
+            newlyCreated.push({
+              id: newId,
+              type: safeType,
+              title: String(entry.title).trim(),
+              content: typeof entry.content === "string" ? entry.content : "",
+              parentKey,
+              imageUrl: null,
+              fileMime: null,
+            });
+          }
         }
-        setCustomSections((prev) =>
-          prev.map((old) => {
+        setCustomSections((prev) => {
+          const updated = prev.map((old) => {
             const entry = updatesById.get(old.id);
             if (!entry) return old;
             return {
@@ -1917,8 +2084,12 @@ Se la modifica richiesta riguarda una sezione custom (es. "togli la frase X dal 
               title: typeof entry.title === "string" ? entry.title : old.title,
               content: typeof entry.content === "string" ? entry.content : old.content,
             };
-          }),
-        );
+          });
+          return [...updated, ...newlyCreated];
+        });
+        if (newlyCreated.length) {
+          setSectionOrder((prev) => insertNewCustomKeysInOrder(prev, newlyCreated));
+        }
       }
       setHistory(prev=>[...prev,{msg:msg||"(allegati)", files:attachments.map(a=>a.name), ts:new Date()}]);
       setMsg(""); setAttachments([]);
@@ -1957,32 +2128,31 @@ Se la modifica richiesta riguarda una sezione custom (es. "togli la frase X dal 
     const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
     let flowParts = "";
     for (const key of order) {
+      const presetWith = (k, fallbackDomIds, klass) => {
+        const ovr = presetOverrides[k];
+        if (ovr != null) return ovr ? page(ovr, klass) : "";
+        return fallbackDomIds
+          .map((id) => getById(id))
+          .filter(Boolean)
+          .map((h) => page(h, klass))
+          .join("");
+      };
       if (key === "ps1") {
-        const h = getById("ps1");
-        if (h) flowParts += page(h, "ppage-flow");
+        flowParts += presetWith("ps1", ["ps1"], "ppage-flow");
       } else if (key === "ps2") {
-        const h = getById("ps2");
-        if (h) flowParts += page(h, "ppage-flow");
+        flowParts += presetWith("ps2", ["ps2"], "ppage-flow");
       } else if (key === "ps3") {
-        const h = getById("ps3");
-        if (h) flowParts += page(h, "ppage-flow");
+        flowParts += presetWith("ps3", ["ps3"], "ppage-flow");
       } else if (key === "ps4") {
-        const h = getById("ps4");
-        if (h) flowParts += page(h, "ppage-flow");
+        flowParts += presetWith("ps4", ["ps4"], "ppage-flow");
       } else if (key === "ps5") {
-        const h = getById("ps5");
-        if (h) flowParts += page(h, "ppage-flow");
+        flowParts += presetWith("ps5", ["ps5"], "ppage-flow");
       } else if (key === "ps6") {
-        const a = getById("ps6a");
-        if (a) flowParts += page(a, "ppage-flow");
-        const b = getById("ps6b");
-        if (b) flowParts += page(b, "ppage-flow");
+        flowParts += presetWith("ps6", ["ps6a", "ps6b"], "ppage-flow");
       } else if (key === "all1") {
-        const h = getById("pall1");
-        if (h) flowParts += page(h, "ppage-fixed ppage-all1");
+        flowParts += presetWith("all1", ["pall1"], "ppage-fixed ppage-all1");
       } else if (key === "all2") {
-        const h = getById("pall2");
-        if (h) flowParts += page(h, "ppage-flow");
+        flowParts += presetWith("all2", ["pall2"], "ppage-flow");
       } else if (key.startsWith("custom:")) {
         const id = parseCustomSectionKey(key);
         const s = customSections.find((c) => c.id === id);
@@ -2034,6 +2204,9 @@ embed{display:block;}
   .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;}
   .ppage-allegato-custom .pcnt p,.ppage-allegato-custom .pcnt>div{break-inside:avoid;page-break-inside:avoid;}
   .cover .pcnt{height:100%;box-sizing:border-box;}
+  .pcnt h2{break-before:page;page-break-before:always;break-inside:avoid;page-break-inside:avoid;}
+  .pcnt h3{break-before:auto;page-break-before:auto;break-inside:avoid;page-break-inside:avoid;}
+  .pcnt p,.pcnt ul,.pcnt li{break-inside:avoid;page-break-inside:avoid;}
   *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
   th{background:#0c1d3d!important;color:#fff!important;}
 }
@@ -2133,6 +2306,11 @@ ${flowParts}
               )}
               {key.startsWith("custom:") && !isRenaming && (
                 <button type="button" onClick={()=>openSecModalForEdit(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"11px",padding:"2px 6px",lineHeight:1,color:N,fontWeight:"600"}} title="Modifica contenuto e tipo">✏️ Modifica</button>
+              )}
+              {(/^ps[1-6]$/.test(key) || key === "all1" || key === "all2") && (
+                <button type="button" onClick={()=>openPresetEdit(key)} style={{background:"none",border:"none",cursor:"pointer",fontSize:"11px",padding:"2px 6px",lineHeight:1,color:N,fontWeight:"600"}} title={presetOverrides[key] ? "Modifica override (override attivo)" : "Modifica contenuto preset"}>
+                  ✏️ Modifica{presetOverrides[key] ? " ●" : ""}
+                </button>
               )}
               {isRenaming ? (
                 <input
@@ -2273,6 +2451,33 @@ ${flowParts}
         )}
         <DocPreview data={data} customSections={customSections} sectionOrder={sectionOrder} />
       </div>
+
+      {presetEditOpen && (
+        <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={()=>setPresetEditOpen(false)}>
+          <div style={{background:WH,borderRadius:"12px",maxWidth:"720px",width:"100%",maxHeight:"92vh",overflow:"auto",boxShadow:"0 20px 50px rgba(0,0,0,0.2)",...SANS}} onClick={e=>e.stopPropagation()}>
+            <div style={{padding:"14px 18px",borderBottom:`1px solid ${GB}`,background:GL,fontWeight:"700",fontSize:"14px",color:N}}>
+              Modifica sezione preset — {PRESET_SECTION_SHORT[presetEditKey] || ALL12_SHORT[presetEditKey] || presetEditKey}
+            </div>
+            <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:"10px"}}>
+              <div style={{fontSize:"11px",color:GR,lineHeight:1.5}}>
+                Modifica l'HTML catturato dalla preview. Il testo modificato sostituirà il contenuto preset solo in stampa. Premi "Ripristina" per tornare al preset originale.
+              </div>
+              <textarea
+                value={presetEditDraft}
+                onChange={(e) => setPresetEditDraft(e.target.value)}
+                rows={20}
+                spellCheck={false}
+                style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical",fontFamily:"ui-monospace,Menlo,Consolas,monospace",fontSize:"12px",lineHeight:1.5}}
+              />
+              <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
+                <button type="button" onClick={resetPresetEdit} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:RD}}>Ripristina preset</button>
+                <button type="button" onClick={()=>setPresetEditOpen(false)} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
+                <button type="button" onClick={savePresetEdit} style={{flex:1,padding:"10px",background:N,color:WH,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>Salva</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {secModalOpen && (
         <div style={{position:"fixed",inset:0,zIndex:200,background:"rgba(15,23,42,0.55)",display:"flex",alignItems:"center",justifyContent:"center",padding:"16px"}} onClick={()=>{setSecModalOpen(false);setSecModalEditingId(null);}}>
