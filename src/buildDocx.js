@@ -291,11 +291,14 @@ function buildFooter() {
 
 // ── Sezione Banner (header colorato di un capitolo o allegato) ──────────────
 function bannerParagraph(text, opts = {}) {
+  // Banner usato per gli allegati. È un HEADING_1 (così appare nel TOC) ma
+  // con shading navy e testo bianco per mantenere l'aspetto "etichetta".
   return new Paragraph({
     children: [txt(text, { bold: true, color: "FFFFFF", size: 24 })],
     shading: { type: ShadingType.CLEAR, color: "auto", fill: NAVY },
     spacing: { before: 240, after: 200 },
     keepNext: true,
+    heading: HeadingLevel.HEADING_1,
     ...opts,
   });
 }
@@ -756,16 +759,16 @@ async function buildCover(data, prefetched) {
 }
 
 // ── TOC field ───────────────────────────────────────────────────────────────
+// Limitiamo a HEADING_1 e HEADING_2 per restare in una pagina sola in
+// documenti tipici (capitoli main + sub).
 function buildTocField() {
   return [
     para([txt("INDICE", { bold: true, color: NAVY, size: 26 })], {
-      heading: HeadingLevel.TITLE,
       spacing: { after: 200 },
     }),
     new TableOfContents("INDICE", {
       hyperlink: true,
-      headingStyleRange: "1-3",
-      stylesWithLevels: [],
+      headingStyleRange: "1-2",
     }),
     new Paragraph({ children: [new PageBreak()] }),
   ];
@@ -1036,6 +1039,7 @@ export async function generateDocxBlob({
     creator: "DELTAgroup CS",
     title: `Concetto di Sicurezza - ${data?.nomeEvento || ""}`,
     description: "Documento generato da DELTAgroup CS",
+    features: { updateFields: true },
     styles: {
       default: {
         document: {
@@ -1061,26 +1065,21 @@ export async function generateDocxBlob({
     },
     numbering,
     sections: [
-      // Cover (no header/footer per evitare logo doppio in copertina)
+      // Cover con header (logo) + footer DELTAgroup
       {
         properties: {
           page: {
             size: { orientation: PageOrientation.PORTRAIT },
-            margin: { top: 1200, right: 850, bottom: 850, left: 850 },
+            margin: { top: 1700, right: 850, bottom: 1100, left: 850 },
           },
-          titlePage: true,
         },
+        headers: { default: buildHeader(headerLogoBytes) },
+        footers: { default: buildFooter() },
         children: coverChildren,
       },
       // Indice + corpo
       {
         ...sectionOpts,
-        properties: {
-          ...sectionOpts.properties,
-          page: {
-            ...sectionOpts.properties.page,
-          },
-        },
         children: [...buildTocField(), ...flowChildren],
       },
     ],
