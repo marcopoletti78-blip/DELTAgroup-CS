@@ -985,24 +985,40 @@ function insertNewCustomKeysInOrder(prevOrder, newSections) {
   return base;
 }
 
-function applyPresetDeletedAndRenumber(presetKey, rows, chapterIndex, presetDeletedItems) {
+function applyPresetDeletedAndRenumber(presetKey, rows, chapterIndex, presetDeletedItems, subOrder) {
   const deleted = new Set((presetDeletedItems && presetDeletedItems[presetKey]) || []);
-  // Filtra le righe con n originale (pre-remap) in `deleted`.
-  const filtered = rows.filter((r) => !deleted.has(String(r.n)));
-  // Rinumerazione contigua dei sub (X.Y) mantenendo il main chapter X.
+  // Separa main e sub (sui n ORIGINALI, pre-remap).
+  const mainRow = rows.find((r) => /^\d+$/.test(String(r.n ?? "").trim()));
+  let subRows = rows.filter((r) => /^\d+\.\d+$/.test(String(r.n ?? "").trim()));
+  subRows = subRows.filter((r) => !deleted.has(String(r.n)));
+  // Riordina i sub secondo subOrder (array di "X.Y" originali); le voci non
+  // presenti in subOrder restano nell'ordine originale, alla fine.
+  if (Array.isArray(subOrder) && subOrder.length) {
+    const byN = new Map(subRows.map((s) => [String(s.n), s]));
+    const ordered = [];
+    const seen = new Set();
+    for (const n of subOrder) {
+      const s = byN.get(String(n));
+      if (s && !seen.has(String(s.n))) {
+        ordered.push(s);
+        seen.add(String(s.n));
+      }
+    }
+    for (const s of subRows) {
+      if (!seen.has(String(s.n))) ordered.push(s);
+    }
+    subRows = ordered;
+  }
+  const out = [];
+  if (mainRow && !deleted.has(String(mainRow.n))) {
+    out.push({ ...mainRow, n: String(chapterIndex), t: String(mainRow.t || "").replace(/^\d+\s+/, "") });
+  }
   let subCounter = 0;
-  return filtered.map((row) => {
-    const cn = String(row.n ?? "").trim();
-    const sub = cn.match(/^(\d+)\.(\d+)$/);
-    if (sub) {
-      subCounter += 1;
-      return { ...row, n: `${chapterIndex}.${subCounter}`, t: String(row.t || "").replace(/^\d+(\.\d+)?\s+/, "") };
-    }
-    if (/^\d+$/.test(cn)) {
-      return { ...row, n: String(chapterIndex), t: String(row.t || "").replace(/^\d+\s+/, "") };
-    }
-    return { ...row };
-  });
+  for (const s of subRows) {
+    subCounter += 1;
+    out.push({ ...s, n: `${chapterIndex}.${subCounter}`, t: String(s.t || "").replace(/^\d+(\.\d+)?\s+/, "") });
+  }
+  return out;
 }
 
 // Stima del numero pagina di partenza per ogni "owner" key dell'order.
@@ -1053,7 +1069,7 @@ function effectiveParentKeyInOrder(order, idx, customSections) {
   return null;
 }
 
-function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}) {
+function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}, presetSubOrder = {}) {
   const cs = Array.isArray(customSections) ? customSections : [];
   const order = Array.isArray(sectionOrder) && sectionOrder.length ? sectionOrder : [...DEFAULT_SECTION_ORDER];
   if (!order.length) return [];
@@ -1066,7 +1082,7 @@ function buildTocRows(sectionOrder, customSections, presetDeletedItems = {}) {
     if (/^ps[1-6]$/.test(key)) {
       const idx = chapterNumByKey.get(key);
       const block = TOC_PRESET_BLOCKS[key] ?? [];
-      const renumbered = applyPresetDeletedAndRenumber(key, block, idx, presetDeletedItems);
+      const renumbered = applyPresetDeletedAndRenumber(key, block, idx, presetDeletedItems, presetSubOrder[key]);
       rows.push(...renumbered.map((r) => ({ ...r, ownerKey: key })));
     } else if (key === "all1" && TOC_ALL1_ENTRY) {
       const deletedAll = new Set((presetDeletedItems.all1) || []);
@@ -1300,11 +1316,32 @@ const isMain = (n) => typeof n === "string" && (/^\d+$/.test(n) || n.startsWith(
 
 // Filtra i sub di un preset rimuovendo quelli eliminati, quelli senza body, e
 // rinumerando contigualmente i rimanenti (X.1, X.2, ...).
-function renderPresetSubs(items, p, deletedSet) {
+function renderPresetSubs(items, p, deletedSet, subOrder, origChapter = null) {
   const visible = items.filter((s) => s.body != null && s.body !== false && s.body !== "");
+  let ordered = visible;
+  if (Array.isArray(subOrder) && subOrder.length && origChapter != null) {
+    // subOrder è array di "X.Y" originali. Estraggo l'idx (Y) e riordino visible per origIdx.
+    const wantedIdx = subOrder
+      .map((n) => {
+        const m = String(n).match(/^\d+\.(\d+)$/);
+        return m ? parseInt(m[1], 10) : null;
+      })
+      .filter((v) => v != null);
+    const byIdx = new Map(visible.map((s) => [s.origIdx, s]));
+    const reord = [];
+    const seen = new Set();
+    for (const idx of wantedIdx) {
+      const s = byIdx.get(idx);
+      if (s && !seen.has(idx)) { reord.push(s); seen.add(idx); }
+    }
+    for (const s of visible) {
+      if (!seen.has(s.origIdx)) reord.push(s);
+    }
+    ordered = reord;
+  }
   let counter = 0;
-  return visible.map((s) => {
-    const origN = `${p}.${s.origIdx}`;
+  return ordered.map((s) => {
+    const origN = `${origChapter ?? p}.${s.origIdx}`;
     if (deletedSet && deletedSet.has(origN)) return null;
     counter += 1;
     const n = `${p}.${counter}`;
@@ -1313,7 +1350,7 @@ function renderPresetSubs(items, p, deletedSet) {
 }
 
 /** Anteprima: blocchi preset (ordine gestito dal container). */
-function PresetPs1({ data, displayChapter = 1, customSubs = null, deletedItems = [] }) {
+function PresetPs1({ data, displayChapter = 1, customSubs = null, deletedItems = [], subOrder = null }) {
   if (!data.s1) return null;
   const p = String(displayChapter);
   const deletedSet = new Set(deletedItems);
@@ -1363,7 +1400,7 @@ function PresetPs1({ data, displayChapter = 1, customSubs = null, deletedItems =
           ))}
         </tbody>
       </table>
-      {renderPresetSubs(subs, p, deletedSet)}
+      {renderPresetSubs(subs, p, deletedSet, subOrder, 1)}
       {data.s1.puntoRitrovo && (
         <div style={{background:GL,border:`1px solid ${GB}`,borderRadius:"6px",padding:"10px 16px",fontWeight:"700",fontSize:"12.5px",...SANS,color:N,textAlign:"center",textTransform:"uppercase",letterSpacing:"0.07em"}}>
           PUNTO DI RITROVO: {data.s1.puntoRitrovo}
@@ -1374,7 +1411,7 @@ function PresetPs1({ data, displayChapter = 1, customSubs = null, deletedItems =
   );
 }
 
-function PresetPs2({ data, displayChapter = 2, customSubs = null, deletedItems = [] }) {
+function PresetPs2({ data, displayChapter = 2, customSubs = null, deletedItems = [], subOrder = null }) {
   if (!data.s2) return null;
   const p = String(displayChapter);
   const deletedSet = new Set(deletedItems);
@@ -1401,13 +1438,13 @@ function PresetPs2({ data, displayChapter = 2, customSubs = null, deletedItems =
           {data.s2.programma.map((row, i) => <div key={i}><strong>{row.giorno}</strong>{row.giorno && row.attivita ? " — " : ""}{row.attivita}</div>)}
         </div>
       )}
-      {renderPresetSubs(subs, p, deletedSet)}
+      {renderPresetSubs(subs, p, deletedSet, subOrder, 2)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs3({ data, displayChapter = 3, customSubs = null, deletedItems = [] }) {
+function PresetPs3({ data, displayChapter = 3, customSubs = null, deletedItems = [], subOrder = null }) {
   if (!data.s3) return null;
   const p = String(displayChapter);
   const deletedSet = new Set(deletedItems);
@@ -1429,13 +1466,13 @@ function PresetPs3({ data, displayChapter = 3, customSubs = null, deletedItems =
   return (
     <Dsec id="ps3" n={p} t="Analisi dei pericoli">
       <p style={{ ...SANS, fontSize:"12.5px", lineHeight:1.75, margin:"0 0 16px" }}>Ad ogni evento vi sono fattori di rischio che potrebbero pregiudicare il buon esito dello stesso. Una valutazione attenta di questi fattori può influire sia sulla buona riuscita che sulle misure da adottare in caso di necessità.</p>
-      {renderPresetSubs(subs, p, deletedSet)}
+      {renderPresetSubs(subs, p, deletedSet, subOrder, 3)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs4({ data, displayChapter = 4, customSubs = null, deletedItems = [] }) {
+function PresetPs4({ data, displayChapter = 4, customSubs = null, deletedItems = [], subOrder = null }) {
   if (!data.s4) return null;
   const p = String(displayChapter);
   const deletedSet = new Set(deletedItems);
@@ -1458,13 +1495,13 @@ function PresetPs4({ data, displayChapter = 4, customSubs = null, deletedItems =
           </div>
         ))}
       </div>
-      {renderPresetSubs(subs, p, deletedSet)}
+      {renderPresetSubs(subs, p, deletedSet, subOrder, 4)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs5({ data, displayChapter = 5, customSubs = null, deletedItems = [] }) {
+function PresetPs5({ data, displayChapter = 5, customSubs = null, deletedItems = [], subOrder = null }) {
   if (!data.s5) return null;
   const p = String(displayChapter);
   const deletedSet = new Set(deletedItems);
@@ -1477,13 +1514,13 @@ function PresetPs5({ data, displayChapter = 5, customSubs = null, deletedItems =
   ];
   return (
     <Dsec id="ps5" n={p} t="Scenari">
-      {renderPresetSubs(subs, p, deletedSet)}
+      {renderPresetSubs(subs, p, deletedSet, subOrder, 5)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetPs6({ data, displayChapter = 6, customSubs = null, deletedItems = [] }) {
+function PresetPs6({ data, displayChapter = 6, customSubs = null, deletedItems = [], subOrder = null }) {
   if (!data.s6) return null;
   const p = String(displayChapter);
   const deletedSet = new Set(deletedItems);
@@ -1514,29 +1551,49 @@ function PresetPs6({ data, displayChapter = 6, customSubs = null, deletedItems =
   ];
   return (
     <Dsec id="ps6a" n={p} t="Casi d'Allarme">
-      {renderPresetSubs(subs, p, deletedSet)}
+      {renderPresetSubs(subs, p, deletedSet, subOrder, 6)}
       {customSubs}
     </Dsec>
   );
 }
 
-function PresetAll1({ displayAllegato = 1 }) {
+function PresetAll1({ data, displayAllegato = 1 }) {
+  const uploaded = Array.isArray(data?.allegato1Files) ? data.allegato1Files : [];
   return (
     <div id="pall1" style={{ marginTop:"0", paddingTop:"28px", borderTop:"none", pageBreakBefore:"always", breakBefore:"page" }}>
       <div style={{ background:N, color:WH, padding:"9px 16px", fontSize:"13px", fontWeight:"700", ...SANS, borderRadius:"6px", marginBottom:"22px", textAlign:"center", textTransform:"uppercase", letterSpacing:"0.08em" }}>
         Allegato {displayAllegato} – Formulario Annunci d'Emergenza
       </div>
-      {ANNUNCI.map((sec)=>(
-        <div key={sec.n} style={{ marginBottom:"22px", breakInside:"avoid", pageBreakInside:"avoid" }}>
-          <div style={{ fontWeight:"700", fontSize:"12.5px", textDecoration:"underline", color:N, ...SANS, marginBottom:"12px" }}>{sec.n}</div>
-          {sec.items.map((it, i)=>(
-            <div key={i} style={{ marginBottom:"13px", paddingLeft:"8px", breakInside:"avoid", pageBreakInside:"avoid" }}>
-              <div style={{ fontWeight:"700", fontSize:"11.5px", ...SANS, color:TX, marginBottom:"3px" }}>Nr. – {it.l}</div>
-              <div style={{ ...SANS, fontSize:"11.5px", whiteSpace:"pre-line", color:TX, lineHeight:1.65, paddingLeft:"10px" }}>{it.t}</div>
-            </div>
-          ))}
+      {uploaded.length > 0 ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:"16px" }}>
+          {uploaded.map((f, i)=>{
+            const isImg = f.type?.startsWith("image/");
+            const isPdf = f.type === "application/pdf";
+            const src = f.url;
+            return (
+              <div key={f.id || i} style={{ marginBottom:"12px" }}>
+                <div style={{ ...SANS, fontSize:"11px", color:GR, marginBottom:"6px", fontWeight:"600" }}>📎 {f.name}</div>
+                {isImg && <img src={src} alt={f.name} style={{ width:"100%", border:`1px solid ${GB}`, borderRadius:"6px", display:"block" }} />}
+                {isPdf && (
+                  <iframe src={src} style={{ width:"100%", height:"600px", border:`1px solid ${GB}`, borderRadius:"6px" }} title={f.name} />
+                )}
+                {!isImg && !isPdf && (
+                  <div style={{ background:"#f0f4f9", border:`1px solid ${GB}`, borderRadius:"6px", padding:"16px", display:"flex", alignItems:"center", gap:"10px", ...SANS, fontSize:"12px", color:TX }}>
+                    <span style={{ fontSize:"28px" }}>📊</span>
+                    <div style={{ fontWeight:"600" }}>{f.name}</div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
-      ))}
+      ) : (
+        <div style={{ border:`2px dashed ${GB}`, borderRadius:"8px", padding:"40px", textAlign:"center", color:GR, ...SANS, fontSize:"12.5px" }}>
+          <div style={{ fontSize:"36px", marginBottom:"10px" }}>📢</div>
+          <div style={{ fontWeight:"600", color:TM, marginBottom:"4px" }}>Formulario annunci d'emergenza</div>
+          <div style={{ fontSize:"11px" }}>Carica l'immagine o il PDF del formulario dal pannello di modifica a sinistra → sezione Allegato 1</div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1668,12 +1725,12 @@ function CustomAllegatoPreview({ section, displayAllegatoNum }) {
   );
 }
 
-function DocPreview({ data, customSections = [], sectionOrder, presetOverrides = {}, presetDeletedItems = {} }) {
+function DocPreview({ data, customSections = [], sectionOrder, presetOverrides = {}, presetDeletedItems = {}, presetSubOrder = {} }) {
   if (!data || !data.nomeEvento) return null;
   const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
   const tocRows = React.useMemo(
-    () => buildTocRows(sectionOrder, customSections, presetDeletedItems),
-    [sectionOrder, customSections, presetOverrides, presetDeletedItems],
+    () => buildTocRows(sectionOrder, customSections, presetDeletedItems, presetSubOrder),
+    [sectionOrder, customSections, presetOverrides, presetDeletedItems, presetSubOrder],
   );
   const { chapterNumByKey, allegatoNumByKey, subchapterDisplayByKey } = React.useMemo(
     () => buildSectionNumberMaps(order, customSections, presetDeletedItems),
@@ -1744,13 +1801,13 @@ function DocPreview({ data, customSections = [], sectionOrder, presetOverrides =
             });
           };
           return order.map((key) => {
-            if (key === "ps1") return <PresetPs1 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 1} customSubs={renderSubs("ps1")} deletedItems={presetDeletedItems.ps1 || []} />;
-            if (key === "ps2") return <PresetPs2 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 2} customSubs={renderSubs("ps2")} deletedItems={presetDeletedItems.ps2 || []} />;
-            if (key === "ps3") return <PresetPs3 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 3} customSubs={renderSubs("ps3")} deletedItems={presetDeletedItems.ps3 || []} />;
-            if (key === "ps4") return <PresetPs4 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 4} customSubs={renderSubs("ps4")} deletedItems={presetDeletedItems.ps4 || []} />;
-            if (key === "ps5") return <PresetPs5 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 5} customSubs={renderSubs("ps5")} deletedItems={presetDeletedItems.ps5 || []} />;
-            if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} displayChapter={chapterNumByKey.get(key) ?? 6} customSubs={renderSubs("ps6")} deletedItems={presetDeletedItems.ps6 || []} /></React.Fragment>;
-            if (key === "all1") return <PresetAll1 key={key} displayAllegato={allegatoNumByKey.get(key) ?? 1} />;
+            if (key === "ps1") return <PresetPs1 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 1} customSubs={renderSubs("ps1")} deletedItems={presetDeletedItems.ps1 || []} subOrder={presetSubOrder.ps1} />;
+            if (key === "ps2") return <PresetPs2 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 2} customSubs={renderSubs("ps2")} deletedItems={presetDeletedItems.ps2 || []} subOrder={presetSubOrder.ps2} />;
+            if (key === "ps3") return <PresetPs3 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 3} customSubs={renderSubs("ps3")} deletedItems={presetDeletedItems.ps3 || []} subOrder={presetSubOrder.ps3} />;
+            if (key === "ps4") return <PresetPs4 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 4} customSubs={renderSubs("ps4")} deletedItems={presetDeletedItems.ps4 || []} subOrder={presetSubOrder.ps4} />;
+            if (key === "ps5") return <PresetPs5 key={key} data={data} displayChapter={chapterNumByKey.get(key) ?? 5} customSubs={renderSubs("ps5")} deletedItems={presetDeletedItems.ps5 || []} subOrder={presetSubOrder.ps5} />;
+            if (key === "ps6") return <React.Fragment key={key}><PresetPs6 data={data} displayChapter={chapterNumByKey.get(key) ?? 6} customSubs={renderSubs("ps6")} deletedItems={presetDeletedItems.ps6 || []} subOrder={presetSubOrder.ps6} /></React.Fragment>;
+            if (key === "all1") return <PresetAll1 key={key} data={data} displayAllegato={allegatoNumByKey.get(key) ?? 1} />;
             if (key === "all2") return <PresetAll2 key={key} data={data} displayAllegato={allegatoNumByKey.get(key) ?? 2} />;
             if (key.startsWith("custom:")) {
               const id = parseCustomSectionKey(key);
@@ -1808,13 +1865,12 @@ function normalizeCustomSection(raw) {
 }
 
 function loadPersistedSections(docName) {
+  const empty = { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {}, presetDeletedItems: {}, presetSubOrder: {} };
   try {
     const raw = localStorage.getItem(LS_EDITOR_SECTIONS);
-    if (!raw) return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {}, presetDeletedItems: {} };
+    if (!raw) return empty;
     const p = JSON.parse(raw);
-    if (p.docKey != null && p.docKey !== (docName || "")) {
-      return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {}, presetDeletedItems: {} };
-    }
+    if (p.docKey != null && p.docKey !== (docName || "")) return empty;
     return {
       customSections: Array.isArray(p.customSections)
         ? p.customSections.map(normalizeCustomSection).filter(Boolean)
@@ -1822,10 +1878,11 @@ function loadPersistedSections(docName) {
       sectionOrder: Array.isArray(p.sectionOrder) && p.sectionOrder.length ? p.sectionOrder : [...DEFAULT_SECTION_ORDER],
       presetOverrides: (p.presetOverrides && typeof p.presetOverrides === "object") ? p.presetOverrides : {},
       presetDeletedItems: (p.presetDeletedItems && typeof p.presetDeletedItems === "object") ? p.presetDeletedItems : {},
+      presetSubOrder: (p.presetSubOrder && typeof p.presetSubOrder === "object") ? p.presetSubOrder : {},
     };
   } catch (e) {
     console.error("[loadPersistedSections]", e);
-    return { customSections: [], sectionOrder: [...DEFAULT_SECTION_ORDER], presetOverrides: {}, presetDeletedItems: {} };
+    return empty;
   }
 }
 
@@ -1851,11 +1908,12 @@ const ALL12_SHORT = {
 
 function Editor({ data: initialData, onBack }) {
   const persisted = loadPersistedSections(initialData.nomeEvento);
-  const [data, setData] = useState({...initialData, allegato2Files: initialData.allegato2Files||[]});
+  const [data, setData] = useState({...initialData, allegato1Files: initialData.allegato1Files||[], allegato2Files: initialData.allegato2Files||[]});
   const [customSections, setCustomSections] = useState(persisted.customSections);
   const [sectionOrder, setSectionOrder] = useState(persisted.sectionOrder);
   const [presetOverrides, setPresetOverrides] = useState(persisted.presetOverrides || {});
   const [presetDeletedItems, setPresetDeletedItems] = useState(persisted.presetDeletedItems || {});
+  const [presetSubOrder, setPresetSubOrder] = useState(persisted.presetSubOrder || {});
   const [presetEditOpen, setPresetEditOpen] = useState(false);
   const [presetEditKey, setPresetEditKey] = useState(null);
   const [presetEditDraft, setPresetEditDraft] = useState("");
@@ -1866,6 +1924,7 @@ function Editor({ data: initialData, onBack }) {
   const [attachments, setAttachments] = useState([]);
   const [addDrag, setAddDrag] = useState(false);
   const [all2Drag, setAll2Drag] = useState(false);
+  const [all1Drag, setAll1Drag] = useState(false);
   const [rightDrag, setRightDrag] = useState(false);
   const [showSave, setShowSave] = useState(false);
   const [secModalOpen, setSecModalOpen] = useState(false);
@@ -1882,6 +1941,7 @@ function Editor({ data: initialData, onBack }) {
   const [settingsDraft, setSettingsDraft] = useState(null);
   const addRef = React.useRef();
   const all2Ref = React.useRef();
+  const all1Ref = React.useRef();
   const secModalFileRef = React.useRef();
   const chatEndRef = React.useRef();
   const rightDragCount = React.useRef(0);
@@ -1919,11 +1979,12 @@ function Editor({ data: initialData, onBack }) {
         sectionOrder,
         presetOverrides,
         presetDeletedItems,
+        presetSubOrder,
       }));
     } catch (e) {
       console.error("[persist sections]", e);
     }
-  }, [data.nomeEvento, customSections, sectionOrder, presetOverrides, presetDeletedItems]);
+  }, [data.nomeEvento, customSections, sectionOrder, presetOverrides, presetDeletedItems, presetSubOrder]);
 
   // Tiene i sottocapitoli custom sempre subito dopo il loro parent nell'order.
   // Evita che restino "in fondo" quando l'AI o l'utente li aggiungono in posizioni innaturali.
@@ -1955,6 +2016,50 @@ function Editor({ data: initialData, onBack }) {
       return TOC_ALL2_ENTRY ? [TOC_ALL2_ENTRY] : [];
     }
     return TOC_PRESET_BLOCKS[presetKey] || [];
+  };
+
+  // Ritorna [mainItem, ...subsInCustomOrder]. Solo per ps1..ps6.
+  const getPresetItemsOrdered = (presetKey) => {
+    if (!/^ps[1-6]$/.test(presetKey)) return getPresetItemsForKey(presetKey);
+    const block = TOC_PRESET_BLOCKS[presetKey] || [];
+    const main = block.find((r) => /^\d+$/.test(String(r.n).trim()));
+    const subs = block.filter((r) => /^\d+\.\d+$/.test(String(r.n).trim()));
+    const customOrder = presetSubOrder[presetKey];
+    if (Array.isArray(customOrder) && customOrder.length) {
+      const byN = new Map(subs.map((s) => [String(s.n), s]));
+      const ordered = [];
+      const seen = new Set();
+      for (const n of customOrder) {
+        const s = byN.get(String(n));
+        if (s && !seen.has(String(s.n))) { ordered.push(s); seen.add(String(s.n)); }
+      }
+      for (const s of subs) {
+        if (!seen.has(String(s.n))) ordered.push(s);
+      }
+      return main ? [main, ...ordered] : ordered;
+    }
+    return main ? [main, ...subs] : subs;
+  };
+
+  const movePresetSub = (presetKey, subN, dir) => {
+    if (!/^ps[1-6]$/.test(presetKey)) return;
+    const block = TOC_PRESET_BLOCKS[presetKey] || [];
+    const subs = block.filter((r) => /^\d+\.\d+$/.test(String(r.n).trim())).map((r) => String(r.n));
+    setPresetSubOrder((prev) => {
+      const current = Array.isArray(prev[presetKey]) && prev[presetKey].length
+        ? prev[presetKey].filter((n) => subs.includes(String(n)))
+        : [...subs];
+      // Aggiungi eventuali sub non presenti
+      for (const n of subs) {
+        if (!current.includes(n)) current.push(n);
+      }
+      const idx = current.indexOf(String(subN));
+      const j = idx + dir;
+      if (idx < 0 || j < 0 || j >= current.length) return prev;
+      const next = [...current];
+      [next[idx], next[j]] = [next[j], next[idx]];
+      return { ...prev, [presetKey]: next };
+    });
   };
 
   const openPresetEdit = (key) => {
@@ -2185,12 +2290,27 @@ function Editor({ data: initialData, onBack }) {
     setNewSecAILoading(true);
     setErr(null);
     try {
+      const FORMATTING_RULES = `
+FORMATO DI RISPOSTA OBBLIGATORIO (Markdown):
+- Titoli di sezione: usa "## Titolo" (NON usare "#" singolo).
+- Sottotitoli: usa "### Sottotitolo".
+- Liste puntate: una voce per riga, ogni voce inizia con "- " (trattino+spazio). MAI concatenare voci sulla stessa riga.
+- Liste numerate: una voce per riga, ogni voce inizia con "1. ", "2. ", ecc.
+- Tabelle: formato pipe markdown, una riga per record:
+  | Colonna A | Colonna B | Colonna C |
+  |-----------|-----------|-----------|
+  | dato 1    | dato 2    | dato 3    |
+  | dato 4    | dato 5    | dato 6    |
+  Inserisci SEMPRE una newline alla fine di ogni riga. Non mettere mai tutta la tabella su una sola riga.
+- Grassetto: **testo**.
+- Separa i paragrafi con una riga vuota.
+- NON includere il titolo della sezione stessa (es. "## ${newSecTitle.trim()}") all'inizio: viene già renderizzato dall'app.`;
       const prompt =
         newSecType === "allegato"
-          ? `Genera il contenuto per un allegato intitolato "${newSecTitle.trim()}" di un Concetto di Sicurezza. Puoi includere checklist, tabelle, procedure operative.`
+          ? `Genera il contenuto per un allegato intitolato "${newSecTitle.trim()}" di un Concetto di Sicurezza. Puoi includere checklist, tabelle, procedure operative.\n${FORMATTING_RULES}`
           : newSecType === "sottocapitolo"
-            ? `Genera il contenuto per un sotto-capitolo intitolato "${newSecTitle.trim()}" di un Concetto di Sicurezza (testo da inserire sotto un capitolo principale).`
-            : `Genera il contenuto per una sezione intitolata "${newSecTitle.trim()}" di un Concetto di Sicurezza`;
+            ? `Genera il contenuto per un sotto-capitolo intitolato "${newSecTitle.trim()}" di un Concetto di Sicurezza (testo da inserire sotto un capitolo principale).\n${FORMATTING_RULES}`
+            : `Genera il contenuto per una sezione intitolata "${newSecTitle.trim()}" di un Concetto di Sicurezza.\n${FORMATTING_RULES}`;
       const t = await callAIText(prompt);
       setNewSecContent(t);
     } catch (e) {
@@ -2384,6 +2504,24 @@ function Editor({ data: initialData, onBack }) {
     });
   };
 
+  const addAll1Files = (files) => {
+    const toAdd = Array.from(files).map(file => ({
+      id: Date.now()+Math.random(),
+      name: file.name,
+      type: detectType(file)||"application/octet-stream",
+      url: URL.createObjectURL(file),
+    }));
+    setData(prev=>({...prev, allegato1Files:[...(prev.allegato1Files||[]),...toAdd]}));
+  };
+
+  const removeAll1 = (id) => {
+    setData(prev=>{
+      const f = (prev.allegato1Files||[]).find(x=>x.id===id);
+      if(f?.url) URL.revokeObjectURL(f.url);
+      return {...prev, allegato1Files:(prev.allegato1Files||[]).filter(x=>x.id!==id)};
+    });
+  };
+
   const runEdit = async (effectiveMsg, effectiveAttachments, dataOverride = null) => {
     setLoading(true); setErr(null);
     const baseData = dataOverride || data;
@@ -2424,7 +2562,7 @@ Restituisci \`customSections\` completo (esistenti + nuovi) nel JSON di risposta
     try {
       const newData = await callAI(editMsg, null, effectiveAttachments, SYS_EDIT);
       const { customSections: newCS, ...rest } = newData || {};
-      setData({...rest, logoEvento:baseData.logoEvento||null, allegato2Files:baseData.allegato2Files||[], eventSettings: baseData.eventSettings || null});
+      setData({...rest, logoEvento:baseData.logoEvento||null, allegato1Files:baseData.allegato1Files||[], allegato2Files:baseData.allegato2Files||[], eventSettings: baseData.eventSettings || null});
       let newlyCreated = [];
       if (Array.isArray(newCS)) {
         const existingIds = new Set(customSections.map((c) => c.id));
@@ -2608,7 +2746,7 @@ Restituisci \`customSections\` completo (esistenti + nuovi) nel JSON di risposta
       } else if (key === "ps6") {
         flowParts += presetWith("ps6", ["ps6a", "ps6b"], "ppage-flow");
       } else if (key === "all1") {
-        flowParts += presetWith("all1", ["pall1"], "ppage-fixed ppage-all1");
+        flowParts += presetWith("all1", ["pall1"], "ppage-flow");
       } else if (key === "all2") {
         flowParts += presetWith("all2", ["pall2"], "ppage-flow");
       } else if (key.startsWith("custom:")) {
@@ -2656,7 +2794,6 @@ embed{display:block;}
   .print-ftr{position:fixed;bottom:0;left:0;width:100%;z-index:1000;}
   .ppage-fixed{height:297mm;overflow:hidden;}
   .pcnt{padding-top:85px;padding-bottom:60px;padding-left:36px;padding-right:36px;}
-  .ppage-all1 .pcnt{font-size:7pt;line-height:1.25;overflow:hidden;max-height:calc(297mm - 150px);}
   .ppage-allegato-custom .pcnt{font-size:8pt;line-height:1.3;}
   .cover .pcnt{height:100%;box-sizing:border-box;}
   .pcnt h2,.pcnt h3,.pcnt h4{break-after:avoid;page-break-after:avoid;break-inside:avoid;page-break-inside:avoid;}
@@ -2823,6 +2960,30 @@ ${flowParts}
           </div>
         )}
 
+        {/* ── Allegato 1 upload ── */}
+        <div style={{padding:"10px 14px",borderTop:`1px solid ${GB}`,background:"#fafbfd"}}>
+          <div style={{...SANS,fontSize:"11px",fontWeight:"700",color:N,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"7px"}}>📢 Allegato 1 – Annunci d'emergenza</div>
+          <input ref={all1Ref} type="file" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" multiple style={{display:"none"}} onChange={e=>addAll1Files(e.target.files)}/>
+          {(data.allegato1Files||[]).map(f=>(
+            <div key={f.id} style={{display:"flex",alignItems:"center",gap:"6px",padding:"3px 0",...SANS,fontSize:"11px"}}>
+              <span>{f.type.startsWith("image/")?"🖼️":f.type==="application/pdf"?"📄":"📊"}</span>
+              <span style={{flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",color:TX}}>{f.name}</span>
+              <button onClick={()=>removeAll1(f.id)} style={{background:"none",border:"none",cursor:"pointer",color:"#ccc",fontSize:"16px",padding:0,lineHeight:1}}>×</button>
+            </div>
+          ))}
+          <div
+            style={{border:`1px dashed ${all1Drag?N:GB}`,borderRadius:"6px",padding:"8px 12px",cursor:"pointer",background:all1Drag?"#eef2f9":WH,display:"flex",alignItems:"center",gap:"8px",marginTop:"4px",transition:"all 0.2s"}}
+            onClick={()=>all1Ref.current.click()}
+            onDragEnter={e=>{e.preventDefault();e.stopPropagation();setAll1Drag(true);}}
+            onDragOver={e=>{e.preventDefault();e.stopPropagation();}}
+            onDragLeave={e=>{e.preventDefault();e.stopPropagation();setAll1Drag(false);}}
+            onDrop={e=>{e.preventDefault();e.stopPropagation();setAll1Drag(false);addAll1Files(e.dataTransfer.files);}}
+          >
+            <span style={{fontSize:"16px"}}>📎</span>
+            <span style={{...SANS,fontSize:"11px",color:TM}}>Trascina o clicca · immagine o PDF del formulario annunci</span>
+          </div>
+        </div>
+
         {/* ── Allegato 2 upload ── */}
         <div style={{padding:"10px 14px",borderTop:`1px solid ${GB}`,background:"#fafbfd"}}>
           <div style={{...SANS,fontSize:"11px",fontWeight:"700",color:N,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:"7px"}}>📂 Allegato 2 – Piantine</div>
@@ -2908,7 +3069,7 @@ ${flowParts}
             <span style={{fontSize:"16px"}}>⏳</span> Aggiornamento documento in corso…
           </div>
         )}
-        <DocPreview data={data} customSections={customSections} sectionOrder={sectionOrder} presetOverrides={presetOverrides} presetDeletedItems={presetDeletedItems} />
+        <DocPreview data={data} customSections={customSections} sectionOrder={sectionOrder} presetOverrides={presetOverrides} presetDeletedItems={presetDeletedItems} presetSubOrder={presetSubOrder} />
       </div>
 
       {presetEditOpen && (
@@ -2928,30 +3089,62 @@ ${flowParts}
                 spellCheck
                 style={{...inp,width:"100%",boxSizing:"border-box",resize:"vertical",fontSize:"13px",lineHeight:1.6}}
               />
-              {getPresetItemsForKey(presetEditKey).length > 0 && (
-                <div style={{border:`1px solid ${GB}`,borderRadius:"8px",padding:"10px 12px",background:GL}}>
-                  <div style={{fontSize:"11px",fontWeight:"700",color:N,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"8px"}}>
-                    Elimina punti — i rimanenti vengono rinumerati
+              {getPresetItemsOrdered(presetEditKey).length > 0 && (() => {
+                const orderedItems = getPresetItemsOrdered(presetEditKey);
+                const subItems = orderedItems.filter((r) => /^\d+\.\d+$/.test(String(r.n).trim()));
+                const mainItem = orderedItems.find((r) => /^\d+$/.test(String(r.n).trim()));
+                const isPs = /^ps[1-6]$/.test(presetEditKey);
+                return (
+                  <div style={{border:`1px solid ${GB}`,borderRadius:"8px",padding:"10px 12px",background:GL}}>
+                    <div style={{fontSize:"11px",fontWeight:"700",color:N,textTransform:"uppercase",letterSpacing:"0.06em",marginBottom:"8px"}}>
+                      Riordina o elimina punti — i rimanenti vengono rinumerati
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
+                      {mainItem && (() => {
+                        const itemN = String(mainItem.n);
+                        const isDeleted = (presetDeletedItems[presetEditKey] || []).includes(itemN);
+                        return (
+                          <label key={itemN} style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px",cursor:"pointer",color:isDeleted?GR:TX,textDecoration:isDeleted?"line-through":"none"}}>
+                            <span style={{width:"50px"}}/>
+                            <input
+                              type="checkbox"
+                              checked={isDeleted}
+                              onChange={() => togglePresetItemDeleted(presetEditKey, itemN)}
+                            />
+                            <span style={{minWidth:"36px",fontWeight:"700",color:isDeleted?GR:N}}>{itemN}</span>
+                            <span style={{fontWeight:"600"}}>{mainItem.t}</span>
+                          </label>
+                        );
+                      })()}
+                      {subItems.map((item, i) => {
+                        const itemN = String(item.n);
+                        const isDeleted = (presetDeletedItems[presetEditKey] || []).includes(itemN);
+                        const canUp = isPs && i > 0;
+                        const canDown = isPs && i < subItems.length - 1;
+                        return (
+                          <div key={itemN} style={{display:"flex",alignItems:"center",gap:"6px",fontSize:"12px",color:isDeleted?GR:TX,textDecoration:isDeleted?"line-through":"none"}}>
+                            {isPs ? (
+                              <>
+                                <button type="button" onClick={()=>movePresetSub(presetEditKey,itemN,-1)} disabled={!canUp} style={{background:!canUp?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:!canUp?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Su">▲</button>
+                                <button type="button" onClick={()=>movePresetSub(presetEditKey,itemN,1)} disabled={!canDown} style={{background:!canDown?"#eee":WH,border:`1px solid ${GB}`,borderRadius:"4px",cursor:!canDown?"not-allowed":"pointer",padding:"2px 6px",fontSize:"10px"}} title="Giù">▼</button>
+                              </>
+                            ) : (
+                              <span style={{width:"50px"}}/>
+                            )}
+                            <input
+                              type="checkbox"
+                              checked={isDeleted}
+                              onChange={() => togglePresetItemDeleted(presetEditKey, itemN)}
+                            />
+                            <span style={{minWidth:"36px",fontWeight:"600",color:isDeleted?GR:N}}>{itemN}</span>
+                            <span>{item.t}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div style={{display:"flex",flexDirection:"column",gap:"4px"}}>
-                    {getPresetItemsForKey(presetEditKey).map((item) => {
-                      const itemN = String(item.n);
-                      const isDeleted = (presetDeletedItems[presetEditKey] || []).includes(itemN);
-                      return (
-                        <label key={itemN} style={{display:"flex",alignItems:"center",gap:"8px",fontSize:"12px",cursor:"pointer",color:isDeleted?GR:TX,textDecoration:isDeleted?"line-through":"none"}}>
-                          <input
-                            type="checkbox"
-                            checked={isDeleted}
-                            onChange={() => togglePresetItemDeleted(presetEditKey, itemN)}
-                          />
-                          <span style={{minWidth:"36px",fontWeight:"600",color:isDeleted?GR:N}}>{itemN}</span>
-                          <span>{item.t}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
               <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
                 <button type="button" onClick={resetPresetEdit} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:RD}}>Ripristina preset</button>
                 <button type="button" onClick={()=>setPresetEditOpen(false)} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
