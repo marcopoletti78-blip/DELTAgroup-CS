@@ -2872,10 +2872,11 @@ ${flowParts}
     <div style={{display:"flex", height:"calc(100vh - 60px)", overflow:"hidden"}}>
 
       {/* ── PANNELLO SINISTRO ── */}
+      {/* Niente onDrop globale qui: ogni dropzone (Allegato 1, Allegato 2, chat) gestisce il proprio. */}
       <div
         style={{width:"360px",minWidth:"300px",background:WH,borderRight:`1px solid ${GB}`,display:"flex",flexDirection:"column",overflow:"hidden"}}
-        onDragOver={e=>{e.preventDefault();e.stopPropagation();}}
-        onDrop={e=>{e.preventDefault();e.stopPropagation();if(e.dataTransfer.files.length>0)addAll2Files(e.dataTransfer.files);}}
+        onDragOver={e=>e.preventDefault()}
+        onDrop={e=>e.preventDefault()}
       >
 
         {/* Top bar */}
