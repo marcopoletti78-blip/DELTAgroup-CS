@@ -745,8 +745,8 @@ function Dsec({ n, t, children, id }) {
 
 function Dsub({ n, t, children }) {
   return (
-    <div style={{marginBottom:"17px"}}>
-      <div style={{fontWeight:"700",fontSize:"12px",textTransform:"uppercase",letterSpacing:"0.07em",textDecoration:"underline",color:N,marginBottom:"7px",...SANS}}>{n}&nbsp;{t}</div>
+    <div style={{marginBottom:"17px",breakInside:"avoid",pageBreakInside:"avoid"}}>
+      <div style={{fontWeight:"700",fontSize:"12px",textTransform:"uppercase",letterSpacing:"0.07em",textDecoration:"underline",color:N,marginBottom:"7px",...SANS,breakAfter:"avoid",pageBreakAfter:"avoid"}}>{n}&nbsp;{t}</div>
       <div style={{fontSize:"12.5px",lineHeight:1.75,color:TX,...SANS}}>{children}</div>
     </div>
   );
@@ -1176,17 +1176,36 @@ function plainTextToPresetHtml(text) {
   return `<div class="preset-override">${inner}</div>`;
 }
 
-// Markdown → HTML semplice (h2, h3, h4, b, ul/li, p).
+// Espande tabelle markdown scritte su singola riga (le AI a volte le
+// generano così) inserendo le newline mancanti tra le righe della tabella.
+// Pattern: cerca sequenze " | |  " che separano righe consecutive.
+function expandInlineMarkdownTables(src) {
+  if (!src) return src;
+  let s = String(src);
+  // Newline prima del separator "|---|---|..." se preceduto da spazio (es. "...| |---|---|")
+  s = s.replace(/\s\|(?=(?:\s*[-:]+\s*\|)+)/g, "\n|");
+  // Newline tra fine riga "|" e nuovo inizio "|" su stessa linea: "...| |..."
+  s = s.replace(/\|\s+\|/g, "|\n|");
+  // Newline dopo il separator: "|---|---| |..." (caso comune di un'unica linea)
+  s = s.replace(/(\|\s*[-:]+\s*(?:\|\s*[-:]+\s*)+\|)\s+(?=\|)/g, "$1\n");
+  return s;
+}
+
+// Markdown → HTML semplice (h2..h4, b, ul/li, p, table).
 // Per testo che non contiene già tag HTML. Escape applicato all'input prima del parsing.
-// Liste accettano spazi iniziali (es. "    - voce").
-// `#` viene mappato a <h2> (un solo livello di top heading, allineato a <h2>).
+// Supporta:
+// - heading: #, ##, ###, ####
+// - liste indentate: "    - voce"
+// - tabelle pipe: "| col | col |" + separator "|---|---|"
 function markdownToHtml(src) {
   if (!src) return "";
-  const escaped = escapeHtmlPrint(String(src));
+  const preprocessed = expandInlineMarkdownTables(String(src));
+  const escaped = escapeHtmlPrint(preprocessed);
   const lines = escaped.split(/\r?\n/);
   const out = [];
   let paraBuf = [];
   let listBuf = [];
+  let tableBuf = null;
   const flushPara = () => {
     if (!paraBuf.length) return;
     let txt = paraBuf.join(" ").trim();
@@ -1203,9 +1222,43 @@ function markdownToHtml(src) {
     out.push(`<ul>${items}</ul>`);
     listBuf = [];
   };
-  for (const rawLine of lines) {
-    const line = rawLine.replace(/\s+$/g, "");
-    if (!line.trim()) {
+  const flushTable = () => {
+    if (!tableBuf) return;
+    const renderCell = (c) => c.replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+    const thead = tableBuf.headers
+      ? `<thead><tr>${tableBuf.headers.map((h) => `<th>${renderCell(h)}</th>`).join("")}</tr></thead>`
+      : "";
+    const tbody = `<tbody>${tableBuf.rows.map((r) => `<tr>${r.map((c) => `<td>${renderCell(c)}</td>`).join("")}</tr>`).join("")}</tbody>`;
+    out.push(`<table>${thead}${tbody}</table>`);
+    tableBuf = null;
+  };
+  const parseRow = (line) => {
+    const t = line.trim();
+    if (!t.startsWith("|") || !t.endsWith("|")) return null;
+    return t.slice(1, -1).split("|").map((c) => c.trim());
+  };
+  const isSeparator = (line) => {
+    const cells = parseRow(line);
+    if (!cells || !cells.length) return false;
+    return cells.every((c) => /^:?-{2,}:?$/.test(c));
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].replace(/\s+$/g, "");
+    const trimmed = line.trim();
+    // Inizio tabella: riga "|...|" + riga successiva separator
+    if (!tableBuf && parseRow(line) && i + 1 < lines.length && isSeparator(lines[i + 1])) {
+      flushList();
+      flushPara();
+      tableBuf = { headers: parseRow(line), rows: [] };
+      i += 1;
+      continue;
+    }
+    if (tableBuf) {
+      const row = parseRow(line);
+      if (row) { tableBuf.rows.push(row); continue; }
+      flushTable();
+    }
+    if (!trimmed) {
       flushList();
       flushPara();
       continue;
@@ -1215,38 +1268,15 @@ function markdownToHtml(src) {
     const h3m = line.match(/^###\s+(.*)$/);
     const h4m = line.match(/^####\s+(.*)$/);
     const lim = line.match(/^\s*[-*]\s+(.*)$/);
-    if (h4m) {
-      flushList();
-      flushPara();
-      out.push(`<h4>${h4m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h4>`);
-      continue;
-    }
-    if (h3m) {
-      flushList();
-      flushPara();
-      out.push(`<h3>${h3m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h3>`);
-      continue;
-    }
-    if (h2m) {
-      flushList();
-      flushPara();
-      out.push(`<h2>${h2m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h2>`);
-      continue;
-    }
-    if (h1m) {
-      flushList();
-      flushPara();
-      out.push(`<h2>${h1m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h2>`);
-      continue;
-    }
-    if (lim) {
-      flushPara();
-      listBuf.push(lim[1]);
-      continue;
-    }
+    if (h4m) { flushList(); flushPara(); out.push(`<h4>${h4m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h4>`); continue; }
+    if (h3m) { flushList(); flushPara(); out.push(`<h3>${h3m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h3>`); continue; }
+    if (h2m) { flushList(); flushPara(); out.push(`<h2>${h2m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h2>`); continue; }
+    if (h1m) { flushList(); flushPara(); out.push(`<h2>${h1m[1].replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>")}</h2>`); continue; }
+    if (lim) { flushPara(); listBuf.push(lim[1]); continue; }
     flushList();
     paraBuf.push(line);
   }
+  flushTable();
   flushList();
   flushPara();
   return out.join("\n");
@@ -1460,7 +1490,11 @@ function PresetPs6({ data, displayChapter = 6, customSubs = null, deletedItems =
   const orderedList = (k) =>
     data.s6[k] && data.s6[k].length > 0 ? (
       <ol style={{ margin:0, paddingLeft:"18px" }}>
-        {data.s6[k].map((s, i) => <li key={i} style={{ marginBottom:"3px" }}>{s}</li>)}
+        {data.s6[k].map((s, i) => (
+          <li key={i} style={{ marginBottom:"3px" }}>
+            {String(s).replace(/^\s*\d+[\.\)]\s+/, "")}
+          </li>
+        ))}
       </ol>
     ) : null;
   const subs = [
