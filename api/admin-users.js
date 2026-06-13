@@ -38,14 +38,20 @@ export default async function (req, res) {
       return res.status(400).json({ error: userData.msg || userData.error })
 
     const userId = userData.id
+    console.log('userId ottenuto:', userId)
 
-    await supabaseAdmin.from('profili').insert({
-      id: userId,
-      email,
-      nome: nome || '',
-      ruolo: ruolo || 'utente',
-      attivo: true
-    })
+    const { error: profileError } = await supabaseAdmin
+      .from('profili')
+      .insert({ id: userId, email, nome: nome || '', ruolo: ruolo || 'utente', attivo: true })
+
+    console.log('profileError:', profileError)
+
+    if (profileError) {
+      console.error('Errore inserimento profilo:', profileError)
+      return res.status(400).json({
+        error: 'Utente creato ma profilo non salvato: ' + profileError.message
+      })
+    }
 
     return res.status(200).json({ success: true })
   } catch (err) {
