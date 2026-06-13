@@ -167,7 +167,7 @@ function subHeading(title) {
 
 // ── Larghezze tabelle (full-width, somma = 9026 twips) ──────────────────────
 const TBL_W = 9026;
-const COLS_KV = [3200, 5826];        // 2 colonne (Dati servizio, Dettagli)
+const COLS_KV = [3000, 6026];        // 2 colonne (Dati servizio, Dettagli)
 const COLS_PER = [2800, 2800, 3426]; // 3 colonne (Pericoli)
 const COLS_REF = [2400, 2400, 2000, 2226]; // 4 colonne (Referenti)
 const WHITE = { type: ShadingType.CLEAR, color: "auto", fill: "FFFFFF" };
