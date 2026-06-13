@@ -3673,6 +3673,13 @@ function AdminPanel({ onBack }) {
   };
   React.useEffect(() => { load(); }, []);
 
+  // Form "Aggiungi utente"
+  const [nNome, setNNome] = useState("");
+  const [nEmail, setNEmail] = useState("");
+  const [nPass, setNPass] = useState("");
+  const [nRuolo, setNRuolo] = useState("utente");
+  const [creating, setCreating] = useState(false);
+
   const flash = (t) => { setMsg(t); };
 
   const updateProfilo = async (id, patch) => {
@@ -3683,8 +3690,32 @@ function AdminPanel({ onBack }) {
     else flash("Salvato ✓");
   };
 
+  const createUser = async () => {
+    setErr(null); setMsg(null);
+    if (!nEmail || !nPass) { setErr("Email e password obbligatorie."); return; }
+    if (nPass.length < 8) { setErr("La password deve avere almeno 8 caratteri."); return; }
+    setCreating(true);
+    try {
+      const r = await fetch("/api/admin-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: nEmail, nome: nNome, password: nPass, ruolo: nRuolo }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Errore nella creazione dell'utente");
+      setMsg("Utente creato ✓");
+      setNNome(""); setNEmail(""); setNPass(""); setNRuolo("utente");
+      load();
+    } catch (e) {
+      setErr(`Errore: ${e.message}`);
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const TH = { ...SANS, textAlign:"left", padding:"10px 12px", fontSize:"11px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:TM, borderBottom:`2px solid ${GB}`, whiteSpace:"nowrap" };
   const TD = { ...SANS, padding:"11px 12px", fontSize:"13px", color:N, borderBottom:`1px solid ${GL}` };
+  const fInp = { ...SANS, padding:"9px 11px", border:`1px solid ${GB}`, borderRadius:"8px", fontSize:"14px", color:N, background:WH, outline:"none", boxSizing:"border-box", width:"100%" };
 
   return (
     <div style={{minHeight:"calc(100vh - 60px)",background:BG,padding:"32px 20px"}}>
@@ -3732,6 +3763,25 @@ function AdminPanel({ onBack }) {
               </table>
             </div>
           )}
+        </div>
+
+        {/* Aggiungi nuovo utente */}
+        <div style={{background:WH,border:`1px solid ${GB}`,borderRadius:"14px",padding:"18px 20px",marginTop:"18px",boxShadow:"0 2px 12px rgba(12,29,61,0.06)"}}>
+          <div style={{...SANS,fontSize:"12px",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",color:N,borderTop:`1px solid ${GB}`,paddingTop:"14px",marginBottom:"14px"}}>Aggiungi utente</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"12px"}}>
+            <input value={nNome} onChange={(e)=>setNNome(e.target.value)} placeholder="Nome" style={fInp}/>
+            <input type="email" value={nEmail} onChange={(e)=>setNEmail(e.target.value)} placeholder="Email" style={fInp}/>
+            <input type="password" value={nPass} onChange={(e)=>setNPass(e.target.value)} placeholder="Password temporanea (min 8 caratteri)" style={fInp}/>
+            <select value={nRuolo} onChange={(e)=>setNRuolo(e.target.value)} style={{...fInp,cursor:"pointer"}}>
+              <option value="utente">utente</option>
+              <option value="admin">admin</option>
+            </select>
+          </div>
+          <div style={{marginTop:"14px"}}>
+            <button onClick={createUser} disabled={creating} style={{...SANS,padding:"11px 22px",background:creating?"#9bb0e0":AC,color:WH,border:"none",borderRadius:"9px",fontSize:"14px",fontWeight:700,cursor:creating?"wait":"pointer"}}>
+              {creating ? "Creazione in corso…" : "Aggiungi"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
