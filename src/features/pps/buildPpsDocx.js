@@ -119,8 +119,9 @@ function titleBlock(data) {
   out.push(para([txt("PPS", { bold: true, color: RED, size: 22 })], {
     alignment: AlignmentType.CENTER, spacing: { after: 160 },
   }));
-  if (data.titolo) {
-    out.push(para([txt(data.titolo, { bold: true, color: NAVY, size: 28 })], {
+  const heading = [data.cliente, data.codice].filter(Boolean).join("  ·  ");
+  if (heading) {
+    out.push(para([txt(heading, { bold: true, color: NAVY, size: 26 })], {
       alignment: AlignmentType.CENTER, spacing: { after: 60 },
     }));
   }
@@ -143,24 +144,22 @@ function sectionHeading(num, title) {
   });
 }
 
-// ── Sezione 1: dati del servizio (tabella label/valore) ─────────────────────
-function buildServizioTable(data) {
-  const rows = [
-    ["Titolo / Servizio", data.titolo],
-    ["Committente / Cliente", data.cliente],
-    ["Luogo", data.luogo],
-    ["Data", data.data],
-    ["Orario", [data.orarioInizio, data.orarioFine].filter(Boolean).join(" – ")],
-    ["Tipo di servizio", data.tipoServizio],
-    ["Numero agenti", data.numAgenti],
-    ["Note", data.note],
-  ].filter(([, v]) => v != null && String(v).trim() !== "");
+function subHeading(title) {
+  return new Paragraph({
+    children: [txt(title, { bold: true, color: NAVY, size: 22, underline: {} })],
+    heading: HeadingLevel.HEADING_2,
+    spacing: { before: 160, after: 80 },
+    keepNext: true,
+  });
+}
 
-  if (!rows.length) return null;
-
+// ── Tabella generica chiave/valore (2 colonne) ──────────────────────────────
+function kvTable(rows) {
+  const visible = rows.filter(([, v]) => v != null && String(v).trim() !== "");
+  if (!visible.length) return null;
   return new Table({
     width: { size: 9000, type: WidthType.DXA },
-    rows: rows.map(([label, value], i) => new TableRow({
+    rows: visible.map(([label, value], i) => new TableRow({
       children: [
         new TableCell({
           width: { size: 3000, type: WidthType.DXA },
@@ -177,22 +176,75 @@ function buildServizioTable(data) {
   });
 }
 
-// ── Sezione 2: compiti (lista puntata) ──────────────────────────────────────
-function buildCompitiBlocks(compiti) {
-  const lines = String(compiti || "")
-    .split(/\r?\n/)
-    .map((s) => s.replace(/^\s*[-*•]\s+/, "").replace(/^\s*\d+[\.\)]\s+/, "").trim())
+// ── SEZ 1 — Dati del servizio ───────────────────────────────────────────────
+function buildServizioTable(data) {
+  return kvTable([
+    ["Codice servizio", data.codice],
+    ["Numero cliente", data.numero_cliente],
+    ["Cliente / Committente", data.cliente],
+    ["Luogo / Indirizzo", data.luogo],
+    ["Data", data.data],
+    ["Orario", [data.orario_inizio, data.orario_fine].filter(Boolean).join(" – ")],
+    ["Tipo di servizio", data.tipo_servizio],
+    ["Numero agenti", data.num_agenti],
+    ["Note", data.note_dati],
+  ]);
+}
+
+// ── SEZ 3 — Compiti (lista puntata) ─────────────────────────────────────────
+function compitiList(compiti) {
+  const lines = (Array.isArray(compiti) ? compiti : String(compiti || "").split(/\r?\n/))
+    .map((s) => String(s).replace(/^\s*[-*•]\s+/, "").replace(/^\s*\d+[\.\)]\s+/, "").trim())
     .filter(Boolean);
-  if (!lines.length) {
-    return [para([txt("(Nessun compito specificato)", { italics: true, color: MUTED, size: 18 })], { spacing: { after: 60 } })];
-  }
+  if (!lines.length) return null;
   return lines.map((l) => para([txt(l, { size: 20, color: TEXT })], {
-    bullet: { level: 0 },
-    spacing: { after: 60 },
+    bullet: { level: 0 }, spacing: { after: 60 },
   }));
 }
 
-// ── Sezione 3: referenti (tabella) ──────────────────────────────────────────
+// ── SEZ 4 — Pericoli particolari (tabella 3 colonne) ────────────────────────
+function buildPericoliTable(pericoli) {
+  const list = (pericoli || []).filter((r) =>
+    [r.pericolo, r.conseguenze, r.misure].some((v) => v && String(v).trim() !== "")
+  );
+  if (!list.length) return null;
+  const headers = ["Pericolo", "Conseguenze", "Misure di protezione"];
+  const headerRow = new TableRow({
+    tableHeader: true,
+    children: headers.map((h) => new TableCell({
+      shading: { type: ShadingType.CLEAR, color: "auto", fill: NAVY },
+      children: [para([txt(h, { bold: true, color: "FFFFFF", size: 18 })], { spacing: { after: 0 } })],
+    })),
+  });
+  const bodyRows = list.map((r, i) => new TableRow({
+    children: [r.pericolo, r.conseguenze, r.misure].map((c) => new TableCell({
+      width: { size: 3000, type: WidthType.DXA },
+      shading: { type: ShadingType.CLEAR, color: "auto", fill: i % 2 === 0 ? "FFFFFF" : "F9FBFD" },
+      children: [para([txt(c || "", { size: 18 })], { spacing: { after: 0 } })],
+    })),
+  }));
+  return new Table({
+    width: { size: 9000, type: WidthType.DXA },
+    rows: [headerRow, ...bodyRows],
+    borders: defaultBorders(),
+  });
+}
+
+// ── SEZ 5 — Dettagli operativi (tabella chiave/valore) ──────────────────────
+function buildDettagliTable(data) {
+  const equip = Array.isArray(data.equipaggiamento)
+    ? data.equipaggiamento.map((s) => String(s).trim()).filter(Boolean).join(", ")
+    : (data.equipaggiamento || "");
+  return kvTable([
+    ["Divisa / Tenue", data.divisa],
+    ["Equipaggiamento", equip],
+    ["Canale radio", data.radio_canale],
+    ["Vettovagliamento", data.vettovagliamento],
+    ["Punto di incontro / Parcheggio", data.parcheggio],
+  ]);
+}
+
+// ── SEZ 6 — Referenti (tabella) ─────────────────────────────────────────────
 function buildReferentiTable(referenti) {
   const list = (referenti || []).filter((r) =>
     [r.nome, r.ruolo, r.telefono, r.email].some((v) => v && String(v).trim() !== "")
@@ -244,29 +296,72 @@ function buildReferentiTable(referenti) {
   });
 }
 
+const VALIDITA_TEXT = "Queste prescrizioni particolari di servizio sono parte integrante della conferma d'ordine e regolano tutti i punti non contemplati o divergenti dalle prescrizioni generali per la sorveglianza.";
+
 // ── Funzione principale ─────────────────────────────────────────────────────
-// data = {
-//   titolo, cliente, luogo, data, orarioInizio, orarioFine, tipoServizio,
-//   numAgenti, note, compiti (string multilinea),
-//   referenti: [{ nome, ruolo, telefono, email }]
-// }
+// data = struttura "contenuto" del wizard (snake_case):
+// { codice, numero_cliente, cliente, luogo, data, orario_inizio, orario_fine,
+//   tipo_servizio, num_agenti, note_dati, situazione, compiti[], differenze_pgs,
+//   pericoli[], divisa, equipaggiamento[], radio_canale, vettovagliamento,
+//   parcheggio, note_operative, referenti[] }
 export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
   const logoBytes = await resolveLogoBytes(headerLogoUrl);
 
   const children = [];
   children.push(...titleBlock(data));
 
+  // SEZ 1 — Dati del servizio
   children.push(sectionHeading("1", "Dati del servizio"));
   const servTable = buildServizioTable(data);
   if (servTable) { children.push(servTable); children.push(spacer()); }
   else children.push(para([txt("(Nessun dato del servizio inserito)", { italics: true, color: MUTED, size: 18 })], { spacing: { after: 120 } }));
 
-  children.push(sectionHeading("2", "Compiti del personale"));
-  children.push(...buildCompitiBlocks(data.compiti));
+  // SEZ 2 — Situazione (omessa se vuota)
+  if (data.situazione && String(data.situazione).trim()) {
+    children.push(sectionHeading("2", "Situazione"));
+    for (const line of String(data.situazione).split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
+      children.push(para([txt(line, { size: 20, color: TEXT })], { spacing: { after: 100 } }));
+    }
+    children.push(spacer());
+  }
+
+  // SEZ 3 — Compiti del personale
+  children.push(sectionHeading("3", "Compiti del personale"));
+  const compiti = compitiList(data.compiti);
+  if (compiti) children.push(...compiti);
+  else children.push(para([txt("(Nessun compito specificato)", { italics: true, color: MUTED, size: 18 })], { spacing: { after: 60 } }));
+  if (data.differenze_pgs && String(data.differenze_pgs).trim()) {
+    children.push(subHeading("Differenze rispetto alle PGS"));
+    for (const line of String(data.differenze_pgs).split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
+      children.push(para([txt(line, { size: 20, color: TEXT })], { spacing: { after: 100 } }));
+    }
+  }
   children.push(spacer());
 
-  children.push(sectionHeading("3", "Referenti"));
+  // SEZ 4 — Pericoli particolari (omessa se nessuna riga)
+  const pericoliTable = buildPericoliTable(data.pericoli);
+  if (pericoliTable) {
+    children.push(sectionHeading("4", "Pericoli particolari"));
+    children.push(pericoliTable);
+    children.push(spacer());
+  }
+
+  // SEZ 5 — Dettagli operativi (omessa se nessun valore)
+  const dettagliTable = buildDettagliTable(data);
+  if (dettagliTable) {
+    children.push(sectionHeading("5", "Dettagli operativi"));
+    children.push(dettagliTable);
+    children.push(spacer());
+  }
+
+  // SEZ 6 — Referenti
+  children.push(sectionHeading("6", "Referenti"));
   children.push(buildReferentiTable(data.referenti));
+  children.push(spacer());
+
+  // SEZ 7 — Validità
+  children.push(sectionHeading("7", "Validità"));
+  children.push(para([txt(VALIDITA_TEXT, { size: 20, color: TEXT })], { spacing: { after: 60 } }));
 
   const sectionOpts = {
     properties: {
@@ -281,7 +376,7 @@ export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
 
   const doc = new Document({
     creator: "DELTAgroup CS",
-    title: `PPS - ${data.titolo || ""}`,
+    title: `PPS - ${data.codice || data.cliente || ""}`,
     description: "PPS — Prescrizioni Particolari di Servizio generato da DELTAgroup CS",
     styles: {
       default: {
@@ -289,6 +384,10 @@ export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
         heading1: {
           run: { font: "Arial", size: 26, bold: true, color: NAVY },
           paragraph: { spacing: { before: 240, after: 140 }, keepNext: true },
+        },
+        heading2: {
+          run: { font: "Arial", size: 22, bold: true, color: NAVY },
+          paragraph: { spacing: { before: 160, after: 80 }, keepNext: true },
         },
       },
     },
