@@ -1,6 +1,6 @@
-const { createClient } = require('@supabase/supabase-js')
+import { createClient } from '@supabase/supabase-js'
 
-module.exports = async (req, res) => {
+export default async function (req, res) {
   console.log('URL:', process.env.VITE_SUPABASE_URL ? 'presente' : 'MANCANTE')
   console.log('KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'presente' : 'MANCANTE')
   res.setHeader('Access-Control-Allow-Origin', '*')
