@@ -69,6 +69,31 @@ async function resolveLogoBytes(headerLogoUrl) {
   return null;
 }
 
+async function getImageDimensions(bytes, fallback = { w: 800, h: 600 }) {
+  if (!bytes || typeof Image === "undefined") return fallback;
+  try {
+    const blob = new Blob([bytes]);
+    const url = URL.createObjectURL(blob);
+    const dims = await new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => resolve({ w: img.naturalWidth, h: img.naturalHeight });
+      img.onerror = () => resolve(fallback);
+      img.src = url;
+    });
+    URL.revokeObjectURL(url);
+    return dims;
+  } catch (e) {
+    return fallback;
+  }
+}
+
+// Adatta l'immagine alla larghezza massima (px) mantenendo le proporzioni.
+function fitImage(w, h, maxW = 500) {
+  if (!w || !h) return { width: maxW, height: Math.round(maxW * 0.66) };
+  if (w <= maxW) return { width: Math.round(w), height: Math.round(h) };
+  return { width: maxW, height: Math.round((h / w) * maxW) };
+}
+
 // ── Header / Footer (mirror di buildDocx.js) ────────────────────────────────
 // Header in stile DELTAgroup: tabella 2 colonne (logo a sx con bordo destro,
 // dati servizio a dx allineati a destra) + divisore con bordo inferiore blu.
@@ -389,6 +414,23 @@ export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
   // Validità (sempre presente)
   children.push(heading("Validità"));
   children.push(para([txt(VALIDITA_TEXT, { size: 20, color: TEXT })], { spacing: { after: 60 } }));
+
+  // Allegati — Foto sopralluogo (omessa se nessuna foto)
+  const foto = Array.isArray(data.foto) ? data.foto.filter((p) => p && p.url) : [];
+  if (foto.length) {
+    children.push(heading("Allegati — Foto sopralluogo"));
+    for (const ph of foto) {
+      const bytes = await fetchAsBytes(ph.url);
+      if (!bytes) continue;
+      if (ph.didascalia && String(ph.didascalia).trim()) {
+        children.push(para([txt(ph.didascalia, { bold: true, size: 20, color: NAVY })], { spacing: { after: 40 } }));
+      }
+      const dims = await getImageDimensions(bytes);
+      const fit = fitImage(dims.w, dims.h, 500);
+      children.push(para([new ImageRun({ data: bytes, transformation: fit, type: "jpg" })], { spacing: { after: 120 } }));
+      children.push(spacer());
+    }
+  }
 
   const sectionOpts = {
     properties: {

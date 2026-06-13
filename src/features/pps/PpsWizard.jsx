@@ -23,7 +23,7 @@ const OK = "#16a34a";
 const SANS = { fontFamily: "system-ui, -apple-system, sans-serif" };
 const SERIF = { fontFamily: "Georgia, 'Times New Roman', serif" };
 
-const STEPS = ["Dati servizio", "Situazione", "Compiti", "Pericoli", "Dettagli", "Referenti"];
+const STEPS = ["Dati servizio", "Situazione", "Compiti", "Pericoli", "Dettagli", "Referenti", "Allegati"];
 
 const TIPI_SERVIZIO = [
   "Pattuglia / Ronda", "Controllo accessi", "Sorveglianza fissa", "Evento", "Altro",
@@ -42,6 +42,7 @@ const INIT = {
   divisa: "", equipaggiamento: [""], radio_canale: "",
   vettovagliamento: "", parcheggio: "", note_operative: "",
   referenti: [{ nome: "", ruolo: "", telefono: "", email: "" }],
+  foto: [],
 };
 
 // Retrocompatibilità: mappa un "contenuto" (anche vecchio formato) sullo schema nuovo.
@@ -59,6 +60,7 @@ function normalizeLoaded(c) {
   const referenti = Array.isArray(c.referenti) && c.referenti.length
     ? c.referenti.map((r) => ({ nome: r.nome ?? "", ruolo: r.ruolo ?? "", telefono: r.telefono ?? "", email: r.email ?? "" }))
     : [{ nome: "", ruolo: "", telefono: "", email: "" }];
+  const foto = Array.isArray(c.foto) ? c.foto.filter((p) => p && p.url).map((p) => ({ url: p.url, didascalia: p.didascalia ?? "" })) : [];
   return {
     codice: c.codice ?? "",
     numero_cliente: c.numero_cliente ?? c.numeroCliente ?? "",
@@ -81,7 +83,38 @@ function normalizeLoaded(c) {
     parcheggio: c.parcheggio ?? "",
     note_operative: c.note_operative ?? "",
     referenti,
+    foto,
   };
+}
+
+// Ridimensiona un file immagine a max `maxSide` px (lato lungo) e lo esporta
+// come Blob JPEG con la qualità indicata, tramite canvas.
+function resizeImage(file, maxSide = 1200, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+      if (width >= height && width > maxSide) { height = Math.round((height * maxSide) / width); width = maxSide; }
+      else if (height > width && height > maxSide) { width = Math.round((width * maxSide) / height); height = maxSide; }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, width, height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("conversione immagine fallita"))), "image/jpeg", quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("immagine non valida")); };
+    img.src = url;
+  });
+}
+
+// Ricava il path nello storage dall'URL pubblico (.../pps-foto/<path>).
+function pathFromUrl(url) {
+  if (!url) return null;
+  const marker = "/pps-foto/";
+  const i = url.indexOf(marker);
+  return i >= 0 ? decodeURIComponent(url.slice(i + marker.length)) : null;
 }
 
 // ── Componenti UI di base (top-level) ───────────────────────────────────────
@@ -213,6 +246,9 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState(null);
   const handledIdRef = useRef(null);
+  const fileRef = useRef(null);
+  const [uploading, setUploading] = useState(false);
+  const [upErr, setUpErr] = useState(null);
 
   // Caricamento PPS esistente / reset per nuova PPS
   useEffect(() => {
@@ -256,6 +292,57 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
   const uRef = (i, k, v) => u("referenti", f.referenti.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addRef = () => u("referenti", [...f.referenti, { nome: "", ruolo: "", telefono: "", email: "" }]);
   const delRef = (i) => u("referenti", f.referenti.filter((_, idx) => idx !== i));
+
+  // foto / allegati (Supabase Storage: bucket "pps-foto")
+  const persistFoto = async (newFoto) => {
+    if (!localId) return;
+    const { error } = await supabase.from("pps").update({ contenuto: { ...f, foto: newFoto } }).eq("id", localId);
+    if (error) setUpErr(`Salvataggio foto non riuscito: ${error.message}`);
+  };
+  const handleFiles = async (fileList) => {
+    setUpErr(null);
+    if (!localId) return;
+    const files = Array.from(fileList || []).slice(0, Math.max(0, 5 - f.foto.length));
+    if (!files.length) return;
+    setUploading(true);
+    let current = [...f.foto];
+    try {
+      for (const file of files) {
+        const blob = await resizeImage(file, 1200, 0.85);
+        const safe = (file.name || "foto.jpg").replace(/[^a-zA-Z0-9_.\-]/g, "_");
+        const path = `${localId}/${Date.now()}-${safe}`;
+        const { error: upError } = await supabase.storage.from("pps-foto").upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        if (upError) throw upError;
+        const { data: pub } = supabase.storage.from("pps-foto").getPublicUrl(path);
+        current = [...current, { url: pub.publicUrl, didascalia: "" }];
+      }
+      u("foto", current);
+      await persistFoto(current);
+    } catch (e) {
+      console.error("[PpsWizard] upload", e);
+      setUpErr(`Upload fallito: ${e.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+  const removeFoto = async (idx) => {
+    setUpErr(null);
+    const ph = f.foto[idx];
+    try {
+      const path = pathFromUrl(ph?.url);
+      if (path) {
+        const { error } = await supabase.storage.from("pps-foto").remove([path]);
+        if (error) throw error;
+      }
+      const newFoto = f.foto.filter((_, i) => i !== idx);
+      u("foto", newFoto);
+      await persistFoto(newFoto);
+    } catch (e) {
+      console.error("[PpsWizard] remove foto", e);
+      setUpErr(`Eliminazione foto non riuscita: ${e.message}`);
+    }
+  };
+  const setDidascalia = (idx, val) => u("foto", f.foto.map((x, i) => (i === idx ? { ...x, didascalia: val } : x)));
 
   const doAiSituazione = async () => {
     setAiSit(true); setErr(null);
@@ -466,6 +553,59 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
                 </div>
               ))}
               <Btn variant="ghost" on={addRef}>+ Aggiungi referente</Btn>
+            </div>
+          )}
+
+          {/* STEP 7 — Allegati / Foto */}
+          {step === 6 && (
+            <div>
+              <div style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: TM, marginBottom: "10px" }}>Foto sopralluogo (max 5)</div>
+              {!localId ? (
+                <div style={{ ...SANS, padding: "16px", background: GL, borderRadius: "10px", color: TM, fontSize: "13px", lineHeight: 1.6 }}>
+                  Salva prima la PPS (pulsante <b>💾 Salva</b> in alto) per poter caricare le foto.
+                </div>
+              ) : (
+                <div>
+                  <div
+                    onClick={() => { if (f.foto.length < 5 && !uploading) fileRef.current?.click(); }}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={(e) => { e.preventDefault(); if (f.foto.length < 5 && !uploading) handleFiles(e.dataTransfer.files); }}
+                    style={{
+                      border: `2px dashed ${f.foto.length >= 5 ? GB : AC}`, borderRadius: "12px",
+                      padding: "30px", textAlign: "center", ...SANS, fontSize: "13px", fontWeight: 600,
+                      cursor: (f.foto.length >= 5 || uploading) ? "not-allowed" : "pointer",
+                      background: f.foto.length >= 5 ? "#f7f8fa" : "#f8faff",
+                      color: f.foto.length >= 5 ? GR : AC,
+                    }}>
+                    {uploading ? "Caricamento in corso…"
+                      : f.foto.length >= 5 ? "Massimo 5 foto"
+                      : "Trascina le foto qui o clicca per selezionare"}
+                  </div>
+                  <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" multiple
+                    style={{ display: "none" }} onChange={(e) => { handleFiles(e.target.files); e.target.value = ""; }} />
+
+                  {upErr && (
+                    <div style={{ ...SANS, marginTop: "12px", padding: "10px 12px", background: "#fdeced", border: `1px solid ${ERR}55`, borderRadius: "8px", color: ERR, fontSize: "12.5px" }}>
+                      {upErr}
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
+                    {f.foto.map((ph, i) => (
+                      <div key={i} style={{ display: "flex", gap: "12px", alignItems: "center", border: `1px solid ${GB}`, borderRadius: "10px", padding: "10px", background: WH }}>
+                        <img src={ph.url} alt="" style={{ width: "120px", height: "80px", objectFit: "cover", borderRadius: "6px", flexShrink: 0, border: `1px solid ${GB}` }} />
+                        <input value={ph.didascalia || ""} placeholder="Didascalia (es. Ingresso principale)"
+                          onChange={(e) => setDidascalia(i, e.target.value)} onBlur={() => persistFoto(f.foto)} style={inpStyle} />
+                        <button onClick={() => removeFoto(i)} title="Elimina"
+                          style={{ ...SANS, flexShrink: 0, width: "34px", height: "34px", borderRadius: "8px", border: `1px solid ${GB}`, background: WH, color: ERR, cursor: "pointer", fontSize: "16px", fontWeight: 700 }}>×</button>
+                      </div>
+                    ))}
+                    {f.foto.length === 0 && (
+                      <div style={{ ...SANS, fontSize: "12px", color: GR }}>Nessuna foto caricata.</div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
