@@ -7,7 +7,7 @@ import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   HeadingLevel, AlignmentType, ImageRun, Header, Footer,
   BorderStyle, WidthType, ShadingType, PageNumber, PageOrientation,
-  VerticalAlign,
+  VerticalAlign, TableLayoutType,
 } from "docx";
 
 // ── PALETTE (hex senza #) — allineata a buildDocx.js ────────────────────────
@@ -107,6 +107,7 @@ function buildHeader(logoBytes, data = {}) {
   const headerTable = new Table({
     width: { size: 10206, type: WidthType.DXA },
     columnWidths: [3600, 6606],
+    layout: TableLayoutType.FIXED,
     borders: noBorders(),
     rows: [
       new TableRow({
@@ -195,6 +196,7 @@ function kvTable(rows) {
   return new Table({
     width: { size: TBL_W, type: WidthType.DXA },
     columnWidths: COLS_KV,
+    layout: TableLayoutType.FIXED,
     rows: visible.map(([label, value]) => new TableRow({
       children: [
         new TableCell({
@@ -264,6 +266,7 @@ function buildPericoliTable(pericoli) {
   return new Table({
     width: { size: TBL_W, type: WidthType.DXA },
     columnWidths: COLS_PER,
+    layout: TableLayoutType.FIXED,
     rows: [headerRow, ...bodyRows],
     borders: defaultBorders(),
   });
@@ -302,6 +305,7 @@ function buildReferentiTable(referenti) {
     return new Table({
       width: { size: TBL_W, type: WidthType.DXA },
       columnWidths: COLS_REF,
+      layout: TableLayoutType.FIXED,
       rows: [headerRow, new TableRow({
         children: [new TableCell({
           columnSpan: 4,
@@ -339,6 +343,7 @@ function buildReferentiTable(referenti) {
   return new Table({
     width: { size: TBL_W, type: WidthType.DXA },
     columnWidths: COLS_REF,
+    layout: TableLayoutType.FIXED,
     rows: [headerRow, ...bodyRows],
     borders: defaultBorders(),
   });
