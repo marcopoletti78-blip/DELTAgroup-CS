@@ -144,7 +144,6 @@ function sectionHeading(num, title) {
     children: [txt(`${num}  ${title}`, { bold: true, color: NAVY, size: 22 })],
     shading: { type: ShadingType.CLEAR, color: "auto", fill: "EEF2FF" },
     spacing: { before: 80, after: 80 },
-    border: { left: { style: BorderStyle.SINGLE, size: 16, color: "1E40AF" } },
     keepNext: true,
   });
 }
