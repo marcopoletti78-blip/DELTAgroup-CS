@@ -3322,24 +3322,18 @@ function Home({ onNew, onMod, onPps }) {
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px",alignItems:"stretch"}}>
           {/* CARD SINISTRA — Concetti di Sicurezza */}
           <HomeCard accent={AC}>
-            <div style={{...SERIF,fontSize:"22px",fontWeight:"700",color:N,marginBottom:"2px"}}>Concetti di Sicurezza</div>
-            <div style={{...SANS,fontSize:"12px",fontWeight:"700",letterSpacing:"0.14em",color:AC,marginBottom:"18px"}}>CS</div>
-            <div style={{...SANS,fontSize:"13px",color:TM,lineHeight:1.6,marginBottom:"20px"}}>
-              Crea o aggiorna i concetti di sicurezza per i tuoi eventi, con lo standard DELTAgroup.
-            </div>
+            <div style={{...SERIF,fontSize:"26px",fontWeight:"700",color:N,marginBottom:"4px",lineHeight:1.15}}>Concetti di Sicurezza</div>
+            <div style={{...SANS,fontSize:"13px",fontWeight:"600",color:AC,marginBottom:"22px"}}>CS</div>
             <div style={{display:"flex",flexDirection:"column",gap:"10px",marginTop:"auto"}}>
               <Btn ch="Nuovo Concetto" on={onNew} variant="red" full/>
-              <Btn ch="Modifica Esistente" on={onMod} variant="ghost" full/>
+              <Btn ch="Modifica Esistente" on={onMod} variant="ghost" full style={{border:`1px solid ${AC}`,color:AC}}/>
             </div>
           </HomeCard>
           {/* CARD DESTRA — PPS */}
           <HomeCard accent={AC}>
-            <div style={{...SERIF,fontSize:"40px",fontWeight:"700",color:AC,marginBottom:"2px",lineHeight:1}}>PPS</div>
-            <div style={{...SANS,fontSize:"13px",fontWeight:"600",color:N,marginBottom:"18px"}}>Prescrizioni Particolari di Servizio</div>
-            <div style={{...SANS,fontSize:"13px",color:TM,lineHeight:1.6,marginBottom:"20px"}}>
-              Documento sintetico (1-2 pagine): dati del servizio, compiti del personale e referenti.
-            </div>
-            <div style={{marginTop:"auto"}}>
+            <div style={{...SERIF,fontSize:"26px",fontWeight:"700",color:N,marginBottom:"4px",lineHeight:1.15}}>PPS</div>
+            <div style={{...SANS,fontSize:"13px",fontWeight:"600",color:AC,marginBottom:"22px"}}>Prescrizioni Particolari di Servizio</div>
+            <div style={{display:"flex",flexDirection:"column",gap:"10px",marginTop:"auto"}}>
               <Btn ch="Crea / Apri PPS" on={onPps} variant="red" full/>
             </div>
           </HomeCard>
