@@ -4,6 +4,8 @@ import { generateDocxBlob } from "./buildDocx";
 import { saveAs } from "file-saver";
 import PpsWizard from "./features/pps/PpsWizard";
 import PpsList from "./features/pps/PpsList";
+import CsList from "./features/cs/CsList";
+import { supabase } from "./supabaseClient";
 
 // ── PALETTE ──────────────────────────────────────────────────────────────────
 const N = "#0c1d3d";    // navy
@@ -1899,6 +1901,67 @@ function newSectionId() {
     : `sec_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// ── Storico CS: mapping riga Supabase (cs_documenti) ↔ stato Editor ──────────
+// Il documento CS completo è salvato in contenuto.data (con s1..s6, eventSettings,
+// allegati…); sezioni/ordine/override sono in contenuto.
+function buildLoadedDataFromRow(row) {
+  const c = (row && row.contenuto) || {};
+  if (c.data && typeof c.data === "object") return c.data;
+  // Fallback minimale (documenti salvati senza data completo)
+  return {
+    nomeEvento: row?.nome_evento || "",
+    luogo: row?.luogo || "",
+    anno: row?.anno || "",
+    eventSettings: row?.evento || null,
+    allegato1Files: [],
+    allegato2Files: [],
+  };
+}
+
+function buildLoadedContentFromRow(row) {
+  const c = (row && row.contenuto) || {};
+  const cs = Array.isArray(c.customSections) ? c.customSections.map(normalizeCustomSection).filter(Boolean) : [];
+  const rawOrder = Array.isArray(c.sectionOrder) && c.sectionOrder.length ? c.sectionOrder : [...DEFAULT_SECTION_ORDER];
+  return {
+    customSections: cs,
+    sectionOrder: normalizeSectionOrder(rawOrder, cs),
+    presetOverrides: (c.presetOverrides && typeof c.presetOverrides === "object") ? c.presetOverrides : {},
+    presetDeletedItems: (c.presetDeletedItems && typeof c.presetDeletedItems === "object") ? c.presetDeletedItems : {},
+    presetSubOrder: (c.presetSubOrder && typeof c.presetSubOrder === "object") ? c.presetSubOrder : {},
+  };
+}
+
+// Loader del documento CS da Supabase (view "cs-load"). Top-level.
+function CsLoader({ id, onLoaded, onBack }) {
+  const [err, setErr] = useState(null);
+  React.useEffect(() => {
+    let active = true;
+    if (!id) { setErr("Documento non valido."); return; }
+    (async () => {
+      const { data, error } = await supabase.from("cs_documenti").select("*").eq("id", id).single();
+      if (!active) return;
+      if (error) { setErr(`Errore nel caricamento del documento: ${error.message}`); return; }
+      onLoaded(data);
+    })();
+    return () => { active = false; };
+  }, [id]);
+
+  return (
+    <div style={{ minHeight: "calc(100vh - 60px)", display: "flex", alignItems: "center", justifyContent: "center", background: BG, padding: "40px" }}>
+      <div style={{ textAlign: "center", ...SANS }}>
+        {err ? (
+          <>
+            <div style={{ color: RD, fontSize: "14px", marginBottom: "14px" }}>{err}</div>
+            <button onClick={onBack} style={{ ...SANS, padding: "9px 18px", border: `1px solid ${GB}`, borderRadius: "8px", background: WH, color: N, cursor: "pointer", fontWeight: 700 }}>← Torna all'archivio</button>
+          </>
+        ) : (
+          <div style={{ color: TM, fontSize: "15px" }}>Caricamento documento…</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 const PRESET_SECTION_SHORT = {
   ps1: "Responsabilità",
   ps2: "Descrizione",
@@ -1913,8 +1976,8 @@ const ALL12_SHORT = {
   all2: "Planimetria agenti",
 };
 
-function Editor({ data: initialData, onBack }) {
-  const persisted = loadPersistedSections(initialData.nomeEvento);
+function Editor({ data: initialData, onBack, csDocId = null, setCsDocId, loadedContent = null }) {
+  const persisted = loadedContent || loadPersistedSections(initialData.nomeEvento);
   const [data, setData] = useState({...initialData, allegato1Files: initialData.allegato1Files||[], allegato2Files: initialData.allegato2Files||[]});
   const [customSections, setCustomSections] = useState(persisted.customSections);
   const [sectionOrder, setSectionOrder] = useState(persisted.sectionOrder);
@@ -1946,6 +2009,9 @@ function Editor({ data: initialData, onBack }) {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [settingsStep, setSettingsStep] = useState(0);
   const [settingsDraft, setSettingsDraft] = useState(null);
+  const [csId, setCsId] = useState(csDocId ?? null);
+  const [csSaving, setCsSaving] = useState(false);
+  const [csSaveMsg, setCsSaveMsg] = useState(null);
   const addRef = React.useRef();
   const all2Ref = React.useRef();
   const all1Ref = React.useRef();
@@ -2711,6 +2777,40 @@ Restituisci \`customSections\` completo (esistenti + nuovi) nel JSON di risposta
     await runEdit(editMsg, [], newData);
   };
 
+  // ── Salvataggio su Supabase (tabella cs_documenti) ──────────────────────────
+  // In parallelo al salvataggio localStorage esistente (che resta invariato).
+  const doSaveCs = async () => {
+    setCsSaving(true); setErr(null); setCsSaveMsg(null);
+    try {
+      const es = data.eventSettings || {};
+      const csData = {
+        nome_evento: data.nomeEvento || es.name || "",
+        luogo: data.luogo || es.luogo || "",
+        anno: data.anno || es.anno || "",
+        tipo_evento: es.tipo || "",
+        stato: "bozza",
+        versione: 1,
+        evento: { ...es },
+        contenuto: { customSections, sectionOrder, presetOverrides, presetDeletedItems, presetSubOrder, data },
+      };
+      if (!csId) {
+        const { data: row, error } = await supabase.from("cs_documenti").insert([csData]).select().single();
+        if (error) throw error;
+        setCsId(row.id);
+        setCsDocId?.(row.id);
+      } else {
+        const { error } = await supabase.from("cs_documenti").update(csData).eq("id", csId);
+        if (error) throw error;
+      }
+      setCsSaveMsg("Salvato ✓");
+    } catch (e) {
+      console.error("[Editor] save CS", e);
+      setErr(`Errore salvataggio CS: ${e.message}`);
+    } finally {
+      setCsSaving(false);
+    }
+  };
+
   const buildPrintHTML = () => {
     const el = document.getElementById("doc-preview");
     if (!el) return "";
@@ -2895,7 +2995,10 @@ ${flowParts}
         {/* Top bar */}
         <div style={{padding:"12px 16px",borderBottom:`1px solid ${GB}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:N,position:"relative"}}>
           <button onClick={onBack} style={{...SANS,fontSize:"12px",color:"rgba(255,255,255,0.75)",background:"none",border:"none",cursor:"pointer",padding:0}}>← Indietro</button>
-          <div style={{position:"relative"}}>
+          <div style={{display:"flex",alignItems:"center",gap:"8px"}}>
+            {csSaveMsg && <span style={{...SANS,fontSize:"11px",fontWeight:"700",color:"#86efac"}}>{csSaveMsg}</span>}
+            <button onClick={doSaveCs} disabled={csSaving} style={{...SANS,fontSize:"12px",padding:"6px 12px",background:WH,color:N,border:"none",borderRadius:"6px",cursor:csSaving?"wait":"pointer",fontWeight:"700"}}>{csSaving?"Salvo…":"💾 Salva"}</button>
+            <div style={{position:"relative"}}>
             <button onClick={()=>setShowSave(s=>!s)} style={{...SANS,fontSize:"12px",padding:"6px 12px",background:AC,color:WH,border:"none",borderRadius:"6px",cursor:"pointer",fontWeight:"600",display:"flex",alignItems:"center",gap:"5px"}}>
               🖨️ Stampa / Salva <span style={{fontSize:"10px"}}>▼</span>
             </button>
@@ -2915,6 +3018,7 @@ ${flowParts}
                 </button>
               </div>
             )}
+            </div>
           </div>
         </div>
 
@@ -3381,7 +3485,7 @@ function LandingHome({ onCs, onPps }) {
 }
 
 // ── HOME CS (stile LandingHome) ───────────────────────────────────────────────
-function CsHome({ onNew, onMod, onBack }) {
+function CsHome({ onNew, onMod, onBack, onArchive }) {
   const [hov1, setHov1] = useState(false);
   const [hov2, setHov2] = useState(false);
 
@@ -3452,6 +3556,10 @@ function CsHome({ onNew, onMod, onBack }) {
         </div>
       </div>
 
+      <div style={{textAlign:"center",paddingBottom:"4px"}}>
+        <button onClick={onArchive} style={{...SANS,background:"transparent",border:"1px solid #1E40AF",color:"#1E40AF",borderRadius:"9px",padding:"10px 22px",fontSize:"14px",fontWeight:"700",cursor:"pointer"}}>📂 Apri Archivio</button>
+      </div>
+
       <div style={{borderTop:"1px solid #D1D9F0",padding:"20px 40px",textAlign:"center",fontSize:"11.5px",color:"#94A3B8",...SANS}}>
         DELTAgroup Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 919 214 949 · TICINO@delta.ch
       </div>
@@ -3499,6 +3607,8 @@ export default function App() {
   const [view, setView] = useState("home");
   const [doc, setDoc] = useState(null);
   const [ppsId, setPpsId] = useState(null);
+  const [csDocId, setCsDocId] = useState(null);
+  const [csLoadedContent, setCsLoadedContent] = useState(null);
   // Prevenzione globale apertura file da drag fuori dalle dropzone
   React.useEffect(() => {
     const stop = (e) => e.preventDefault();
@@ -3506,14 +3616,26 @@ export default function App() {
     document.addEventListener("drop", stop);
     return () => { document.removeEventListener("dragover", stop); document.removeEventListener("drop", stop); };
   }, []);
-  const done = (data) => { setDoc(data); setView("preview"); };
+  const done = (data) => { setDoc(data); setCsDocId(null); setCsLoadedContent(null); setView("preview"); };
   return (
     <div style={{minHeight:"100vh",background:BG}}>
       {view!=="home"&&<Header onHome={()=>setView("home")}/>}
       {view==="home"&&<LandingHome onCs={()=>setView("cs-home")} onPps={()=>setView("pps-list")}/>}
-      {view==="cs-home"&&<CsHome onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onBack={()=>setView("home")}/>}
+      {view==="cs-home"&&<CsHome onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onBack={()=>setView("home")} onArchive={()=>setView("cs-list")}/>}
       {view==="wizard"&&<Wizard onBack={()=>setView("home")} onDone={done}/>}
       {view==="modify"&&<Modify onBack={()=>setView("home")} onDone={done}/>}
+      {view==="cs-list"&&
+        <CsList
+          onNew={()=>{ setCsDocId(null); setCsLoadedContent(null); setView("cs-home"); }}
+          onOpen={(id)=>{ setCsDocId(id); setView("cs-load"); }}
+          onBack={()=>setView("home")}
+        />}
+      {view==="cs-load"&&
+        <CsLoader
+          id={csDocId}
+          onBack={()=>setView("cs-list")}
+          onLoaded={(row)=>{ setDoc(buildLoadedDataFromRow(row)); setCsLoadedContent(buildLoadedContentFromRow(row)); setCsDocId(row.id); setView("preview"); }}
+        />}
       {view==="pps-list"&&
         <PpsList
           onNew={()=>{ setPpsId(null); setView("pps-edit"); }}
@@ -3526,7 +3648,7 @@ export default function App() {
           onBack={()=>setView("pps-list")}
           onSaved={(id)=>setPpsId(id)}
         />}
-      {view==="preview"&&<Editor data={doc} onBack={()=>setView("home")}/>}
+      {view==="preview"&&<Editor data={doc} onBack={()=>setView("home")} csDocId={csDocId} setCsDocId={setCsDocId} loadedContent={csLoadedContent}/>}
     </div>
   );
 }
