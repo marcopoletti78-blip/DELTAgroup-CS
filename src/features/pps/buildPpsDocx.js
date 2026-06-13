@@ -80,20 +80,20 @@ function buildHeader(logoBytes, data = {}) {
     : [para([], { spacing: { after: 0 } })];
 
   const headerTable = new Table({
-    width: { size: 9026, type: WidthType.DXA },
-    columnWidths: [3200, 5826],
+    width: { size: 10206, type: WidthType.DXA },
+    columnWidths: [3600, 6606],
     borders: noBorders(),
     rows: [
       new TableRow({
         children: [
           new TableCell({
-            width: { size: 3200, type: WidthType.DXA },
+            width: { size: 3600, type: WidthType.DXA },
             verticalAlign: VerticalAlign.CENTER,
             borders: { ...noBorders(), right: { style: BorderStyle.SINGLE, size: 8, color: "cccccc" } },
             children: leftChildren,
           }),
           new TableCell({
-            width: { size: 5826, type: WidthType.DXA },
+            width: { size: 6606, type: WidthType.DXA },
             verticalAlign: VerticalAlign.CENTER,
             borders: noBorders(),
             margins: { left: 200 },
@@ -137,30 +137,31 @@ function buildFooter() {
   });
 }
 
+// Intestazione di sezione: stile a "etichetta" (shading + bordo sinistro),
+// senza HeadingLevel per non generare voci di sommario.
 function sectionHeading(num, title) {
   return new Paragraph({
-    children: [txt(`${num}  ${title}`, { bold: true, color: NAVY, size: 26 })],
-    heading: HeadingLevel.HEADING_1,
-    spacing: { before: 240, after: 140 },
+    children: [txt(`${num}  ${title}`, { bold: true, color: NAVY, size: 22 })],
+    shading: { type: ShadingType.CLEAR, color: "auto", fill: "EEF2FF" },
+    spacing: { before: 80, after: 80 },
+    border: { left: { style: BorderStyle.SINGLE, size: 16, color: "1E40AF" } },
     keepNext: true,
-    border: { bottom: { color: GB, space: 2, style: BorderStyle.SINGLE, size: 6 } },
   });
 }
 
 function subHeading(title) {
   return new Paragraph({
-    children: [txt(title, { bold: true, color: NAVY, size: 22, underline: {} })],
-    heading: HeadingLevel.HEADING_2,
+    children: [txt(title, { bold: true, color: NAVY, size: 20, underline: {} })],
     spacing: { before: 160, after: 80 },
     keepNext: true,
   });
 }
 
-// ── Larghezze tabelle (full-width, somma = 9026 twips) ──────────────────────
-const TBL_W = 9026;
-const COLS_KV = [3000, 6026];        // 2 colonne (Dati servizio, Dettagli)
-const COLS_PER = [2800, 2800, 3426]; // 3 colonne (Pericoli)
-const COLS_REF = [2400, 2400, 2000, 2226]; // 4 colonne (Referenti)
+// ── Larghezze tabelle (full-width = larghezza contenuto 11906 - 850 - 850) ──
+const TBL_W = 10206;
+const COLS_KV = [3600, 6606];        // 2 colonne (Dati servizio, Dettagli)
+const COLS_PER = [3000, 3000, 4206]; // 3 colonne (Pericoli)
+const COLS_REF = [2800, 2800, 2300, 2306]; // 4 colonne (Referenti)
 const WHITE = { type: ShadingType.CLEAR, color: "auto", fill: "FFFFFF" };
 
 // ── Tabella generica chiave/valore (2 colonne) ──────────────────────────────
