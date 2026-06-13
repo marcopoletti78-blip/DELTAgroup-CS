@@ -7,7 +7,7 @@ import {
   HeadingLevel, AlignmentType, ImageRun, TableOfContents, Header, Footer,
   BorderStyle, WidthType, convertInchesToTwip, ShadingType, PageNumber,
   PageOrientation, LevelFormat, TabStopType, TabStopPosition,
-  PageBreak,
+  PageBreak, VerticalAlign, TableLayoutType,
 } from "docx";
 
 // ── PALETTE (hex senza #) ───────────────────────────────────────────────────
@@ -258,24 +258,51 @@ function renderCustomContent(content) {
 }
 
 // ── Header / Footer ─────────────────────────────────────────────────────────
-function buildHeader(logoBytes) {
-  const children = [];
-  if (logoBytes) {
-    children.push(new ImageRun({
-      data: logoBytes,
-      transformation: { width: 110, height: 40 },
-      type: "jpg",
-    }));
-  }
-  return new Header({
-    children: [
-      para(children, {
-        alignment: AlignmentType.RIGHT,
-        spacing: { after: 0 },
-        border: { bottom: { color: NAVY, space: 1, style: BorderStyle.SINGLE, size: 12 } },
+// Header in stile DELTAgroup: tabella 2 colonne (logo a sx con bordo destro,
+// nome evento a dx allineato a destra) + divisore con bordo inferiore blu.
+function buildHeader(logoBytes, data = {}) {
+  const sub = ["Concetto di Sicurezza", data?.anno].filter(Boolean).join(" · ");
+
+  const leftChildren = logoBytes
+    ? [para([new ImageRun({ data: logoBytes, transformation: { width: 170, height: 62 }, type: "jpg" })], { spacing: { after: 0 } })]
+    : [para([], { spacing: { after: 0 } })];
+
+  const headerTable = new Table({
+    width: { size: 10206, type: WidthType.DXA },
+    columnWidths: [3600, 6606],
+    layout: TableLayoutType.FIXED,
+    borders: noBorders(),
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 3600, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            borders: { ...noBorders(), right: { style: BorderStyle.SINGLE, size: 8, color: "cccccc" } },
+            children: leftChildren,
+          }),
+          new TableCell({
+            width: { size: 6606, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            borders: noBorders(),
+            margins: { left: 200 },
+            children: [
+              para([txt(data?.nomeEvento || " ", { bold: true, size: 22, color: NAVY })], { alignment: AlignmentType.RIGHT, spacing: { after: 0 } }),
+              para([txt(sub, { size: 18, color: "666666" })], { alignment: AlignmentType.RIGHT, spacing: { after: 0 } }),
+            ],
+          }),
+        ],
       }),
     ],
   });
+
+  const divider = new Paragraph({
+    children: [],
+    spacing: { before: 40, after: 0 },
+    border: { bottom: { color: NAVY, space: 1, style: BorderStyle.SINGLE, size: 24 } },
+  });
+
+  return new Header({ children: [headerTable, divider] });
 }
 
 function buildFooter() {
@@ -1041,7 +1068,7 @@ export async function generateDocxBlob({
         margin: { top: 1700, right: 850, bottom: 1100, left: 850 },
       },
     },
-    headers: { default: buildHeader(headerLogoBytes) },
+    headers: { default: buildHeader(headerLogoBytes, data) },
     footers: { default: buildFooter() },
   };
 
@@ -1101,7 +1128,7 @@ export async function generateDocxBlob({
             margin: { top: 1700, right: 850, bottom: 1100, left: 850 },
           },
         },
-        headers: { default: buildHeader(headerLogoBytes) },
+        headers: { default: buildHeader(headerLogoBytes, data) },
         footers: { default: buildFooter() },
         children: coverChildren,
       },

@@ -3380,55 +3380,80 @@ function LandingHome({ onCs, onPps }) {
   );
 }
 
-// ── HOME CS ─────────────────────────────────────────────────────────────────
-function CsCard({ accent=AC, children }) {
-  const [hov, setHov] = useState(false);
-  return (
-    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{
-      background:WH, border:`2px solid ${hov?accent:GB}`,
-      borderRadius:"12px", padding:"28px", textAlign:"left",
-      transition:"all 0.18s", transform:hov?"translateY(-2px)":"none",
-      boxShadow:hov?"0 8px 24px rgba(12,29,61,0.14)":"0 2px 8px rgba(0,0,0,0.05)",
-      display:"flex", flexDirection:"column", height:"100%", boxSizing:"border-box",
-    }}>
-      {children}
-    </div>
-  );
-}
+// ── HOME CS (stile LandingHome) ───────────────────────────────────────────────
+function CsHome({ onNew, onMod, onBack }) {
+  const [hov1, setHov1] = useState(false);
+  const [hov2, setHov2] = useState(false);
 
-function CsHome({ onNew, onMod, onPps, onBack }) {
+  const cardBase = {
+    background:"#fff", borderRadius:"20px", padding:"48px 32px",
+    boxShadow:"0 4px 24px rgba(30,58,138,0.07)", cursor:"pointer",
+    display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:"20px",
+    transition:"all 0.2s",
+  };
+  const cardHover = { boxShadow:"0 8px 32px rgba(30,58,138,0.14)", transform:"translateY(-3px)" };
+  const iconCircle = { width:"80px", height:"80px", borderRadius:"50%", background:"#E8EEFF", display:"flex", alignItems:"center", justifyContent:"center" };
+  const titleS = { ...SANS, fontSize:"22px", fontWeight:"700", color:"#1E3A8A" };
+  const lineS = { width:"40px", height:"3px", background:"#1E40AF", borderRadius:"2px" };
+  const descS = { ...SANS, fontSize:"14px", color:"#64748B", lineHeight:1.7, maxWidth:"240px" };
+  const arrowCircle = { width:"48px", height:"48px", borderRadius:"50%", background:"#1E40AF", display:"flex", alignItems:"center", justifyContent:"center", marginTop:"8px" };
+
   return (
-    <div style={{minHeight:"calc(100vh - 60px)",background:BG,display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 20px"}}>
-      <div style={{maxWidth:"820px",width:"100%"}}>
-        <div style={{marginBottom:"16px"}}>
-          <Btn ch="← Indietro" on={onBack} variant="ghost"/>
-        </div>
-        <div style={{textAlign:"center",marginBottom:"28px",...SANS,fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.2em",color:AC,fontWeight:"700"}}>
-          Sistema Documentale · DELTAgroup Ticino
-        </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px",alignItems:"stretch"}}>
-          {/* CARD SINISTRA — Concetti di Sicurezza */}
-          <CsCard accent={AC}>
-            <div style={{...SERIF,fontSize:"26px",fontWeight:"700",color:N,marginBottom:"4px",lineHeight:1.15}}>Concetti di Sicurezza</div>
-            <div style={{...SANS,fontSize:"13px",fontWeight:"600",color:AC,marginBottom:"22px"}}>CS</div>
-            <div style={{display:"flex",flexDirection:"column",gap:"10px",marginTop:"auto"}}>
-              <Btn ch="Nuovo Concetto" on={onNew} variant="red" full/>
-              <Btn ch="Modifica Esistente" on={onMod} variant="ghost" full style={{border:`1px solid ${AC}`,color:AC}}/>
+    <div style={{minHeight:"calc(100vh - 60px)",background:"#EEF2FF",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+      <div style={{padding:"20px 40px 0"}}>
+        <button onClick={onBack} style={{...SANS,background:"none",border:"none",cursor:"pointer",color:"#1E40AF",fontSize:"13px",fontWeight:"700",padding:"6px 4px"}}>← Home</button>
+      </div>
+
+      <div style={{textAlign:"center",paddingTop:"8px"}}>
+        <div style={{...SANS,fontSize:"24px",fontWeight:"700",letterSpacing:"0.12em",color:"#1E3A8A",marginBottom:"8px"}}>Concetti di Sicurezza</div>
+        <div style={{...SANS,fontSize:"14px",color:"#94A3B8",letterSpacing:"0.05em"}}>DELTAgroup Ticino</div>
+      </div>
+
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"32px",maxWidth:"900px",width:"100%",padding:"0 40px"}}>
+          {/* CARD 1 — Nuovo Concetto */}
+          <div onClick={onNew} onMouseEnter={()=>setHov1(true)} onMouseLeave={()=>setHov1(false)} style={{...cardBase,...(hov1?cardHover:{})}}>
+            <div style={iconCircle}>
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#1E40AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="12" y1="12" x2="12" y2="18"/>
+                <line x1="9" y1="15" x2="15" y2="15"/>
+              </svg>
             </div>
-          </CsCard>
-          {/* CARD DESTRA — PPS */}
-          <CsCard accent={AC}>
-            <div style={{...SERIF,fontSize:"26px",fontWeight:"700",color:N,marginBottom:"4px",lineHeight:1.15}}>PPS</div>
-            <div style={{...SANS,fontSize:"13px",fontWeight:"600",color:AC,marginBottom:"22px"}}>Prescrizioni Particolari di Servizio</div>
-            <div style={{display:"flex",flexDirection:"column",gap:"10px",marginTop:"auto"}}>
-              <Btn ch="Crea / Apri PPS" on={onPps} variant="red" full/>
+            <div style={titleS}>Nuovo Concetto</div>
+            <div style={lineS}/>
+            <div style={descS}>Crea un nuovo concetto di sicurezza partendo dai dati dell'evento</div>
+            <div style={arrowCircle}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="13 6 19 12 13 18"/>
+              </svg>
             </div>
-          </CsCard>
+          </div>
+          {/* CARD 2 — Modifica Esistente */}
+          <div onClick={onMod} onMouseEnter={()=>setHov2(true)} onMouseLeave={()=>setHov2(false)} style={{...cardBase,...(hov2?cardHover:{})}}>
+            <div style={iconCircle}>
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#1E40AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 20h9"/>
+                <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/>
+              </svg>
+            </div>
+            <div style={titleS}>Modifica Esistente</div>
+            <div style={lineS}/>
+            <div style={descS}>Carica un concetto esistente e applica modifiche guidate dall'AI</div>
+            <div style={arrowCircle}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="13 6 19 12 13 18"/>
+              </svg>
+            </div>
+          </div>
         </div>
-        <div style={{textAlign:"center",marginTop:"36px",fontSize:"11.5px",color:GR,...SANS}}>
-          DELTAgroup Security &amp; Services AG &nbsp;·&nbsp; Via alla Foce 4, 6933 Muzzano
-          &nbsp;·&nbsp; T +41 919 214 949 &nbsp;·&nbsp; TICINO@delta.ch
-        </div>
+      </div>
+
+      <div style={{borderTop:"1px solid #D1D9F0",padding:"20px 40px",textAlign:"center",fontSize:"11.5px",color:"#94A3B8",...SANS}}>
+        DELTAgroup Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 919 214 949 · TICINO@delta.ch
       </div>
     </div>
   );
