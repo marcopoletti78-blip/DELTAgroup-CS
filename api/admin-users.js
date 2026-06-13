@@ -19,14 +19,26 @@ module.exports = async (req, res) => {
     return res.status(400).json({ error: 'Email e password obbligatorie' })
 
   try {
-    const { data: authData, error: authError } =
-      await supabaseAdmin.auth.admin.createUser({
-        email, password, email_confirm: true
-      })
-    if (authError) return res.status(400).json({ error: authError.message })
+    const response = await fetch(
+      `${process.env.VITE_SUPABASE_URL}/auth/v1/admin/users`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`,
+          'Content-Type': 'application/json',
+          'apikey': process.env.SUPABASE_SERVICE_ROLE_KEY
+        },
+        body: JSON.stringify({ email, password, email_confirm: true })
+      }
+    )
+    const userData = await response.json()
+    if (!response.ok)
+      return res.status(400).json({ error: userData.msg || userData.error })
+
+    const userId = userData.id
 
     await supabaseAdmin.from('profili').insert({
-      id: authData.user.id,
+      id: userId,
       email,
       nome: nome || '',
       ruolo: ruolo || 'utente',
