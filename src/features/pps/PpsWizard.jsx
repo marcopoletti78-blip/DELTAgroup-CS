@@ -1,4 +1,4 @@
-// Wizard PPS/SPADO — modulo autonomo a 3 step (dati servizio, compiti, referenti)
+// Wizard PPS — modulo autonomo a 3 step (dati servizio, compiti, referenti)
 // che genera un DOCX di 1-2 pagine tramite buildPpsDocx.js.
 // L'assist AI opzionale (bozza compiti) passa dal proxy serverless /api/generate.
 
@@ -9,7 +9,7 @@ import { generatePpsDocxBlob } from "./buildPpsDocx";
 
 // ── Palette (allineata ad App.jsx) ──────────────────────────────────────────
 const N = "#0c1d3d";
-const RD = "#c8102e";
+const RD = "#1E40AF";
 const WH = "#ffffff";
 const BG = "#f4f7fc";
 const GL = "#edf1f8";
@@ -177,9 +177,9 @@ export default function PpsWizard({ onBack }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
           <div>
             <div style={{ ...SANS, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.18em", color: RD, fontWeight: 700 }}>
-              Piano di Pronto Servizio
+              Prescrizioni Particolari di Servizio
             </div>
-            <h1 style={{ ...SERIF, fontSize: "26px", fontWeight: 700, color: N, margin: "4px 0 0" }}>PPS / SPADO</h1>
+            <h1 style={{ ...SERIF, fontSize: "26px", fontWeight: 700, color: N, margin: "4px 0 0" }}>PPS</h1>
           </div>
           <Btn variant="ghost" on={onBack}>← Home</Btn>
         </div>
@@ -242,7 +242,7 @@ export default function PpsWizard({ onBack }) {
           )}
 
           {err && (
-            <div style={{ ...SANS, marginTop: "16px", padding: "10px 12px", background: "#fff4f4", border: `1px solid ${RD}55`, borderRadius: "8px", color: RD, fontSize: "12.5px" }}>
+            <div style={{ ...SANS, marginTop: "16px", padding: "10px 12px", background: "#eef3fb", border: `1px solid ${RD}55`, borderRadius: "8px", color: RD, fontSize: "12.5px" }}>
               {err}
             </div>
           )}

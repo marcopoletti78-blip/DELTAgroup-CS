@@ -1,4 +1,4 @@
-// Generatore DOCX per il modulo PPS/SPADO (Piano di Pronto Servizio).
+// Generatore DOCX per il modulo PPS (Prescrizioni Particolari di Servizio).
 // Modulo autonomo: NON dipende da src/buildDocx.js (che resta dedicato al CS),
 // ma ne riusa la stessa logica/stile (palette, header/footer, tabelle docx)
 // per garantire coerenza grafica con i documenti DELTAgroup.
@@ -11,7 +11,7 @@ import {
 
 // ── PALETTE (hex senza #) — allineata a buildDocx.js ────────────────────────
 const NAVY = "0c1d3d";
-const RED = "c8102e";
+const RED = "1E40AF";
 const TEXT = "1a2038";
 const MUTED = "52637a";
 const GB = "d0dae8";
@@ -113,10 +113,10 @@ function buildFooter() {
 // ── Blocchi titolo ──────────────────────────────────────────────────────────
 function titleBlock(data) {
   const out = [];
-  out.push(para([txt("PIANO DI PRONTO SERVIZIO", { bold: true, color: NAVY, size: 32 })], {
+  out.push(para([txt("PPS — Prescrizioni Particolari di Servizio", { bold: true, color: NAVY, size: 32 })], {
     alignment: AlignmentType.CENTER, spacing: { after: 40 },
   }));
-  out.push(para([txt("PPS / SPADO", { bold: true, color: RED, size: 22 })], {
+  out.push(para([txt("PPS", { bold: true, color: RED, size: 22 })], {
     alignment: AlignmentType.CENTER, spacing: { after: 160 },
   }));
   if (data.titolo) {
@@ -281,8 +281,8 @@ export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
 
   const doc = new Document({
     creator: "DELTAgroup CS",
-    title: `PPS / SPADO - ${data.titolo || ""}`,
-    description: "Piano di Pronto Servizio generato da DELTAgroup CS",
+    title: `PPS - ${data.titolo || ""}`,
+    description: "PPS — Prescrizioni Particolari di Servizio generato da DELTAgroup CS",
     styles: {
       default: {
         document: { run: { font: "Arial", size: 20, color: TEXT } },

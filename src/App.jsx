@@ -7,7 +7,8 @@ import PpsWizard from "./features/pps/PpsWizard";
 // ── PALETTE ──────────────────────────────────────────────────────────────────
 const N = "#0c1d3d";    // navy
 const NM = "#1a3461";   // navy mid
-const RD = "#c8102e";   // red (DELTAgroup brand)
+const RD = "#c8102e";   // red (riservato a stati di errore/avviso)
+const AC = "#1E40AF";   // accent blu (tema CS-PPS)
 const WH = "#ffffff";
 const BG = "#f4f7fc";
 const GL = "#edf1f8";   // gray light
@@ -169,7 +170,7 @@ function FL({ label, req, children, span2 }) {
   return (
     <div style={span2?{gridColumn:"1/-1"}:{}}>
       <div style={{fontSize:"11px",fontWeight:"700",textTransform:"uppercase",letterSpacing:"0.08em",color:TM,...SANS,marginBottom:"5px"}}>
-        {label}{req&&<span style={{color:RD}}> *</span>}
+        {label}{req&&<span style={{color:AC}}> *</span>}
       </div>
       {children}
     </div>
@@ -194,7 +195,7 @@ function Crd({ title, children }) {
 function Btn({ ch, on, variant="navy", disabled=false, full=false, style={} }) {
   const styles = {
     navy: {bg:N,cl:WH},
-    red:  {bg:RD,cl:WH},
+    red:  {bg:AC,cl:WH},
     ghost:{bg:"transparent",cl:N,border:`1px solid ${GB}`},
   };
   const s = styles[variant];
@@ -219,7 +220,7 @@ function StepBar({ steps, cur }) {
           <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:"5px",minWidth:"56px"}}>
             <div style={{
               width:"28px",height:"28px",borderRadius:"50%",flexShrink:0,
-              background:i<cur?N:i===cur?RD:GB,
+              background:i<cur?N:i===cur?AC:GB,
               color:i<=cur?WH:GR,
               display:"flex",alignItems:"center",justifyContent:"center",
               fontSize:"11px",fontWeight:"700",...SANS
@@ -458,7 +459,7 @@ function Step4({ f, onGen, loading, err }) {
           </div>
         )}
         <button onClick={onGen} disabled={loading||!f.name} style={{
-          background:loading||!f.name?"#4a6490":RD, color:WH,
+          background:loading||!f.name?"#4a6490":AC, color:WH,
           border:"none",borderRadius:"10px",padding:"14px 44px",
           fontSize:"15px",fontWeight:"600",cursor:loading||!f.name?"not-allowed":"pointer",...SANS
         }}>
@@ -1751,7 +1752,7 @@ function DocPreview({ data, customSections = [], sectionOrder, presetOverrides =
         <img src={logoImg} alt="DELTAgroup" style={{height:65,display:"block"}}/>
       </div>
 
-      <div id="pc" style={{textAlign:"center",borderBottom:`3px solid ${RD}`,paddingBottom:"32px",marginBottom:"0",padding:"36px 48px 32px"}}>
+      <div id="pc" style={{textAlign:"center",borderBottom:`3px solid ${AC}`,paddingBottom:"32px",marginBottom:"0",padding:"36px 48px 32px"}}>
         {data.logoEvento && (
           <div style={{marginBottom:"20px"}}>
             <img src={data.logoEvento} alt="logo evento" style={{maxHeight:"90px",maxWidth:"220px",objectFit:"contain"}}/>
@@ -2894,7 +2895,7 @@ ${flowParts}
         <div style={{padding:"12px 16px",borderBottom:`1px solid ${GB}`,display:"flex",justifyContent:"space-between",alignItems:"center",background:N,position:"relative"}}>
           <button onClick={onBack} style={{...SANS,fontSize:"12px",color:"rgba(255,255,255,0.75)",background:"none",border:"none",cursor:"pointer",padding:0}}>← Indietro</button>
           <div style={{position:"relative"}}>
-            <button onClick={()=>setShowSave(s=>!s)} style={{...SANS,fontSize:"12px",padding:"6px 12px",background:RD,color:WH,border:"none",borderRadius:"6px",cursor:"pointer",fontWeight:"600",display:"flex",alignItems:"center",gap:"5px"}}>
+            <button onClick={()=>setShowSave(s=>!s)} style={{...SANS,fontSize:"12px",padding:"6px 12px",background:AC,color:WH,border:"none",borderRadius:"6px",cursor:"pointer",fontWeight:"600",display:"flex",alignItems:"center",gap:"5px"}}>
               🖨️ Stampa / Salva <span style={{fontSize:"10px"}}>▼</span>
             </button>
             {showSave&&(
@@ -3188,7 +3189,7 @@ ${flowParts}
                 );
               })()}
               <div style={{display:"flex",gap:"10px",marginTop:"4px"}}>
-                <button type="button" onClick={resetPresetEdit} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:RD}}>Ripristina preset</button>
+                <button type="button" onClick={resetPresetEdit} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:AC}}>Ripristina preset</button>
                 <button type="button" onClick={()=>setPresetEditOpen(false)} style={{flex:1,padding:"10px",background:WH,border:`1px solid ${GB}`,borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
                 <button type="button" onClick={savePresetEdit} style={{flex:1,padding:"10px",background:N,color:WH,border:"none",borderRadius:"8px",cursor:"pointer",fontSize:"13px",fontWeight:"600"}}>Salva</button>
               </div>
@@ -3286,7 +3287,7 @@ ${flowParts}
               )}
               <div style={{flex:1}}/>
               <button type="button" onClick={()=>setSettingsModalOpen(false)} style={{padding:"9px 14px",background:WH,border:`1px solid ${GB}`,borderRadius:"7px",cursor:"pointer",fontSize:"13px",fontWeight:"600",color:TM}}>Annulla</button>
-              <button type="button" onClick={applyEventSettings} disabled={loading} style={{padding:"9px 18px",background:loading?"#ccc":RD,color:WH,border:"none",borderRadius:"7px",cursor:loading?"not-allowed":"pointer",fontSize:"13px",fontWeight:"700"}}>{loading?"⏳ Applicazione…":"💾 Salva e applica"}</button>
+              <button type="button" onClick={applyEventSettings} disabled={loading} style={{padding:"9px 18px",background:loading?"#ccc":AC,color:WH,border:"none",borderRadius:"7px",cursor:loading?"not-allowed":"pointer",fontSize:"13px",fontWeight:"700"}}>{loading?"⏳ Applicazione…":"💾 Salva e applica"}</button>
             </div>
           </div>
         </div>
@@ -3296,55 +3297,52 @@ ${flowParts}
 }
 
 // ── HOME ──────────────────────────────────────────────────────────────────────
-function ModeCard({ icon, title, desc, color, on }) {
+function HomeCard({ accent=AC, children }) {
   const [hov, setHov] = useState(false);
   return (
-    <button onClick={on} onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{
-      background:hov?color:WH, border:`2px solid ${hov?color:GB}`,
-      borderRadius:"12px", padding:"28px", textAlign:"left", cursor:"pointer",
+    <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{
+      background:WH, border:`2px solid ${hov?accent:GB}`,
+      borderRadius:"12px", padding:"28px", textAlign:"left",
       transition:"all 0.18s", transform:hov?"translateY(-2px)":"none",
       boxShadow:hov?"0 8px 24px rgba(12,29,61,0.14)":"0 2px 8px rgba(0,0,0,0.05)",
+      display:"flex", flexDirection:"column", height:"100%", boxSizing:"border-box",
     }}>
-      <div style={{
-        width:"44px",height:"44px",borderRadius:"10px",
-        background:hov?"rgba(255,255,255,0.15)":`${color}18`,
-        display:"flex",alignItems:"center",justifyContent:"center",
-        fontSize:"22px",color:hov?WH:color,marginBottom:"14px",...SANS,fontWeight:"800",
-      }}>{icon}</div>
-      <div style={{...SERIF,fontSize:"19px",fontWeight:"700",color:hov?WH:N,marginBottom:"8px"}}>{title}</div>
-      <div style={{...SANS,fontSize:"13px",color:hov?"rgba(255,255,255,0.82)":TM,lineHeight:1.65}}>{desc}</div>
-    </button>
+      {children}
+    </div>
   );
 }
 
 function Home({ onNew, onMod, onPps }) {
   return (
     <div style={{minHeight:"calc(100vh - 60px)",background:BG,display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 20px"}}>
-      <div style={{maxWidth:"780px",width:"100%"}}>
-        <div style={{textAlign:"center",marginBottom:"48px"}}>
-          <div style={{...SANS,fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.2em",color:RD,marginBottom:"10px",fontWeight:"700"}}>
-            Sistema di Gestione Documentale
-          </div>
-          <h1 style={{...SERIF,fontSize:"34px",fontWeight:"700",color:N,margin:"0 0 14px",lineHeight:1.2}}>
-            Generatore Concetti<br/>di Sicurezza
-          </h1>
-          <p style={{...SANS,color:TM,fontSize:"15px",margin:0,lineHeight:1.65}}>
-            Crea o aggiorna i concetti di sicurezza per i tuoi eventi<br/>
-            con la qualità e lo standard DELTAgroup.
-          </p>
+      <div style={{maxWidth:"820px",width:"100%"}}>
+        <div style={{textAlign:"center",marginBottom:"28px",...SANS,fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.2em",color:AC,fontWeight:"700"}}>
+          Sistema Documentale · DELTAgroup Ticino
         </div>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px"}}>
-          <ModeCard icon="✦" title="Nuovo Concetto" color={N} on={onNew}
-            desc="Crea un concetto di sicurezza partendo da zero. Inserisci i dati dell'evento e genera il documento completo in pochi minuti."
-          />
-          <ModeCard icon="⟳" title="Modifica Esistente" color={RD} on={onMod}
-            desc="Incolla un concetto esistente e descrivi le modifiche. Il sistema aggiornerà il documento mantenendo lo stile DELTAgroup."
-          />
-        </div>
-        <div style={{marginTop:"20px"}}>
-          <ModeCard icon="▤" title="PPS / SPADO — Piano di Pronto Servizio" color={NM} on={onPps}
-            desc="Genera un piano di pronto servizio sintetico (1-2 pagine): dati del servizio, compiti del personale e referenti. Modulo separato dai concetti di sicurezza."
-          />
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px",alignItems:"stretch"}}>
+          {/* CARD SINISTRA — Concetti di Sicurezza */}
+          <HomeCard accent={AC}>
+            <div style={{...SERIF,fontSize:"22px",fontWeight:"700",color:N,marginBottom:"2px"}}>Concetti di Sicurezza</div>
+            <div style={{...SANS,fontSize:"12px",fontWeight:"700",letterSpacing:"0.14em",color:AC,marginBottom:"18px"}}>CS</div>
+            <div style={{...SANS,fontSize:"13px",color:TM,lineHeight:1.6,marginBottom:"20px"}}>
+              Crea o aggiorna i concetti di sicurezza per i tuoi eventi, con lo standard DELTAgroup.
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:"10px",marginTop:"auto"}}>
+              <Btn ch="Nuovo Concetto" on={onNew} variant="red" full/>
+              <Btn ch="Modifica Esistente" on={onMod} variant="ghost" full/>
+            </div>
+          </HomeCard>
+          {/* CARD DESTRA — PPS */}
+          <HomeCard accent={AC}>
+            <div style={{...SERIF,fontSize:"40px",fontWeight:"700",color:AC,marginBottom:"2px",lineHeight:1}}>PPS</div>
+            <div style={{...SANS,fontSize:"13px",fontWeight:"600",color:N,marginBottom:"18px"}}>Prescrizioni Particolari di Servizio</div>
+            <div style={{...SANS,fontSize:"13px",color:TM,lineHeight:1.6,marginBottom:"20px"}}>
+              Documento sintetico (1-2 pagine): dati del servizio, compiti del personale e referenti.
+            </div>
+            <div style={{marginTop:"auto"}}>
+              <Btn ch="Crea / Apri PPS" on={onPps} variant="red" full/>
+            </div>
+          </HomeCard>
         </div>
         <div style={{textAlign:"center",marginTop:"36px",fontSize:"11.5px",color:GR,...SANS}}>
           DELTAgroup Security &amp; Services AG &nbsp;·&nbsp; Via alla Foce 4, 6933 Muzzano
@@ -3361,7 +3359,7 @@ function Header({ onHome }) {
     <div style={{
       background:"#111827", padding:"0 20px", height:"60px",
       display:"flex",alignItems:"center",justifyContent:"space-between",
-      borderBottom:`3px solid ${RD}`,position:"sticky",top:0,zIndex:100,
+      borderBottom:`3px solid ${AC}`,position:"sticky",top:0,zIndex:100,
       boxShadow:"0 2px 12px rgba(0,0,0,0.4)",
     }}>
       <button onClick={onHome} style={{background:"none",border:"none",cursor:"pointer",display:"flex",alignItems:"center",gap:"12px",padding:0}}>
@@ -3376,10 +3374,10 @@ function Header({ onHome }) {
           <div style={{display:"flex",alignItems:"baseline",gap:"0px"}}>
             <span style={{...SERIF,fontSize:"18px",fontWeight:"700",color:WH,letterSpacing:"0.04em"}}>DELTA</span>
             <span style={{...SERIF,fontSize:"14px",fontWeight:"400",color:"rgba(255,255,255,0.85)"}}>group</span>
-            <span style={{...SANS,fontSize:"18px",fontWeight:"700",color:RD,marginLeft:"6px",letterSpacing:"0.06em"}}>CS</span>
+            <span style={{...SANS,fontSize:"18px",fontWeight:"700",color:AC,marginLeft:"6px",letterSpacing:"0.06em"}}>CS — PPS</span>
           </div>
           <div style={{...SANS,fontSize:"9px",color:"rgba(255,255,255,0.45)",textTransform:"uppercase",letterSpacing:"0.14em"}}>
-            Concetti di Sicurezza · Ticino · v2.0
+            Ticino · v3.0
           </div>
         </div>
       </button>
