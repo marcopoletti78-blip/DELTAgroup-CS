@@ -3,6 +3,7 @@ import logoImg from "./assets/logo.jpg";
 import { generateDocxBlob } from "./buildDocx";
 import { saveAs } from "file-saver";
 import PpsWizard from "./features/pps/PpsWizard";
+import PpsList from "./features/pps/PpsList";
 
 // ── PALETTE ──────────────────────────────────────────────────────────────────
 const N = "#0c1d3d";    // navy
@@ -3386,6 +3387,7 @@ function Header({ onHome }) {
 export default function App() {
   const [view, setView] = useState("home");
   const [doc, setDoc] = useState(null);
+  const [ppsId, setPpsId] = useState(null);
   // Prevenzione globale apertura file da drag fuori dalle dropzone
   React.useEffect(() => {
     const stop = (e) => e.preventDefault();
@@ -3397,10 +3399,21 @@ export default function App() {
   return (
     <div style={{minHeight:"100vh",background:BG}}>
       <Header onHome={()=>setView("home")}/>
-      {view==="home"&&<Home onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onPps={()=>setView("pps")}/>}
+      {view==="home"&&<Home onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onPps={()=>setView("pps-list")}/>}
       {view==="wizard"&&<Wizard onBack={()=>setView("home")} onDone={done}/>}
       {view==="modify"&&<Modify onBack={()=>setView("home")} onDone={done}/>}
-      {view==="pps"&&<PpsWizard onBack={()=>setView("home")}/>}
+      {view==="pps-list"&&
+        <PpsList
+          onNew={()=>{ setPpsId(null); setView("pps-edit"); }}
+          onOpen={(id)=>{ setPpsId(id); setView("pps-edit"); }}
+          onBack={()=>setView("home")}
+        />}
+      {view==="pps-edit"&&
+        <PpsWizard
+          ppsId={ppsId}
+          onBack={()=>setView("pps-list")}
+          onSaved={(id)=>setPpsId(id)}
+        />}
       {view==="preview"&&<Editor data={doc} onBack={()=>setView("home")}/>}
     </div>
   );
