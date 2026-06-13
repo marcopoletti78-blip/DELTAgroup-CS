@@ -3705,7 +3705,10 @@ function AdminPanel({ onBack }) {
       if (!r.ok) throw new Error(d.error || "Errore nella creazione dell'utente");
       setMsg("Utente creato ✓");
       setNNome(""); setNEmail(""); setNPass(""); setNRuolo("utente");
-      load();
+      // Ricarica esplicita della lista utenti dopo la creazione.
+      const { data: lista, error: loadErr } = await supabase.from("profili").select("*").order("email");
+      if (loadErr) setErr(`Utente creato, ma ricarica lista fallita: ${loadErr.message}`);
+      else setRows(lista || []);
     } catch (e) {
       setErr(`Errore: ${e.message}`);
     } finally {
