@@ -3297,8 +3297,91 @@ ${flowParts}
   );
 }
 
-// ── HOME ──────────────────────────────────────────────────────────────────────
-function HomeCard({ accent=AC, children }) {
+// ── LANDING ───────────────────────────────────────────────────────────────────
+function LandingHome({ onCs, onPps }) {
+  const [hov1, setHov1] = useState(false);
+  const [hov2, setHov2] = useState(false);
+  const [ww, setWw] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
+  React.useEffect(() => {
+    const onResize = () => setWw(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const cols = ww < 700 ? "1fr" : "1fr 1fr";
+
+  const cardBase = {
+    background:"#fff", borderRadius:"20px", padding:"48px 32px",
+    boxShadow:"0 4px 24px rgba(30,58,138,0.07)", cursor:"pointer",
+    display:"flex", flexDirection:"column", alignItems:"center", textAlign:"center", gap:"20px",
+    transition:"all 0.2s",
+  };
+  const cardHover = { boxShadow:"0 8px 32px rgba(30,58,138,0.14)", transform:"translateY(-3px)" };
+  const iconCircle = { width:"80px", height:"80px", borderRadius:"50%", background:"#E8EEFF", display:"flex", alignItems:"center", justifyContent:"center" };
+  const titleS = { ...SANS, fontSize:"22px", fontWeight:"700", color:"#1E3A8A" };
+  const lineS = { width:"40px", height:"3px", background:"#1E40AF", borderRadius:"2px" };
+  const descS = { ...SANS, fontSize:"14px", color:"#64748B", lineHeight:1.7, maxWidth:"240px" };
+  const arrowCircle = { width:"48px", height:"48px", borderRadius:"50%", background:"#1E40AF", display:"flex", alignItems:"center", justifyContent:"center", marginTop:"8px" };
+
+  return (
+    <div style={{minHeight:"100vh",background:"#EEF2FF",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
+      <div style={{textAlign:"center",paddingTop:"60px"}}>
+        <div style={{...SANS,fontSize:"28px",fontWeight:"700",letterSpacing:"0.2em",color:"#1E3A8A",marginBottom:"8px"}}>PIATTAFORMA OPERATIVA</div>
+        <div style={{...SANS,fontSize:"14px",color:"#94A3B8",letterSpacing:"0.05em"}}>DELTAgroup Ticino</div>
+      </div>
+
+      <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
+        <div style={{display:"grid",gridTemplateColumns:cols,gap:"32px",maxWidth:"900px",width:"100%",padding:"0 40px"}}>
+          {/* CARD CS */}
+          <div onClick={onCs} onMouseEnter={()=>setHov1(true)} onMouseLeave={()=>setHov1(false)} style={{...cardBase,...(hov1?cardHover:{})}}>
+            <div style={iconCircle}>
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#1E40AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <rect x="9" y="11" width="6" height="5" rx="1"/>
+                <path d="M12 8v3"/>
+                <circle cx="12" cy="11" r="0.5" fill="#1E40AF"/>
+              </svg>
+            </div>
+            <div style={titleS}>Concetti di Sicurezza</div>
+            <div style={lineS}/>
+            <div style={descS}>Gestione completa dei concetti di sicurezza per eventi e servizi</div>
+            <div style={arrowCircle}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="13 6 19 12 13 18"/>
+              </svg>
+            </div>
+          </div>
+          {/* CARD PPS */}
+          <div onClick={onPps} onMouseEnter={()=>setHov2(true)} onMouseLeave={()=>setHov2(false)} style={{...cardBase,...(hov2?cardHover:{})}}>
+            <div style={iconCircle}>
+              <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#1E40AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <polyline points="9 15 11 17 15 13"/>
+              </svg>
+            </div>
+            <div style={titleS}>PPS</div>
+            <div style={lineS}/>
+            <div style={descS}>Prescrizioni Particolari di Servizio per ogni attività operativa</div>
+            <div style={arrowCircle}>
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="5" y1="12" x2="19" y2="12"/>
+                <polyline points="13 6 19 12 13 18"/>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{borderTop:"1px solid #D1D9F0",padding:"20px 40px",textAlign:"center",fontSize:"11.5px",color:"#94A3B8",...SANS}}>
+        DELTAgroup Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 919 214 949 · TICINO@delta.ch
+      </div>
+    </div>
+  );
+}
+
+// ── HOME CS ─────────────────────────────────────────────────────────────────
+function CsCard({ accent=AC, children }) {
   const [hov, setHov] = useState(false);
   return (
     <div onMouseEnter={()=>setHov(true)} onMouseLeave={()=>setHov(false)} style={{
@@ -3313,31 +3396,34 @@ function HomeCard({ accent=AC, children }) {
   );
 }
 
-function Home({ onNew, onMod, onPps }) {
+function CsHome({ onNew, onMod, onPps, onBack }) {
   return (
     <div style={{minHeight:"calc(100vh - 60px)",background:BG,display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 20px"}}>
       <div style={{maxWidth:"820px",width:"100%"}}>
+        <div style={{marginBottom:"16px"}}>
+          <Btn ch="← Indietro" on={onBack} variant="ghost"/>
+        </div>
         <div style={{textAlign:"center",marginBottom:"28px",...SANS,fontSize:"11px",textTransform:"uppercase",letterSpacing:"0.2em",color:AC,fontWeight:"700"}}>
           Sistema Documentale · DELTAgroup Ticino
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"20px",alignItems:"stretch"}}>
           {/* CARD SINISTRA — Concetti di Sicurezza */}
-          <HomeCard accent={AC}>
+          <CsCard accent={AC}>
             <div style={{...SERIF,fontSize:"26px",fontWeight:"700",color:N,marginBottom:"4px",lineHeight:1.15}}>Concetti di Sicurezza</div>
             <div style={{...SANS,fontSize:"13px",fontWeight:"600",color:AC,marginBottom:"22px"}}>CS</div>
             <div style={{display:"flex",flexDirection:"column",gap:"10px",marginTop:"auto"}}>
               <Btn ch="Nuovo Concetto" on={onNew} variant="red" full/>
               <Btn ch="Modifica Esistente" on={onMod} variant="ghost" full style={{border:`1px solid ${AC}`,color:AC}}/>
             </div>
-          </HomeCard>
+          </CsCard>
           {/* CARD DESTRA — PPS */}
-          <HomeCard accent={AC}>
+          <CsCard accent={AC}>
             <div style={{...SERIF,fontSize:"26px",fontWeight:"700",color:N,marginBottom:"4px",lineHeight:1.15}}>PPS</div>
             <div style={{...SANS,fontSize:"13px",fontWeight:"600",color:AC,marginBottom:"22px"}}>Prescrizioni Particolari di Servizio</div>
             <div style={{display:"flex",flexDirection:"column",gap:"10px",marginTop:"auto"}}>
               <Btn ch="Crea / Apri PPS" on={onPps} variant="red" full/>
             </div>
-          </HomeCard>
+          </CsCard>
         </div>
         <div style={{textAlign:"center",marginTop:"36px",fontSize:"11.5px",color:GR,...SANS}}>
           DELTAgroup Security &amp; Services AG &nbsp;·&nbsp; Via alla Foce 4, 6933 Muzzano
@@ -3398,8 +3484,9 @@ export default function App() {
   const done = (data) => { setDoc(data); setView("preview"); };
   return (
     <div style={{minHeight:"100vh",background:BG}}>
-      <Header onHome={()=>setView("home")}/>
-      {view==="home"&&<Home onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onPps={()=>setView("pps-list")}/>}
+      {view!=="home"&&<Header onHome={()=>setView("home")}/>}
+      {view==="home"&&<LandingHome onCs={()=>setView("cs-home")} onPps={()=>setView("pps-list")}/>}
+      {view==="cs-home"&&<CsHome onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onBack={()=>setView("home")}/>}
       {view==="wizard"&&<Wizard onBack={()=>setView("home")} onDone={done}/>}
       {view==="modify"&&<Modify onBack={()=>setView("home")} onDone={done}/>}
       {view==="pps-list"&&
