@@ -3402,7 +3402,7 @@ ${flowParts}
 }
 
 // ── LANDING ───────────────────────────────────────────────────────────────────
-function LandingHome({ onCs, onPps }) {
+function LandingHome({ onCs, onPps, isAdmin = false }) {
   const [hov1, setHov1] = useState(false);
   const [hov2, setHov2] = useState(false);
   const [ww, setWw] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
@@ -3411,7 +3411,8 @@ function LandingHome({ onCs, onPps }) {
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-  const cols = ww < 700 ? "1fr" : "1fr 1fr";
+  const cols = (!isAdmin || ww < 700) ? "1fr" : "1fr 1fr";
+  const gridMax = isAdmin ? "900px" : "440px";
 
   const cardBase = {
     background:"#fff", borderRadius:"20px", padding:"48px 32px",
@@ -3434,8 +3435,9 @@ function LandingHome({ onCs, onPps }) {
       </div>
 
       <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{display:"grid",gridTemplateColumns:cols,gap:"32px",maxWidth:"900px",width:"100%",padding:"0 40px"}}>
-          {/* CARD CS */}
+        <div style={{display:"grid",gridTemplateColumns:cols,gap:"32px",maxWidth:gridMax,width:"100%",padding:"0 40px"}}>
+          {/* CARD CS — solo admin */}
+          {isAdmin && (
           <div onClick={onCs} onMouseEnter={()=>setHov1(true)} onMouseLeave={()=>setHov1(false)} style={{...cardBase,...(hov1?cardHover:{})}}>
             <div style={iconCircle}>
               <svg viewBox="0 0 24 24" width="36" height="36" fill="none" stroke="#1E40AF" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
@@ -3455,6 +3457,7 @@ function LandingHome({ onCs, onPps }) {
               </svg>
             </div>
           </div>
+          )}
           {/* CARD PPS */}
           <div onClick={onPps} onMouseEnter={()=>setHov2(true)} onMouseLeave={()=>setHov2(false)} style={{...cardBase,...(hov2?cardHover:{})}}>
             <div style={iconCircle}>
@@ -3568,7 +3571,7 @@ function CsHome({ onNew, onMod, onBack, onArchive }) {
 }
 
 // ── HEADER ────────────────────────────────────────────────────────────────────
-function Header({ onHome }) {
+function Header({ onHome, profilo, onLogout, onAdmin, isAdmin }) {
   return (
     <div style={{
       background:"#111827", padding:"0 20px", height:"60px",
@@ -3595,8 +3598,141 @@ function Header({ onHome }) {
           </div>
         </div>
       </button>
-      <div style={{...SANS,fontSize:"10px",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",letterSpacing:"0.08em",textAlign:"right"}}>
-        Security &amp; Services AG
+      <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
+        <span style={{...SANS,fontSize:"10px",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Security &amp; Services AG</span>
+        {isAdmin && (
+          <button onClick={onAdmin} style={{...SANS,fontSize:"11px",fontWeight:"700",color:"rgba(255,255,255,0.85)",background:"none",border:"none",cursor:"pointer"}} title="Gestione utenti">⚙ Utenti</button>
+        )}
+        {profilo && (
+          <span style={{...SANS,fontSize:"11px",color:"rgba(255,255,255,0.6)",maxWidth:"160px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={profilo.email||""}>
+            {String(profilo.nome || profilo.email || "").slice(0,20)}
+          </span>
+        )}
+        <button onClick={onLogout} style={{...SANS,fontSize:"11px",fontWeight:"700",color:WH,background:"transparent",border:"1px solid rgba(255,255,255,0.5)",borderRadius:"6px",padding:"5px 12px",cursor:"pointer"}}>Esci</button>
+      </div>
+    </div>
+  );
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────────────────────
+function LoginPage({ onLogin }) {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [err, setErr] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    setErr(null); setLoading(true);
+    try {
+      if (!supabase.auth || typeof supabase.auth.signInWithPassword !== "function") {
+        throw new Error("Autenticazione non disponibile (Supabase non configurato).");
+      }
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      onLogin?.();
+    } catch (e2) {
+      setErr("Credenziali non valide. Riprova.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const inp = { width:"100%", padding:"11px 12px", border:`1px solid ${GB}`, borderRadius:"9px", fontSize:"14px", color:N, background:WH, outline:"none", ...SANS, boxSizing:"border-box", marginBottom:"12px" };
+
+  return (
+    <div style={{minHeight:"100vh",background:"#EEF2FF",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px"}}>
+      <form onSubmit={submit} style={{background:WH,borderRadius:"20px",padding:"40px 34px",boxShadow:"0 8px 32px rgba(30,58,138,0.12)",width:"100%",maxWidth:"380px",textAlign:"center"}}>
+        <img src={logoImg} alt="DELTAgroup" style={{maxWidth:"200px",width:"100%",height:"auto",marginBottom:"20px"}}/>
+        <div style={{...SANS,fontSize:"18px",fontWeight:"700",color:"#0c1d3d",marginBottom:"4px"}}>CS — PPS · Accesso riservato</div>
+        <div style={{...SANS,fontSize:"13px",color:"#94A3B8",marginBottom:"24px"}}>DELTAgroup Ticino</div>
+        <input type="email" value={email} onChange={(e)=>setEmail(e.target.value)} placeholder="Email" autoComplete="username" style={inp}/>
+        <input type="password" value={password} onChange={(e)=>setPassword(e.target.value)} placeholder="Password" autoComplete="current-password" style={inp}/>
+        {err && <div style={{...SANS,fontSize:"12.5px",color:RD,marginBottom:"12px"}}>{err}</div>}
+        <button type="submit" disabled={loading} style={{...SANS,width:"100%",padding:"12px",background:loading?"#9bb0e0":AC,color:WH,border:"none",borderRadius:"9px",fontSize:"14px",fontWeight:"700",cursor:loading?"wait":"pointer"}}>
+          {loading ? "Accesso…" : "Accedi"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
+// ── PANNELLO ADMIN ─────────────────────────────────────────────────────────────
+function AdminPanel({ onBack }) {
+  const [rows, setRows] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+  const [msg, setMsg] = useState(null);
+
+  const load = async () => {
+    setLoading(true); setErr(null);
+    const { data, error } = await supabase.from("profili").select("*").order("email");
+    if (error) { setErr(`Errore nel caricamento dei profili: ${error.message}`); setRows([]); }
+    else setRows(data || []);
+    setLoading(false);
+  };
+  React.useEffect(() => { load(); }, []);
+
+  const flash = (t) => { setMsg(t); };
+
+  const updateProfilo = async (id, patch) => {
+    setErr(null); setMsg(null);
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+    const { error } = await supabase.from("profili").update(patch).eq("id", id);
+    if (error) { setErr(`Errore salvataggio: ${error.message}`); load(); }
+    else flash("Salvato ✓");
+  };
+
+  const TH = { ...SANS, textAlign:"left", padding:"10px 12px", fontSize:"11px", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", color:TM, borderBottom:`2px solid ${GB}`, whiteSpace:"nowrap" };
+  const TD = { ...SANS, padding:"11px 12px", fontSize:"13px", color:N, borderBottom:`1px solid ${GL}` };
+
+  return (
+    <div style={{minHeight:"calc(100vh - 60px)",background:BG,padding:"32px 20px"}}>
+      <div style={{maxWidth:"900px",margin:"0 auto"}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:"20px"}}>
+          <h1 style={{...SERIF,fontSize:"26px",fontWeight:700,color:N,margin:0}}>Gestione Utenti</h1>
+          <div style={{display:"flex",alignItems:"center",gap:"12px"}}>
+            {msg && <span style={{...SANS,fontSize:"13px",fontWeight:700,color:"#16a34a"}}>{msg}</span>}
+            <button onClick={onBack} style={{...SANS,padding:"9px 18px",border:`1px solid ${GB}`,borderRadius:"8px",background:WH,color:N,cursor:"pointer",fontWeight:700,fontSize:"13px"}}>← Indietro</button>
+          </div>
+        </div>
+
+        <div style={{background:WH,border:`1px solid ${GB}`,borderRadius:"14px",padding:"8px",boxShadow:"0 2px 12px rgba(12,29,61,0.06)"}}>
+          {err && <div style={{...SANS,margin:"12px",padding:"10px 12px",background:"#fdeced",border:`1px solid ${RD}55`,borderRadius:"8px",color:RD,fontSize:"12.5px"}}>{err}</div>}
+          {loading ? (
+            <div style={{...SANS,padding:"48px",textAlign:"center",color:TM,fontSize:"14px"}}>Caricamento in corso…</div>
+          ) : (
+            <div style={{overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead><tr>
+                  <th style={TH}>Email</th><th style={TH}>Nome</th><th style={TH}>Ruolo</th><th style={TH}>Attivo</th><th style={TH}>Azioni</th>
+                </tr></thead>
+                <tbody>
+                  {rows.map((r) => (
+                    <tr key={r.id}>
+                      <td style={{...TD,fontWeight:600}}>{r.email || "—"}</td>
+                      <td style={TD}>{r.nome || "—"}</td>
+                      <td style={TD}>
+                        <select value={r.ruolo || "utente"} onChange={(e)=>updateProfilo(r.id,{ruolo:e.target.value})}
+                          style={{...SANS,padding:"6px 8px",border:`1px solid ${GB}`,borderRadius:"6px",fontSize:"13px",color:N,background:WH,cursor:"pointer"}}>
+                          <option value="admin">admin</option>
+                          <option value="utente">utente</option>
+                        </select>
+                      </td>
+                      <td style={TD}>{r.attivo ? "Sì" : "No"}</td>
+                      <td style={TD}>
+                        <button onClick={()=>updateProfilo(r.id,{attivo:!r.attivo})}
+                          style={{...SANS,padding:"6px 12px",borderRadius:"6px",border:`1px solid ${r.attivo?RD:GB}`,background:WH,color:r.attivo?RD:"#16a34a",cursor:"pointer",fontSize:"12px",fontWeight:700}}>
+                          {r.attivo ? "Disattiva" : "Attiva"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -3609,6 +3745,8 @@ export default function App() {
   const [ppsId, setPpsId] = useState(null);
   const [csDocId, setCsDocId] = useState(null);
   const [csLoadedContent, setCsLoadedContent] = useState(null);
+  const [sessione, setSessione] = useState(undefined); // undefined = caricamento
+  const [profilo, setProfilo] = useState(null);
   // Prevenzione globale apertura file da drag fuori dalle dropzone
   React.useEffect(() => {
     const stop = (e) => e.preventDefault();
@@ -3616,11 +3754,61 @@ export default function App() {
     document.addEventListener("drop", stop);
     return () => { document.removeEventListener("dragover", stop); document.removeEventListener("drop", stop); };
   }, []);
+
+  // ── Autenticazione (Supabase Auth) ──────────────────────────────────────────
+  React.useEffect(() => {
+    let active = true;
+    const auth = supabase.auth;
+    // Se l'auth non è disponibile (env Supabase mancanti / stub), mostra il login.
+    if (!auth || typeof auth.getSession !== "function") { setSessione(null); return; }
+    const caricaProfilo = async (userId) => {
+      const { data } = await supabase.from("profili").select("*").eq("id", userId).single();
+      if (!active) return;
+      if (data && !data.attivo) {
+        await supabase.auth.signOut();
+        alert("Account disabilitato. Contatta l'amministratore.");
+        return;
+      }
+      setProfilo(data);
+    };
+    auth.getSession().then(({ data: { session } }) => {
+      if (!active) return;
+      setSessione(session);
+      if (session) caricaProfilo(session.user.id);
+    });
+    const { data: sub } = auth.onAuthStateChange((_event, session) => {
+      setSessione(session);
+      if (session) caricaProfilo(session.user.id);
+      else { setSessione(null); setProfilo(null); }
+    });
+    return () => { active = false; sub?.subscription?.unsubscribe?.(); };
+  }, []);
+
+  const isAdmin = profilo?.ruolo === "admin";
+
+  // Gli utenti non-admin non possono accedere alle viste del modulo CS.
+  React.useEffect(() => {
+    if (profilo && !isAdmin) {
+      const csViews = ["cs-home", "cs-list", "cs-load", "wizard", "modify", "preview", "admin"];
+      if (csViews.includes(view)) setView("pps-list");
+    }
+  }, [profilo, isAdmin, view]);
+
   const done = (data) => { setDoc(data); setCsDocId(null); setCsLoadedContent(null); setView("preview"); };
+  const logout = () => { supabase.auth?.signOut?.(); };
+
+  if (sessione === undefined) {
+    return <div style={{minHeight:"100vh",background:"#EEF2FF",display:"flex",alignItems:"center",justifyContent:"center",...SANS,color:"#52637a",fontSize:"15px"}}>Caricamento…</div>;
+  }
+  if (sessione === null) {
+    return <LoginPage onLogin={()=>{}} />;
+  }
+
   return (
     <div style={{minHeight:"100vh",background:BG}}>
-      {view!=="home"&&<Header onHome={()=>setView("home")}/>}
-      {view==="home"&&<LandingHome onCs={()=>setView("cs-home")} onPps={()=>setView("pps-list")}/>}
+      {view!=="home"&&<Header onHome={()=>setView("home")} profilo={profilo} onLogout={logout} onAdmin={()=>setView("admin")} isAdmin={isAdmin}/>}
+      {view==="home"&&<LandingHome isAdmin={isAdmin} onCs={()=>setView("cs-home")} onPps={()=>setView("pps-list")}/>}
+      {view==="admin"&&profilo?.ruolo==="admin"&&<AdminPanel onBack={()=>setView("home")}/>}
       {view==="cs-home"&&<CsHome onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onBack={()=>setView("home")} onArchive={()=>setView("cs-list")}/>}
       {view==="wizard"&&<Wizard onBack={()=>setView("home")} onDone={done}/>}
       {view==="modify"&&<Modify onBack={()=>setView("home")} onDone={done}/>}
