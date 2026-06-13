@@ -7,6 +7,7 @@ import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   HeadingLevel, AlignmentType, ImageRun, Header, Footer,
   BorderStyle, WidthType, ShadingType, PageNumber, PageOrientation,
+  Tab, TabStopType, TabStopPosition,
 } from "docx";
 
 // ── PALETTE (hex senza #) — allineata a buildDocx.js ────────────────────────
@@ -69,24 +70,35 @@ async function resolveLogoBytes(headerLogoUrl) {
 }
 
 // ── Header / Footer (mirror di buildDocx.js) ────────────────────────────────
-function buildHeader(logoBytes) {
-  const children = [];
+// Logo a sinistra + due righe di testo allineate a destra tramite tab stop.
+function buildHeader(logoBytes, data = {}) {
+  const rightTab = { type: TabStopType.RIGHT, position: TabStopPosition.MAX };
+  const sub = [data.cliente, data.luogo].filter(Boolean).join(" · ");
+  const bottomBorder = { bottom: { color: NAVY, space: 1, style: BorderStyle.SINGLE, size: 12 } };
+
+  const line1Children = [];
   if (logoBytes) {
-    children.push(new ImageRun({
-      data: logoBytes,
-      transformation: { width: 110, height: 40 },
-      type: "jpg",
+    line1Children.push(new ImageRun({ data: logoBytes, transformation: { width: 110, height: 40 }, type: "jpg" }));
+  }
+  line1Children.push(new TextRun({ children: [new Tab()] }));
+  line1Children.push(new TextRun({ text: "PPS — Prescrizioni Particolari di Servizio", bold: true, size: 20, color: NAVY }));
+
+  const p1 = new Paragraph({
+    children: line1Children,
+    tabStops: [rightTab],
+    spacing: { after: 0 },
+    ...(sub ? {} : { border: bottomBorder }),
+  });
+  const headerParas = [p1];
+  if (sub) {
+    headerParas.push(new Paragraph({
+      children: [new TextRun({ children: [new Tab()] }), new TextRun({ text: sub, size: 18, color: "666666" })],
+      tabStops: [rightTab],
+      spacing: { after: 0 },
+      border: bottomBorder,
     }));
   }
-  return new Header({
-    children: [
-      para(children, {
-        alignment: AlignmentType.RIGHT,
-        spacing: { after: 0 },
-        border: { bottom: { color: NAVY, space: 1, style: BorderStyle.SINGLE, size: 12 } },
-      }),
-    ],
-  });
+  return new Header({ children: headerParas });
 }
 
 function buildFooter() {
@@ -153,21 +165,30 @@ function subHeading(title) {
   });
 }
 
+// ── Larghezze tabelle (full-width, somma = 9026 twips) ──────────────────────
+const TBL_W = 9026;
+const COLS_KV = [3200, 5826];        // 2 colonne (Dati servizio, Dettagli)
+const COLS_PER = [2800, 2800, 3426]; // 3 colonne (Pericoli)
+const COLS_REF = [2400, 2400, 2000, 2226]; // 4 colonne (Referenti)
+const WHITE = { type: ShadingType.CLEAR, color: "auto", fill: "FFFFFF" };
+
 // ── Tabella generica chiave/valore (2 colonne) ──────────────────────────────
 function kvTable(rows) {
   const visible = rows.filter(([, v]) => v != null && String(v).trim() !== "");
   if (!visible.length) return null;
   return new Table({
-    width: { size: 9000, type: WidthType.DXA },
-    rows: visible.map(([label, value], i) => new TableRow({
+    width: { size: TBL_W, type: WidthType.DXA },
+    columnWidths: COLS_KV,
+    rows: visible.map(([label, value]) => new TableRow({
       children: [
         new TableCell({
-          width: { size: 3000, type: WidthType.DXA },
-          shading: { type: ShadingType.CLEAR, color: "auto", fill: i % 2 === 0 ? GL : "FFFFFF" },
+          width: { size: COLS_KV[0], type: WidthType.DXA },
+          shading: WHITE,
           children: [para([txt(label, { bold: true, color: NAVY, size: 18 })], { spacing: { after: 0 } })],
         }),
         new TableCell({
-          shading: { type: ShadingType.CLEAR, color: "auto", fill: i % 2 === 0 ? GL : "FFFFFF" },
+          width: { size: COLS_KV[1], type: WidthType.DXA },
+          shading: WHITE,
           children: [para([txt(value, { color: TEXT, size: 18 })], { spacing: { after: 0 } })],
         }),
       ],
@@ -211,20 +232,22 @@ function buildPericoliTable(pericoli) {
   const headers = ["Pericolo", "Conseguenze", "Misure di protezione"];
   const headerRow = new TableRow({
     tableHeader: true,
-    children: headers.map((h) => new TableCell({
+    children: headers.map((h, ci) => new TableCell({
+      width: { size: COLS_PER[ci], type: WidthType.DXA },
       shading: { type: ShadingType.CLEAR, color: "auto", fill: NAVY },
       children: [para([txt(h, { bold: true, color: "FFFFFF", size: 18 })], { spacing: { after: 0 } })],
     })),
   });
-  const bodyRows = list.map((r, i) => new TableRow({
-    children: [r.pericolo, r.conseguenze, r.misure].map((c) => new TableCell({
-      width: { size: 3000, type: WidthType.DXA },
-      shading: { type: ShadingType.CLEAR, color: "auto", fill: i % 2 === 0 ? "FFFFFF" : "F9FBFD" },
+  const bodyRows = list.map((r) => new TableRow({
+    children: [r.pericolo, r.conseguenze, r.misure].map((c, ci) => new TableCell({
+      width: { size: COLS_PER[ci], type: WidthType.DXA },
+      shading: WHITE,
       children: [para([txt(c || "", { size: 18 })], { spacing: { after: 0 } })],
     })),
   }));
   return new Table({
-    width: { size: 9000, type: WidthType.DXA },
+    width: { size: TBL_W, type: WidthType.DXA },
+    columnWidths: COLS_PER,
     rows: [headerRow, ...bodyRows],
     borders: defaultBorders(),
   });
@@ -253,45 +276,53 @@ function buildReferentiTable(referenti) {
   const headers = ["Nome", "Ruolo / Funzione", "Telefono", "E-mail"];
   const headerRow = new TableRow({
     tableHeader: true,
-    children: headers.map((h) => new TableCell({
+    children: headers.map((h, ci) => new TableCell({
+      width: { size: COLS_REF[ci], type: WidthType.DXA },
       shading: { type: ShadingType.CLEAR, color: "auto", fill: NAVY },
       children: [para([txt(h, { bold: true, color: "FFFFFF", size: 18 })], { spacing: { after: 0 } })],
     })),
   });
   if (!list.length) {
     return new Table({
-      width: { size: 9000, type: WidthType.DXA },
+      width: { size: TBL_W, type: WidthType.DXA },
+      columnWidths: COLS_REF,
       rows: [headerRow, new TableRow({
         children: [new TableCell({
           columnSpan: 4,
+          shading: WHITE,
           children: [para([txt("(Nessun referente inserito)", { italics: true, color: MUTED, size: 18 })], { spacing: { after: 0 } })],
         })],
       })],
       borders: defaultBorders(),
     });
   }
-  const bodyRows = list.map((r, i) => new TableRow({
+  const bodyRows = list.map((r) => new TableRow({
     children: [
       new TableCell({
-        shading: { type: ShadingType.CLEAR, color: "auto", fill: i % 2 === 0 ? "FFFFFF" : "F9FBFD" },
+        width: { size: COLS_REF[0], type: WidthType.DXA },
+        shading: WHITE,
         children: [para([txt(r.nome || "", { bold: true, color: NAVY, size: 18 })], { spacing: { after: 0 } })],
       }),
       new TableCell({
-        shading: { type: ShadingType.CLEAR, color: "auto", fill: i % 2 === 0 ? "FFFFFF" : "F9FBFD" },
+        width: { size: COLS_REF[1], type: WidthType.DXA },
+        shading: WHITE,
         children: [para([txt(r.ruolo || "", { size: 18 })], { spacing: { after: 0 } })],
       }),
       new TableCell({
-        shading: { type: ShadingType.CLEAR, color: "auto", fill: i % 2 === 0 ? "FFFFFF" : "F9FBFD" },
+        width: { size: COLS_REF[2], type: WidthType.DXA },
+        shading: WHITE,
         children: [para([txt(r.telefono || "", { size: 18 })], { spacing: { after: 0 } })],
       }),
       new TableCell({
-        shading: { type: ShadingType.CLEAR, color: "auto", fill: i % 2 === 0 ? "FFFFFF" : "F9FBFD" },
+        width: { size: COLS_REF[3], type: WidthType.DXA },
+        shading: WHITE,
         children: [para([txt(r.email || "", { size: 18, color: "1565C0" })], { spacing: { after: 0 } })],
       }),
     ],
   }));
   return new Table({
-    width: { size: 9000, type: WidthType.DXA },
+    width: { size: TBL_W, type: WidthType.DXA },
+    columnWidths: COLS_REF,
     rows: [headerRow, ...bodyRows],
     borders: defaultBorders(),
   });
@@ -376,7 +407,7 @@ export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
         margin: { top: 1700, right: 850, bottom: 1100, left: 850 },
       },
     },
-    headers: { default: buildHeader(logoBytes) },
+    headers: { default: buildHeader(logoBytes, data) },
     footers: { default: buildFooter() },
   };
 
