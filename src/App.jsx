@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import logoImg from "./assets/logo.jpg";
 import { generateDocxBlob } from "./buildDocx";
 import { saveAs } from "file-saver";
+import PpsWizard from "./features/pps/PpsWizard";
 
 // ── PALETTE ──────────────────────────────────────────────────────────────────
 const N = "#0c1d3d";    // navy
@@ -3316,7 +3317,7 @@ function ModeCard({ icon, title, desc, color, on }) {
   );
 }
 
-function Home({ onNew, onMod }) {
+function Home({ onNew, onMod, onPps }) {
   return (
     <div style={{minHeight:"calc(100vh - 60px)",background:BG,display:"flex",alignItems:"center",justifyContent:"center",padding:"40px 20px"}}>
       <div style={{maxWidth:"780px",width:"100%"}}>
@@ -3338,6 +3339,11 @@ function Home({ onNew, onMod }) {
           />
           <ModeCard icon="⟳" title="Modifica Esistente" color={RD} on={onMod}
             desc="Incolla un concetto esistente e descrivi le modifiche. Il sistema aggiornerà il documento mantenendo lo stile DELTAgroup."
+          />
+        </div>
+        <div style={{marginTop:"20px"}}>
+          <ModeCard icon="▤" title="PPS / SPADO — Piano di Pronto Servizio" color={NM} on={onPps}
+            desc="Genera un piano di pronto servizio sintetico (1-2 pagine): dati del servizio, compiti del personale e referenti. Modulo separato dai concetti di sicurezza."
           />
         </div>
         <div style={{textAlign:"center",marginTop:"36px",fontSize:"11.5px",color:GR,...SANS}}>
@@ -3399,9 +3405,10 @@ export default function App() {
   return (
     <div style={{minHeight:"100vh",background:BG}}>
       <Header onHome={()=>setView("home")}/>
-      {view==="home"&&<Home onNew={()=>setView("wizard")} onMod={()=>setView("modify")}/>}
+      {view==="home"&&<Home onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onPps={()=>setView("pps")}/>}
       {view==="wizard"&&<Wizard onBack={()=>setView("home")} onDone={done}/>}
       {view==="modify"&&<Modify onBack={()=>setView("home")} onDone={done}/>}
+      {view==="pps"&&<PpsWizard onBack={()=>setView("home")}/>}
       {view==="preview"&&<Editor data={doc} onBack={()=>setView("home")}/>}
     </div>
   );
