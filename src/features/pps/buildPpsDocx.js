@@ -7,7 +7,7 @@ import {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
   HeadingLevel, AlignmentType, ImageRun, Header, Footer,
   BorderStyle, WidthType, ShadingType, PageNumber, PageOrientation,
-  Tab, TabStopType, TabStopPosition,
+  VerticalAlign,
 } from "docx";
 
 // ── PALETTE (hex senza #) — allineata a buildDocx.js ────────────────────────
@@ -70,35 +70,50 @@ async function resolveLogoBytes(headerLogoUrl) {
 }
 
 // ── Header / Footer (mirror di buildDocx.js) ────────────────────────────────
-// Logo a sinistra + due righe di testo allineate a destra tramite tab stop.
+// Header in stile DELTAgroup: tabella 2 colonne (logo a sx con bordo destro,
+// dati servizio a dx allineati a destra) + divisore con bordo inferiore blu.
 function buildHeader(logoBytes, data = {}) {
-  const rightTab = { type: TabStopType.RIGHT, position: TabStopPosition.MAX };
   const sub = [data.cliente, data.luogo].filter(Boolean).join(" · ");
-  const bottomBorder = { bottom: { color: NAVY, space: 1, style: BorderStyle.SINGLE, size: 12 } };
 
-  const line1Children = [];
-  if (logoBytes) {
-    line1Children.push(new ImageRun({ data: logoBytes, transformation: { width: 110, height: 40 }, type: "jpg" }));
-  }
-  line1Children.push(new TextRun({ children: [new Tab()] }));
-  line1Children.push(new TextRun({ text: "PPS — Prescrizioni Particolari di Servizio", bold: true, size: 20, color: NAVY }));
+  const leftChildren = logoBytes
+    ? [para([new ImageRun({ data: logoBytes, transformation: { width: 170, height: 62 }, type: "jpg" })], { spacing: { after: 0 } })]
+    : [para([], { spacing: { after: 0 } })];
 
-  const p1 = new Paragraph({
-    children: line1Children,
-    tabStops: [rightTab],
-    spacing: { after: 0 },
-    ...(sub ? {} : { border: bottomBorder }),
+  const headerTable = new Table({
+    width: { size: 9026, type: WidthType.DXA },
+    columnWidths: [3200, 5826],
+    borders: noBorders(),
+    rows: [
+      new TableRow({
+        children: [
+          new TableCell({
+            width: { size: 3200, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            borders: { ...noBorders(), right: { style: BorderStyle.SINGLE, size: 8, color: "cccccc" } },
+            children: leftChildren,
+          }),
+          new TableCell({
+            width: { size: 5826, type: WidthType.DXA },
+            verticalAlign: VerticalAlign.CENTER,
+            borders: noBorders(),
+            margins: { left: 200 },
+            children: [
+              para([txt(sub || " ", { bold: true, size: 22, color: NAVY })], { alignment: AlignmentType.RIGHT, spacing: { after: 0 } }),
+              para([txt("PPS — Prescrizioni Particolari di Servizio", { size: 18, color: "666666" })], { alignment: AlignmentType.RIGHT, spacing: { after: 0 } }),
+            ],
+          }),
+        ],
+      }),
+    ],
   });
-  const headerParas = [p1];
-  if (sub) {
-    headerParas.push(new Paragraph({
-      children: [new TextRun({ children: [new Tab()] }), new TextRun({ text: sub, size: 18, color: "666666" })],
-      tabStops: [rightTab],
-      spacing: { after: 0 },
-      border: bottomBorder,
-    }));
-  }
-  return new Header({ children: headerParas });
+
+  const divider = new Paragraph({
+    children: [],
+    spacing: { before: 40, after: 0 },
+    border: { bottom: { color: NAVY, space: 1, style: BorderStyle.SINGLE, size: 24 } },
+  });
+
+  return new Header({ children: [headerTable, divider] });
 }
 
 function buildFooter() {
@@ -120,30 +135,6 @@ function buildFooter() {
       }),
     ],
   });
-}
-
-// ── Blocchi titolo ──────────────────────────────────────────────────────────
-function titleBlock(data) {
-  const out = [];
-  out.push(para([txt("PPS — Prescrizioni Particolari di Servizio", { bold: true, color: NAVY, size: 32 })], {
-    alignment: AlignmentType.CENTER, spacing: { after: 40 },
-  }));
-  out.push(para([txt("PPS", { bold: true, color: RED, size: 22 })], {
-    alignment: AlignmentType.CENTER, spacing: { after: 160 },
-  }));
-  const heading = [data.cliente, data.codice].filter(Boolean).join("  ·  ");
-  if (heading) {
-    out.push(para([txt(heading, { bold: true, color: NAVY, size: 26 })], {
-      alignment: AlignmentType.CENTER, spacing: { after: 60 },
-    }));
-  }
-  const sub = [data.luogo, data.data].filter(Boolean).join(" · ");
-  if (sub) {
-    out.push(para([txt(sub, { color: MUTED, size: 22 })], {
-      alignment: AlignmentType.CENTER, spacing: { after: 240 },
-    }));
-  }
-  return out;
 }
 
 function sectionHeading(num, title) {
@@ -340,7 +331,6 @@ export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
   const logoBytes = await resolveLogoBytes(headerLogoUrl);
 
   const children = [];
-  children.push(...titleBlock(data));
 
   // Numerazione dinamica: il contatore avanza solo per le sezioni effettivamente
   // incluse, così non restano "buchi" quando una sezione opzionale è omessa.
