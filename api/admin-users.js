@@ -1,6 +1,8 @@
 const { createClient } = require('@supabase/supabase-js')
 
 module.exports = async (req, res) => {
+  console.log('URL:', process.env.VITE_SUPABASE_URL ? 'presente' : 'MANCANTE')
+  console.log('KEY:', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'presente' : 'MANCANTE')
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -47,6 +49,7 @@ module.exports = async (req, res) => {
 
     return res.status(200).json({ success: true })
   } catch (err) {
+    console.error('Errore:', err)
     return res.status(500).json({ error: err.message })
   }
 }
