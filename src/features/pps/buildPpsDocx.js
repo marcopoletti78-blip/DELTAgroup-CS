@@ -241,6 +241,7 @@ function buildDettagliTable(data) {
     ["Canale radio", data.radio_canale],
     ["Vettovagliamento", data.vettovagliamento],
     ["Punto di incontro / Parcheggio", data.parcheggio],
+    ["Note operative", data.note_operative],
   ]);
 }
 
@@ -310,23 +311,28 @@ export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
   const children = [];
   children.push(...titleBlock(data));
 
-  // SEZ 1 — Dati del servizio
-  children.push(sectionHeading("1", "Dati del servizio"));
+  // Numerazione dinamica: il contatore avanza solo per le sezioni effettivamente
+  // incluse, così non restano "buchi" quando una sezione opzionale è omessa.
+  let n = 0;
+  const heading = (title) => sectionHeading(String(++n), title);
+
+  // Dati del servizio (sempre presente)
+  children.push(heading("Dati del servizio"));
   const servTable = buildServizioTable(data);
   if (servTable) { children.push(servTable); children.push(spacer()); }
   else children.push(para([txt("(Nessun dato del servizio inserito)", { italics: true, color: MUTED, size: 18 })], { spacing: { after: 120 } }));
 
-  // SEZ 2 — Situazione (omessa se vuota)
+  // Situazione (omessa se vuota)
   if (data.situazione && String(data.situazione).trim()) {
-    children.push(sectionHeading("2", "Situazione"));
+    children.push(heading("Situazione"));
     for (const line of String(data.situazione).split(/\r?\n/).map((s) => s.trim()).filter(Boolean)) {
       children.push(para([txt(line, { size: 20, color: TEXT })], { spacing: { after: 100 } }));
     }
     children.push(spacer());
   }
 
-  // SEZ 3 — Compiti del personale
-  children.push(sectionHeading("3", "Compiti del personale"));
+  // Compiti del personale (sempre presente)
+  children.push(heading("Compiti del personale"));
   const compiti = compitiList(data.compiti);
   if (compiti) children.push(...compiti);
   else children.push(para([txt("(Nessun compito specificato)", { italics: true, color: MUTED, size: 18 })], { spacing: { after: 60 } }));
@@ -338,29 +344,29 @@ export async function generatePpsDocxBlob({ data = {}, headerLogoUrl = null }) {
   }
   children.push(spacer());
 
-  // SEZ 4 — Pericoli particolari (omessa se nessuna riga)
+  // Pericoli particolari (omessa se nessuna riga)
   const pericoliTable = buildPericoliTable(data.pericoli);
   if (pericoliTable) {
-    children.push(sectionHeading("4", "Pericoli particolari"));
+    children.push(heading("Pericoli particolari"));
     children.push(pericoliTable);
     children.push(spacer());
   }
 
-  // SEZ 5 — Dettagli operativi (omessa se nessun valore)
+  // Dettagli operativi (omessa se nessun valore)
   const dettagliTable = buildDettagliTable(data);
   if (dettagliTable) {
-    children.push(sectionHeading("5", "Dettagli operativi"));
+    children.push(heading("Dettagli operativi"));
     children.push(dettagliTable);
     children.push(spacer());
   }
 
-  // SEZ 6 — Referenti
-  children.push(sectionHeading("6", "Referenti"));
+  // Referenti (sempre presente)
+  children.push(heading("Referenti"));
   children.push(buildReferentiTable(data.referenti));
   children.push(spacer());
 
-  // SEZ 7 — Validità
-  children.push(sectionHeading("7", "Validità"));
+  // Validità (sempre presente)
+  children.push(heading("Validità"));
   children.push(para([txt(VALIDITA_TEXT, { size: 20, color: TEXT })], { spacing: { after: 60 } }));
 
   const sectionOpts = {
