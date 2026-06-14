@@ -241,6 +241,120 @@ async function generaCompitiAI(f) {
   return callGenerate(content, 400);
 }
 
+// ── Vista documento (PPS validata, sola lettura) ─────────────────────────────
+// Mostrata al posto del wizard quando bloccata=true. Le azioni (download, copia,
+// sblocco) riusano le funzioni del wizard passate via prop.
+function SezioneLabel({ children }) {
+  return (
+    <div style={{ ...SANS, fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: AC, margin: "18px 0 8px" }}>{children}</div>
+  );
+}
+
+function RigaDato({ label, value }) {
+  return (
+    <div style={{ display: "flex", gap: "10px", marginBottom: "6px" }}>
+      <span style={{ ...SANS, fontSize: "12px", fontWeight: 700, color: TM, minWidth: "84px", flexShrink: 0 }}>{label}</span>
+      <span style={{ ...SANS, fontSize: "13px", color: N, wordBreak: "break-word" }}>{value || "—"}</span>
+    </div>
+  );
+}
+
+function PpsDocView({ data, versione, profilo, onBack, onDownload, onCopy, onUnlock, docxLoading = false, saving = false, err = null }) {
+  const isAdmin = profilo?.ruolo === "admin";
+  const compiti = (Array.isArray(data.compiti) ? data.compiti : []).map((s) => String(s || "").trim()).filter(Boolean);
+  const compitiTop = compiti.slice(0, 5);
+  const compitiResto = compiti.length - compitiTop.length;
+  const referenti = (Array.isArray(data.referenti) ? data.referenti : []).filter((r) => (r?.nome || "").trim());
+  const orario = [data.orario_inizio, data.orario_fine].filter(Boolean).join(" – ");
+
+  const actBtn = (bg, col, bd = "none") => ({
+    ...SANS, width: "100%", padding: "13px 16px", borderRadius: "11px", border: bd, background: bg, color: col,
+    fontSize: "14px", fontWeight: 700, cursor: saving ? "wait" : "pointer", transition: "all 0.15s",
+  });
+
+  return (
+    <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px" }}>
+      <div style={{ maxWidth: "820px", margin: "0 auto" }}>
+        {/* Header / breadcrumb + badge */}
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px", marginBottom: "20px" }}>
+          <div style={{ minWidth: 0 }}>
+            <button onClick={onBack} style={{ ...SANS, background: "none", border: "none", cursor: "pointer", color: TM, fontSize: "12.5px", fontWeight: 600, padding: 0 }}>
+              Archivio PPS › <span style={{ color: N, fontWeight: 700 }}>{data.cliente || "(senza cliente)"}</span>
+            </button>
+            <h1 style={{ ...SERIF, fontSize: "24px", fontWeight: 700, color: N, margin: "6px 0 0" }}>{data.codice || data.luogo || "PPS"}</h1>
+          </div>
+          <span style={{ ...SANS, display: "inline-block", padding: "6px 14px", borderRadius: "999px", fontSize: "12.5px", fontWeight: 700, background: "#FEF3C7", color: "#92400e", border: "1px solid #f59e0b", whiteSpace: "nowrap" }}>
+            🔒 Validata v{versione}
+          </span>
+        </div>
+
+        {/* Bottone principale */}
+        <button onClick={onDownload} disabled={docxLoading} style={{ ...SANS, width: "100%", padding: "18px", borderRadius: "14px", border: "none", background: AC, color: WH, fontSize: "16px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer", boxShadow: "0 4px 16px rgba(30,64,175,0.25)", marginBottom: "18px" }}>
+          {docxLoading ? "Genero DOCX…" : "📄 Scarica DOCX"}
+        </button>
+
+        {err && (
+          <div style={{ ...SANS, marginBottom: "18px", padding: "10px 12px", background: "#fdeced", border: `1px solid ${ERR}55`, borderRadius: "8px", color: ERR, fontSize: "12.5px" }}>{err}</div>
+        )}
+
+        {/* Riepilogo documento */}
+        <div style={{ background: GL, border: `1px solid ${GB}`, borderRadius: "14px", padding: "22px", marginBottom: "20px" }}>
+          <div style={{ ...SANS, fontSize: "11px", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: AC, marginBottom: "12px" }}>Dati servizio</div>
+          <RigaDato label="Cliente" value={data.cliente} />
+          <RigaDato label="Luogo" value={data.luogo} />
+          <RigaDato label="Data" value={data.data} />
+          <RigaDato label="Orario" value={orario} />
+          <RigaDato label="Tipo" value={data.tipo_servizio} />
+          <RigaDato label="Agenti" value={data.num_agenti} />
+
+          {data.situazione && data.situazione.trim() && (
+            <>
+              <SezioneLabel>Situazione</SezioneLabel>
+              <div style={{ ...SANS, fontSize: "13px", color: N, lineHeight: 1.6, display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                {data.situazione}
+              </div>
+            </>
+          )}
+
+          {compiti.length > 0 && (
+            <>
+              <SezioneLabel>Compiti</SezioneLabel>
+              <ul style={{ ...SANS, fontSize: "13px", color: N, lineHeight: 1.6, margin: 0, paddingLeft: "20px" }}>
+                {compitiTop.map((c, i) => <li key={i}>{c}</li>)}
+              </ul>
+              {compitiResto > 0 && (
+                <div style={{ ...SANS, fontSize: "12.5px", color: TM, fontStyle: "italic", marginTop: "6px", paddingLeft: "20px" }}>… e altri {compitiResto}</div>
+              )}
+            </>
+          )}
+
+          {referenti.length > 0 && (
+            <>
+              <SezioneLabel>Referenti</SezioneLabel>
+              <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                {referenti.map((r, i) => (
+                  <div key={i} style={{ ...SANS, fontSize: "13px", color: N }}>
+                    <b>{r.nome}</b>{r.ruolo ? <span style={{ color: TM }}> — {r.ruolo}</span> : null}
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Azioni */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+          <button onClick={onCopy} disabled={saving} style={actBtn(AC, WH)}>📋 Crea copia — Nuova versione modificabile</button>
+          {isAdmin && (
+            <button onClick={onUnlock} disabled={saving} style={actBtn(WH, "#b45309", "1px solid #f59e0b")}>🔓 Sblocca per modificare</button>
+          )}
+          <button onClick={onBack} disabled={saving} style={actBtn(WH, N, `1px solid ${GB}`)}>← Archivio</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Wizard ───────────────────────────────────────────────────────────────────
 export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = false, profilo = null }) {
   const gc = (cols) => (isMobile ? "1fr" : cols);
@@ -495,6 +609,24 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       setDocxLoading(false);
     }
   };
+
+  // PPS validata → vista documento di sola lettura (nessun wizard).
+  if (!loading && bloccata) {
+    return (
+      <PpsDocView
+        data={f}
+        versione={versione}
+        profilo={profilo}
+        onBack={onBack}
+        onDownload={doDownload}
+        onCopy={copiaPps}
+        onUnlock={doSblocca}
+        docxLoading={docxLoading}
+        saving={saving}
+        err={err}
+      />
+    );
+  }
 
   return (
     <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px" }}>
