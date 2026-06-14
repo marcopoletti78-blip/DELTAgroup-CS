@@ -3402,7 +3402,7 @@ ${flowParts}
 }
 
 // ── LANDING ───────────────────────────────────────────────────────────────────
-function LandingHome({ onCs, onPps, isAdmin = false }) {
+function LandingHome({ onCs, onPps, isAdmin = false, isMobile = false }) {
   const [hov1, setHov1] = useState(false);
   const [hov2, setHov2] = useState(false);
   const [ww, setWw] = useState(typeof window !== "undefined" ? window.innerWidth : 1024);
@@ -3413,6 +3413,7 @@ function LandingHome({ onCs, onPps, isAdmin = false }) {
   }, []);
   const cols = (!isAdmin || ww < 700) ? "1fr" : "1fr 1fr";
   const gridMax = isAdmin ? "900px" : "440px";
+  const sidePad = isMobile ? "16px" : "40px";
 
   const cardBase = {
     background:"#fff", borderRadius:"20px", padding:"48px 32px",
@@ -3430,12 +3431,14 @@ function LandingHome({ onCs, onPps, isAdmin = false }) {
   return (
     <div style={{minHeight:"100vh",background:"#EEF2FF",display:"flex",flexDirection:"column",justifyContent:"space-between"}}>
       <div style={{textAlign:"center",paddingTop:"60px"}}>
-        <div style={{...SANS,fontSize:"28px",fontWeight:"700",letterSpacing:"0.2em",color:"#1E3A8A",marginBottom:"8px"}}>PIATTAFORMA OPERATIVA</div>
+        <div style={{...SANS,fontSize:isMobile?"20px":"28px",fontWeight:"700",letterSpacing:"0.2em",color:"#1E3A8A",marginBottom:"8px"}}>PIATTAFORMA OPERATIVA</div>
         <div style={{...SANS,fontSize:"14px",color:"#94A3B8",letterSpacing:"0.05em"}}>DELTAgroup Ticino</div>
       </div>
 
       <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{display:"grid",gridTemplateColumns:cols,gap:"32px",maxWidth:gridMax,width:"100%",padding:"0 40px"}}>
+        <div style={isMobile
+          ? {display:"flex",flexDirection:"column",gap:"20px",maxWidth:gridMax,width:"100%",padding:"0 16px"}
+          : {display:"grid",gridTemplateColumns:cols,gap:"32px",maxWidth:gridMax,width:"100%",padding:"0 40px"}}>
           {/* CARD CS — solo admin */}
           {isAdmin && (
           <div onClick={onCs} onMouseEnter={()=>setHov1(true)} onMouseLeave={()=>setHov1(false)} style={{...cardBase,...(hov1?cardHover:{})}}>
@@ -3480,7 +3483,7 @@ function LandingHome({ onCs, onPps, isAdmin = false }) {
         </div>
       </div>
 
-      <div style={{borderTop:"1px solid #D1D9F0",padding:"20px 40px",textAlign:"center",fontSize:"11.5px",color:"#94A3B8",...SANS}}>
+      <div style={{borderTop:"1px solid #D1D9F0",padding:`20px ${sidePad}`,textAlign:"center",fontSize:"11.5px",color:"#94A3B8",...SANS}}>
         DELTAgroup Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 919 214 949 · TICINO@delta.ch
       </div>
     </div>
@@ -3488,7 +3491,7 @@ function LandingHome({ onCs, onPps, isAdmin = false }) {
 }
 
 // ── HOME CS (stile LandingHome) ───────────────────────────────────────────────
-function CsHome({ onNew, onMod, onBack, onArchive }) {
+function CsHome({ onNew, onMod, onBack, onArchive, isMobile = false }) {
   const [hov1, setHov1] = useState(false);
   const [hov2, setHov2] = useState(false);
 
@@ -3517,7 +3520,9 @@ function CsHome({ onNew, onMod, onBack, onArchive }) {
       </div>
 
       <div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center"}}>
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"32px",maxWidth:"900px",width:"100%",padding:"0 40px"}}>
+        <div style={isMobile
+          ? {display:"flex",flexDirection:"column",gap:"20px",maxWidth:"900px",width:"100%",padding:"0 16px"}
+          : {display:"grid",gridTemplateColumns:"1fr 1fr",gap:"32px",maxWidth:"900px",width:"100%",padding:"0 40px"}}>
           {/* CARD 1 — Nuovo Concetto */}
           <div onClick={onNew} onMouseEnter={()=>setHov1(true)} onMouseLeave={()=>setHov1(false)} style={{...cardBase,...(hov1?cardHover:{})}}>
             <div style={iconCircle}>
@@ -3571,7 +3576,15 @@ function CsHome({ onNew, onMod, onBack, onArchive }) {
 }
 
 // ── HEADER ────────────────────────────────────────────────────────────────────
-function Header({ onHome, profilo, onLogout, onAdmin, isAdmin }) {
+function Header({ onHome, profilo, onLogout, onAdmin, isAdmin, isMobile = false }) {
+  const nomeCompleto = String(profilo?.nome || profilo?.email || "");
+  const iniziali = nomeCompleto
+    .trim()
+    .split(/[\s@.]+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join("") || "?";
   return (
     <div style={{
       background:"#111827", padding:"0 20px", height:"60px",
@@ -3598,14 +3611,16 @@ function Header({ onHome, profilo, onLogout, onAdmin, isAdmin }) {
           </div>
         </div>
       </button>
-      <div style={{display:"flex",alignItems:"center",gap:"14px"}}>
-        <span style={{...SANS,fontSize:"10px",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Security &amp; Services AG</span>
+      <div style={{display:"flex",alignItems:"center",gap:isMobile?"10px":"14px"}}>
+        {!isMobile && (
+          <span style={{...SANS,fontSize:"10px",color:"rgba(255,255,255,0.3)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Security &amp; Services AG</span>
+        )}
         {isAdmin && (
-          <button onClick={onAdmin} style={{...SANS,fontSize:"11px",fontWeight:"700",color:"rgba(255,255,255,0.85)",background:"none",border:"none",cursor:"pointer"}} title="Gestione utenti">⚙ Utenti</button>
+          <button onClick={onAdmin} style={{...SANS,fontSize:"11px",fontWeight:"700",color:"rgba(255,255,255,0.85)",background:"none",border:"none",cursor:"pointer"}} title="Gestione utenti">{isMobile ? "⚙" : "⚙ Utenti"}</button>
         )}
         {profilo && (
           <span style={{...SANS,fontSize:"11px",color:"rgba(255,255,255,0.6)",maxWidth:"160px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={profilo.email||""}>
-            {String(profilo.nome || profilo.email || "").slice(0,20)}
+            {isMobile ? iniziali : nomeCompleto.slice(0,20)}
           </span>
         )}
         <button onClick={onLogout} style={{...SANS,fontSize:"11px",fontWeight:"700",color:WH,background:"transparent",border:"1px solid rgba(255,255,255,0.5)",borderRadius:"6px",padding:"5px 12px",cursor:"pointer"}}>Esci</button>
@@ -3800,6 +3815,12 @@ export default function App() {
   const [csLoadedContent, setCsLoadedContent] = useState(null);
   const [sessione, setSessione] = useState(undefined); // undefined = caricamento
   const [profilo, setProfilo] = useState(null);
+  const [isMobile, setIsMobile] = useState(typeof window !== "undefined" && window.innerWidth < 768);
+  React.useEffect(() => {
+    const handle = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", handle);
+    return () => window.removeEventListener("resize", handle);
+  }, []);
   // Prevenzione globale apertura file da drag fuori dalle dropzone
   React.useEffect(() => {
     const stop = (e) => e.preventDefault();
@@ -3859,14 +3880,15 @@ export default function App() {
 
   return (
     <div style={{minHeight:"100vh",background:BG}}>
-      {view!=="home"&&<Header onHome={()=>setView("home")} profilo={profilo} onLogout={logout} onAdmin={()=>setView("admin")} isAdmin={isAdmin}/>}
-      {view==="home"&&<LandingHome isAdmin={isAdmin} onCs={()=>setView("cs-home")} onPps={()=>setView("pps-list")}/>}
+      {view!=="home"&&<Header onHome={()=>setView("home")} profilo={profilo} onLogout={logout} onAdmin={()=>setView("admin")} isAdmin={isAdmin} isMobile={isMobile}/>}
+      {view==="home"&&<LandingHome isAdmin={isAdmin} isMobile={isMobile} onCs={()=>setView("cs-home")} onPps={()=>setView("pps-list")}/>}
       {view==="admin"&&profilo?.ruolo==="admin"&&<AdminPanel onBack={()=>setView("home")}/>}
-      {view==="cs-home"&&<CsHome onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onBack={()=>setView("home")} onArchive={()=>setView("cs-list")}/>}
+      {view==="cs-home"&&<CsHome isMobile={isMobile} onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onBack={()=>setView("home")} onArchive={()=>setView("cs-list")}/>}
       {view==="wizard"&&<Wizard onBack={()=>setView("home")} onDone={done}/>}
       {view==="modify"&&<Modify onBack={()=>setView("home")} onDone={done}/>}
       {view==="cs-list"&&
         <CsList
+          isMobile={isMobile}
           onNew={()=>{ setCsDocId(null); setCsLoadedContent(null); setView("cs-home"); }}
           onOpen={(id)=>{ setCsDocId(id); setView("cs-load"); }}
           onBack={()=>setView("home")}
@@ -3879,6 +3901,7 @@ export default function App() {
         />}
       {view==="pps-list"&&
         <PpsList
+          isMobile={isMobile}
           onNew={()=>{ setPpsId(null); setView("pps-edit"); }}
           onOpen={(id)=>{ setPpsId(id); setView("pps-edit"); }}
           onBack={()=>setView("home")}
@@ -3886,6 +3909,7 @@ export default function App() {
       {view==="pps-edit"&&
         <PpsWizard
           ppsId={ppsId}
+          isMobile={isMobile}
           onBack={()=>setView("pps-list")}
           onSaved={(id)=>setPpsId(id)}
         />}

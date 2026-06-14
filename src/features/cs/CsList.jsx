@@ -58,7 +58,7 @@ function Btn({ children, on, variant = "navy", disabled = false }) {
 }
 
 // ── Archivio CS ───────────────────────────────────────────────────────────────
-export default function CsList({ onNew, onOpen, onBack }) {
+export default function CsList({ onNew, onOpen, onBack, isMobile = false }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -97,7 +97,7 @@ export default function CsList({ onNew, onOpen, onBack }) {
   return (
     <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px" }}>
       <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
           <div>
             <div style={{ ...SANS, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.18em", color: AC, fontWeight: 700 }}>
               Concetti di Sicurezza
@@ -122,6 +122,31 @@ export default function CsList({ onNew, onOpen, onBack }) {
           ) : rows.length === 0 ? (
             <div style={{ ...SANS, padding: "48px", textAlign: "center", color: TM, fontSize: "14px" }}>
               Nessun documento CS salvato. Crea il primo con <b>“+ Nuovo CS”</b>.
+            </div>
+          ) : isMobile ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "8px" }}>
+              {rows.map((d) => (
+                <div key={d.id} onClick={() => onOpen(d.id)}
+                  style={{ ...SANS, cursor: "pointer", border: `1px solid ${GB}`, borderRadius: "12px", padding: "14px", background: WH, boxShadow: "0 1px 4px rgba(12,29,61,0.05)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                    <div style={{ fontWeight: 700, color: AC, fontSize: "15px" }}>{d.nome_evento || "—"}</div>
+                    <button
+                      onClick={(e) => doDelete(e, d.id)}
+                      disabled={deletingId === d.id}
+                      title="Elimina"
+                      style={{ ...SANS, background: "none", border: "none", cursor: deletingId === d.id ? "wait" : "pointer", fontSize: "18px", color: ERR, padding: "0 4px", flexShrink: 0, lineHeight: 1 }}>
+                      {deletingId === d.id ? "…" : "×"}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: "13px", color: TM, marginTop: "4px" }}>📍 {d.luogo || "—"}</div>
+                  <div style={{ fontSize: "13px", color: TM, marginTop: "2px" }}>{d.tipo_evento || "—"}{d.anno ? ` · ${d.anno}` : ""}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                    <StatoBadge stato={d.stato} />
+                    <span style={{ fontSize: "12px", color: TM }}>v{d.versione ?? "—"}</span>
+                    <span style={{ fontSize: "12px", color: TM }}>{formatDate(d.updated_at)}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>

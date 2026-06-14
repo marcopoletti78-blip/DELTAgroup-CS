@@ -59,7 +59,7 @@ function Btn({ children, on, variant = "navy", disabled = false }) {
 }
 
 // ── Lista PPS ─────────────────────────────────────────────────────────────────
-export default function PpsList({ onNew, onOpen, onBack }) {
+export default function PpsList({ onNew, onOpen, onBack, isMobile = false }) {
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
@@ -98,7 +98,7 @@ export default function PpsList({ onNew, onOpen, onBack }) {
   return (
     <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px" }}>
       <div style={{ maxWidth: "1000px", margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
           <div>
             <div style={{ ...SANS, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.18em", color: AC, fontWeight: 700 }}>
               Prescrizioni Particolari di Servizio
@@ -123,6 +123,32 @@ export default function PpsList({ onNew, onOpen, onBack }) {
           ) : rows.length === 0 ? (
             <div style={{ ...SANS, padding: "48px", textAlign: "center", color: TM, fontSize: "14px" }}>
               Nessuna PPS salvata. Crea la prima con <b>“+ Nuova PPS”</b>.
+            </div>
+          ) : isMobile ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "8px" }}>
+              {rows.map((p) => (
+                <div key={p.id} onClick={() => onOpen(p.id)}
+                  style={{ ...SANS, cursor: "pointer", border: `1px solid ${GB}`, borderRadius: "12px", padding: "14px", background: WH, boxShadow: "0 1px 4px rgba(12,29,61,0.05)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+                    <div style={{ fontWeight: 700, color: AC, fontSize: "15px" }}>{p.codice || "—"}</div>
+                    <button
+                      onClick={(e) => doDelete(e, p.id)}
+                      disabled={deletingId === p.id}
+                      title="Elimina"
+                      style={{ ...SANS, background: "none", border: "none", cursor: deletingId === p.id ? "wait" : "pointer", fontSize: "16px", color: ERR, padding: "0 4px", flexShrink: 0 }}>
+                      {deletingId === p.id ? "…" : "🗑"}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: "14px", color: N, fontWeight: 600, marginTop: "2px" }}>{p.cliente || "—"}</div>
+                  <div style={{ fontSize: "13px", color: TM, marginTop: "4px" }}>📍 {p.luogo || "—"}</div>
+                  <div style={{ fontSize: "13px", color: TM, marginTop: "2px" }}>{p.tipo_servizio || "—"}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "10px", flexWrap: "wrap" }}>
+                    <StatoBadge stato={p.stato} />
+                    <span style={{ fontSize: "12px", color: TM }}>v{p.versione ?? "—"}</span>
+                    <span style={{ fontSize: "12px", color: TM }}>{formatDate(p.updated_at)}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : (
             <div style={{ overflowX: "auto" }}>

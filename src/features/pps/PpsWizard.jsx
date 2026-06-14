@@ -186,14 +186,14 @@ function ListEditor({ items, setItems, ph, addLabel }) {
   );
 }
 
-function StepBar({ cur }) {
+function StepBar({ cur, isMobile = false }) {
   return (
     <div style={{ display: "flex", gap: "6px", marginBottom: "28px" }}>
       {STEPS.map((s, i) => (
         <div key={s} style={{ flex: 1, textAlign: "center" }}>
           <div style={{ height: "4px", borderRadius: "2px", marginBottom: "6px", background: i <= cur ? AC : GB }} />
           <span style={{ ...SANS, fontSize: "10.5px", fontWeight: i === cur ? 700 : 500, color: i <= cur ? N : GR }}>
-            {i + 1}. {s}
+            {isMobile ? i + 1 : `${i + 1}. ${s}`}
           </span>
         </div>
       ))}
@@ -231,7 +231,8 @@ async function generaCompitiAI(f) {
 }
 
 // ── Wizard ───────────────────────────────────────────────────────────────────
-export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
+export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = false }) {
+  const gc = (cols) => (isMobile ? "1fr" : cols);
   const [step, setStep] = useState(0);
   const [f, setF] = useState(INIT);
   const [aiSit, setAiSit] = useState(false);
@@ -420,7 +421,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
   return (
     <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px" }}>
       <div style={{ maxWidth: "820px", margin: "0 auto" }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
           <div>
             <div style={{ ...SANS, fontSize: "10px", textTransform: "uppercase", letterSpacing: "0.18em", color: AC, fontWeight: 700 }}>
               Prescrizioni Particolari di Servizio
@@ -441,23 +442,23 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
             <div style={{ ...SANS, padding: "48px", textAlign: "center", color: TM, fontSize: "14px" }}>Caricamento della PPS in corso…</div>
           ) : (
           <>
-          <StepBar cur={step} />
+          <StepBar cur={step} isMobile={isMobile} />
 
           {/* STEP 1 — Dati servizio */}
           {step === 0 && (
             <div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr"), gap: "12px" }}>
                 <Field label="Codice servizio"><Txt v={f.codice} set={(v) => u("codice", v)} ph="Es. UBS-ZH-001" /></Field>
                 <Field label="Numero cliente"><Txt v={f.numero_cliente} set={(v) => u("numero_cliente", v)} ph="Es. KD-705002505" /></Field>
               </div>
               <Field label="Cliente / Committente"><Txt v={f.cliente} set={(v) => u("cliente", v)} ph="Nome del cliente" /></Field>
               <Field label="Luogo / Indirizzo"><Txt v={f.luogo} set={(v) => u("luogo", v)} ph="Indirizzo / località" /></Field>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr 1fr"), gap: "12px" }}>
                 <Field label="Data servizio"><Txt v={f.data} set={(v) => u("data", v)} ph="gg.mm.aaaa" /></Field>
                 <Field label="Orario inizio"><Txt v={f.orario_inizio} set={(v) => u("orario_inizio", v)} ph="20:00" /></Field>
                 <Field label="Orario fine"><Txt v={f.orario_fine} set={(v) => u("orario_fine", v)} ph="06:00" /></Field>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: gc("2fr 1fr"), gap: "12px" }}>
                 <Field label="Tipo di servizio"><Sel v={f.tipo_servizio} set={(v) => u("tipo_servizio", v)} opts={TIPI_SERVIZIO} /></Field>
                 <Field label="Numero agenti"><Txt v={f.num_agenti} set={(v) => u("num_agenti", v)} ph="Es. 2" /></Field>
               </div>
@@ -497,11 +498,13 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
           {step === 3 && (
             <div>
               <div style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: TM, marginBottom: "10px" }}>Pericoli particolari</div>
+              {!isMobile && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 34px", gap: "8px", marginBottom: "6px", ...SANS, fontSize: "11px", fontWeight: 700, color: GR, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 <div>Pericolo</div><div>Conseguenze</div><div>Misure di protezione</div><div></div>
               </div>
+              )}
               {f.pericoli.map((r, i) => (
-                <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 34px", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
+                <div key={i} style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr 1fr 34px"), gap: "8px", marginBottom: isMobile ? "16px" : "8px", alignItems: "center", ...(isMobile ? { padding: "12px", border: `1px solid ${GB}`, borderRadius: "10px", background: GL } : {}) }}>
                   <input value={r.pericolo} placeholder="Pericolo" onChange={(e) => setPericolo(i, "pericolo", e.target.value)} style={inpStyle} />
                   <input value={r.conseguenze} placeholder="Conseguenze" onChange={(e) => setPericolo(i, "conseguenze", e.target.value)} style={inpStyle} />
                   <input value={r.misure} placeholder="Misure" onChange={(e) => setPericolo(i, "misure", e.target.value)} style={inpStyle} />
@@ -518,14 +521,14 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
           {/* STEP 5 — Dettagli operativi */}
           {step === 4 && (
             <div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr"), gap: "12px" }}>
                 <Field label="Divisa / Tenue"><Txt v={f.divisa} set={(v) => u("divisa", v)} ph="Es. Uniforme DELTAgroup" /></Field>
                 <Field label="Canale radio"><Txt v={f.radio_canale} set={(v) => u("radio_canale", v)} ph="Es. Canale 4" /></Field>
               </div>
               <Field label="Equipaggiamento">
                 <ListEditor items={f.equipaggiamento} setItems={(arr) => u("equipaggiamento", arr)} ph="Es. Torcia, radio, telefono di servizio" addLabel="+ Aggiungi equipaggiamento" />
               </Field>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginTop: "4px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr"), gap: "12px", marginTop: "4px" }}>
                 <Field label="Vettovagliamento"><Txt v={f.vettovagliamento} set={(v) => u("vettovagliamento", v)} ph="Es. A carico dell'agente" /></Field>
                 <Field label="Punto di incontro / Parcheggio"><Txt v={f.parcheggio} set={(v) => u("parcheggio", v)} ph="Es. Ingresso principale" /></Field>
               </div>
@@ -544,7 +547,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved }) {
                       <button onClick={() => delRef(i)} style={{ ...SANS, background: "none", border: "none", color: ERR, cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>Rimuovi</button>
                     )}
                   </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr"), gap: "10px" }}>
                     <Txt v={r.nome} set={(v) => uRef(i, "nome", v)} ph="Nome e cognome" />
                     <Txt v={r.ruolo} set={(v) => uRef(i, "ruolo", v)} ph="Ruolo / funzione" />
                     <Txt v={r.telefono} set={(v) => uRef(i, "telefono", v)} ph="Telefono" />
