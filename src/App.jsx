@@ -47,7 +47,7 @@ const INIT = {
 
 
 // ── API ───────────────────────────────────────────────────────────────────────
-const SYS_PROMPT = `Sei un esperto redattore di Concetti di Sicurezza per DELTAgroup Security & Services AG, Muzzano (Ticino). Tel: +41 919 214 949, TICINO@delta.ch. Crei documenti formali, professionali, in italiano.
+const SYS_PROMPT = `Sei un esperto redattore di Concetti di Sicurezza per DELTAgroup Security & Services AG, Muzzano (Ticino). Tel: +41 91 921 49 49, TICINO@delta.ch. Crei documenti formali, professionali, in italiano.
 
 Struttura standard DELTAgroup:
 S1: Responsabilità (tabella contatti obbligatori + 1.1 Servizio sicurezza, 1.2 Polizia, 1.3 Sanitari, 1.4 REGA, 1.5 Pompieri, 1.6 Stato Maggiore)
@@ -3484,7 +3484,7 @@ function LandingHome({ onCs, onPps, isAdmin = false, isMobile = false }) {
       </div>
 
       <div style={{borderTop:"1px solid #D1D9F0",padding:`20px ${sidePad}`,textAlign:"center",fontSize:"11.5px",color:"#94A3B8",...SANS}}>
-        DELTAgroup Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 919 214 949 · TICINO@delta.ch
+        DELTAgroup Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 91 921 49 49 · TICINO@delta.ch
       </div>
     </div>
   );
@@ -3569,7 +3569,7 @@ function CsHome({ onNew, onMod, onBack, onArchive, isMobile = false }) {
       </div>
 
       <div style={{borderTop:"1px solid #D1D9F0",padding:"20px 40px",textAlign:"center",fontSize:"11.5px",color:"#94A3B8",...SANS}}>
-        DELTAgroup Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 919 214 949 · TICINO@delta.ch
+        DELTAgroup Security &amp; Services AG · Via alla Foce 4, 6933 Muzzano · T +41 91 921 49 49 · TICINO@delta.ch
       </div>
     </div>
   );
