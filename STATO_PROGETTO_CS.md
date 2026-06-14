@@ -1,148 +1,263 @@
-# Stato del progetto — DELTAgroup CS / PPS
-
-> Ultimo aggiornamento: **giugno 2026** (2026-06-13)
-> Branch: `main` · Ultimo commit rilevante: `736e3e0`
-
-Applicazione web (React + Vite) di DELTAgroup Security & Services AG (Filiale Ticino).
-La piattaforma ospita **due moduli** dietro una landing comune:
-
-- **CS — Concetti di Sicurezza** (modulo storico, generazione/modifica via AI + DOCX/stampa)
-- **PPS — Prescrizioni Particolari di Servizio** (modulo nuovo, wizard 7 step + persistenza Supabase + foto)
+# STATO PROGETTO — DELTAgroup CS-PPS
+> Documento autosufficiente per ripresa sviluppo in nuova chat.
+> Aggiornato: 14 giugno 2026.
 
 ---
 
-## 1. Versioni file in produzione
+## 1. Cos'è l'app
 
-| File | Righe | Note |
-|------|------:|------|
-| `src/App.jsx` | ~3532 | Aggiunti **LandingHome** (primo schermo) e **CsHome** (sotto-menu CS in stile landing); routing esteso a `home / cs-home / wizard / modify / preview / pps-list / pps-edit`; Header nascosto nella landing; tema blu (`AC = #1E40AF`). |
-| `src/buildDocx.js` | ~1145 | **Header DOCX CS rifatto** in stile DELTAgroup (tabella logo + nome evento/anno, divisore blu). Resto invariato. |
-| `src/supabaseClient.js` | ~40 | **Nuovo.** Client Supabase resiliente (stub se env mancanti). |
-| `src/features/pps/PpsWizard.jsx` | ~632 | **Nuovo.** Wizard PPS a **7 step** + Supabase (salva/carica) + assist AI + upload foto. |
-| `src/features/pps/PpsList.jsx` | ~173 | **Nuovo.** Archivio PPS da Supabase (lista, apri, elimina). |
-| `src/features/pps/buildPpsDocx.js` | ~472 | **Nuovo.** Generatore DOCX PPS a **8 sezioni**, tabelle full-width a layout fisso, header stile DELTAgroup, allegati foto. |
-| `api/generate.js` | 54 | Invariato. Proxy Edge verso Anthropic. |
+**DELTAgroup CS-PPS** è una piattaforma operativa con due moduli:
+
+**CS — Concetti di Sicurezza:** wizard 5 step per generare, 
+personalizzare ed esportare Concetti di Sicurezza per eventi 
+pubblici (AI-assisted, export DOCX + PDF).
+
+**PPS — Prescrizioni Particolari di Servizio:** wizard 7 step 
+per creare PPS operative per ogni servizio/cliente. Archivio 
+per cliente, sistema lock/versioning, audit log.
+
+**URL live:** https://delt-agroup-cs.vercel.app
+**Repo:** https://github.com/marcopoletti78-blip/DELTAgroup-CS
+**Branch:** main
 
 ---
 
-## 2. Infrastruttura
+## 2. Stack
 
-### Supabase — progetto `deltagroup-cs` (regione Zurigo)
-- **Tabella `pps`** (con **GRANT** ai ruoli anon/authenticated + RLS): colonne
-  `id`, `codice`, `cliente`, `luogo`, `tipo_servizio`, `versione`, `stato`,
-  `contenuto` (jsonb), `updated_at` (timestamptz, trigger di aggiornamento).
-- **Bucket Storage `pps-foto`** (pubblico) con **policy** select/insert/delete per
-  la anon key. Path foto: `pps-foto/<ppsId>/<timestamp>-<file>`.
-- Dipendenza: `@supabase/supabase-js` **`^2.108.1`**.
+- React + Vite — SPA
+- Supabase (Zurigo) — database + autenticazione + storage
+- Vercel — hosting + serverless functions
+- Anthropic API (claude-sonnet-4-6) — AI per CS e PPS
+- PWA — installabile su iOS/Android/Desktop
+- Libreria docx — export DOCX
 
-### Variabili d'ambiente (Vercel)
+**Cartella locale:** C:\Users\pom\Desktop\DELTAgroup-CS
+**Claude Code:** cmd.exe → cd C:\Users\pom\Desktop\DELTAgroup-CS → claude
+
+---
+
+## 3. Environment Variables (Vercel)
+
 | Variabile | Uso |
 |-----------|-----|
-| `VITE_SUPABASE_URL` | URL progetto Supabase (build-time) |
-| `VITE_SUPABASE_ANON_KEY` | Chiave anonima (RLS) (build-time) |
-| `ANTHROPIC_API_KEY` | Proxy `api/generate.js` (server-side) |
-
-> Le `VITE_*` sono **inlined a build-time**: dopo modifiche su Vercel serve un
-> **redeploy**. In dev locale richiedono un `.env` (git-ignorato); senza, il modulo
-> PPS mostra "Supabase non configurato" ma landing e CS funzionano comunque
-> (stub resiliente in `supabaseClient.js`).
+| VITE_SUPABASE_URL | https://blgnedshzytctgtussda.supabase.co |
+| VITE_SUPABASE_ANON_KEY | chiave pubblica Supabase |
+| SUPABASE_SERVICE_ROLE_KEY | chiave segreta (solo api/admin-users.js) |
+| VITE_ANTHROPIC_API_KEY | AI lato client (PPS wizard) |
+| ANTHROPIC_API_KEY | AI lato server (api/generate.js) |
 
 ---
 
-## 3. Struttura del codice
-
-### `src/App.jsx`
-- **`LandingHome`** (top-level) — primo schermo "Piattaforma Operativa": sfondo
-  `#EEF2FF`, due card (CS / PPS) con icone SVG, hover, layout responsive (`1fr`
-  sotto 700px), footer recapiti. Header dell'app nascosto qui.
-- **`CsHome`** (top-level) — sotto-menu CS nello **stesso stile della landing**:
-  pulsante "← Home", titolo "Concetti di Sicurezza" + "DELTAgroup Ticino", due card
-  ("Nuovo Concetto" → `onNew`, "Modifica Esistente" → `onMod`). Nessuna card PPS.
-- **Routing**: `home → LandingHome` (`onCs → cs-home`, `onPps → pps-list`);
-  `cs-home → CsHome`; `wizard / modify / preview` (flusso CS); `pps-list → PpsList`;
-  `pps-edit → PpsWizard`.
-- Tema blu `AC = #1E40AF` (rosso `RD` riservato a errori).
-
-### `src/buildDocx.js` (CS)
-- **Header stile DELTAgroup**: tabella 2 colonne (10206 DXA, `[3600, 6606]`, layout
-  fisso) — logo a sinistra con bordo destro, a destra `{nomeEvento}` (bold 11pt) e
-  "Concetto di Sicurezza · {anno}" (9pt grigio) — + divisore con bordo inferiore blu.
-- Tutto il resto (cover, TOC, sezioni ps1–ps6, allegati, numerazione) invariato.
-
-### `src/features/pps/PpsList.jsx`
-- Archivio Supabase: tabella **Codice · Cliente · Luogo · Tipo · Stato (badge) ·
-  Versione · Aggiornato il**; nuova/apri/elimina; stati loading/vuoto/errore.
-
-### `src/features/pps/PpsWizard.jsx` — **7 step**
-1. **Dati servizio** — codice, numero cliente, cliente, luogo, data, orari, tipo, agenti, note.
-2. **Situazione** — textarea + **✨ Genera con AI** (`/api/generate`, `claude-sonnet-4-6`).
-3. **Compiti** — lista add/remove + "Differenze rispetto alle PGS" + **✨ Genera con AI**.
-4. **Pericoli** — tabella Pericolo / Conseguenze / Misure (righe aggiungibili).
-5. **Dettagli** — divisa, equipaggiamento (lista), canale radio, vettovagliamento, parcheggio, note operative.
-6. **Referenti** — nome / ruolo / telefono / email.
-7. **Allegati / Foto** — upload su **Supabase Storage** (`pps-foto`): resize canvas 1200px/JPEG 0.85, max 5, didascalie, eliminazione; richiede PPS già salvata.
-- Persistenza Supabase (insert/update + `contenuto` jsonb), retrocompatibilità al caricamento, salvataggio in ogni step.
-
-### `src/features/pps/buildPpsDocx.js` — DOCX a **8 sezioni**
-- Header stile DELTAgroup (logo + dati servizio); numerazione **dinamica** (niente
-  buchi); tabelle **full-width 10206 DXA** a **layout fisso** (word wrap).
-- Sezioni: 1 Dati · 2 Situazione · 3 Compiti (+ Differenze PGS) · 4 Pericoli ·
-  5 Dettagli · 6 Referenti · 7 Validità (testo fisso) · **8 Allegati — Foto**
-  (immagini scaricate da Supabase Storage, adattate alla pagina).
+## 4. File structure
 
 ---
 
-## 4. Cosa fa l'app oggi
+## 5. Database Supabase
 
-- **Landing "Piattaforma Operativa"** con scelta tra due moduli (CS / PPS).
-- **CS — Concetti di Sicurezza**: wizard di creazione (AI), modifica di un concetto
-  esistente (AI), anteprima, riordino sezioni, export **DOCX** (header rinnovato) e stampa/PDF.
-- **PPS — Prescrizioni Particolari di Servizio** (completo): wizard 7 step, salvataggio
-  e ricarica da **Supabase**, archivio documenti, assist **AI** (situazione/compiti),
-  **foto sopralluogo** su Supabase Storage, export **DOCX** a 8 sezioni.
-- **Storico CS**: ⚠️ **non ancora implementato** — i documenti CS vivono ancora in
-  `localStorage` (chiave unica per ultimo documento). Previsto per la prossima sessione.
+### Tabella `pps`
+| Campo | Tipo | Note |
+|-------|------|------|
+| id | uuid PK | gen_random_uuid() |
+| codice | text | codice servizio |
+| cliente | text | nome cliente |
+| luogo | text | |
+| tipo_servizio | text | |
+| versione | int | default 1 |
+| stato | text | |
+| contenuto | jsonb | tutti i dati del wizard |
+| bloccata | boolean | default false |
+| bloccata_da | text | email admin che ha bloccato |
+| bloccata_il | timestamptz | |
+| updated_at | timestamptz | |
 
----
+### Tabella `pps_audit`
+| Campo | Tipo | Note |
+|-------|------|------|
+| id | uuid PK | |
+| pps_id | uuid FK | → pps(id) ON DELETE CASCADE |
+| utente_email | text | |
+| azione | text | aperto/modificato/bloccato/sbloccato/copiato/creato |
+| dettagli | jsonb | |
+| created_at | timestamptz | |
 
-## 5. Coda di sviluppo
+### Tabella `pps_servizi` (foundation per integrazione PLAN)
+| Campo | Tipo | Note |
+|-------|------|------|
+| id | uuid PK | |
+| pps_id | uuid FK | → pps(id) ON DELETE CASCADE |
+| servizio_id | text | ID servizio in app PLAN |
+| cliente | text | |
+| dipendente_id | text | |
+| dipendente_nome | text | |
+| created_by | text | |
+| created_at | timestamptz | |
 
-### ✅ Completato
-- **Modulo PPS** (wizard 7 step + Supabase + foto + DOCX) — *spostato da priorità immediata*.
-- Landing Piattaforma Operativa, CsHome in stile landing, tema blu.
-- Header DOCX (CS e PPS) in stile DELTAgroup; tabelle PPS full-width a layout fisso.
-- Infrastruttura Supabase (tabella `pps`, bucket `pps-foto`, env Vercel).
+### Tabella `pps_letture` (foundation per conferma lettura agenti)
+| Campo | Tipo | Note |
+|-------|------|------|
+| id | uuid PK | |
+| pps_id | uuid FK | → pps(id) ON DELETE CASCADE |
+| servizio_id | text | |
+| dipendente_id | text | |
+| dipendente_nome | text | |
+| dispositivo | text | |
+| letto_il | timestamptz | |
 
-### 🔜 Priorità immediata
-- **Storico CS**: tabella `cs_documenti` su Supabase, lista documenti CS, **migrazione
-  da `localStorage`** verso Supabase (allineare il CS al pattern del PPS).
+### Tabella `cs_documenti`
+Salvataggio CS su Supabase (in parallelo a localStorage).
 
-### Possibili passi successivi
-- Campo `stato` PPS modificabile dalla UI (bozza → approvata → attiva → archiviata).
-- Versionamento incrementale al salvataggio.
-- Ricerca / filtri nella lista PPS.
-- Versionare lo **script SQL reale** (DDL + trigger + RLS + GRANT + policy Storage) in repo (`supabase/schema.sql`).
-- Code-splitting: il bundle JS supera 500 kB (warning Vite, non bloccante).
+### Tabella `profili`
+| Campo | Tipo | Note |
+|-------|------|------|
+| id | uuid FK | → auth.users |
+| email | text | |
+| nome | text | |
+| ruolo | text | admin / utente |
+| attivo | boolean | |
+| created_at | timestamptz | |
 
----
+### Storage bucket `pps-foto`
+Pubblico, policy anon SELECT/INSERT/DELETE. Upload foto allegate alle PPS.
 
-## 6. Cronologia commit (sessione giugno 2026)
+### RLS
+Disabilitata su tutte le tabelle. Sicurezza gestita da Supabase Auth.
 
+### GRANT su tutte le tabelle
+```sql
+GRANT ALL ON TABLE [tabella] TO anon;
+GRANT ALL ON TABLE [tabella] TO authenticated;
 ```
-736e3e0 fix: CsHome stile aggiornato + header DOCX CS stile PPS
-90566e9 fix: tabelle DOCX layout fisso - word wrap celle
-af672d2 feat: Fase 3 PPS - allegati foto su Supabase Storage
-6e6c2df fix: rimuovi bordo sinistro intestazioni sezione
-dde83e6 fix: DOCX larghezza tabelle corretta + intestazioni sezione
-c72d59d fix: header DOCX stile DELTAgroup con logo e dati servizio
-bf10374 fix: DOCX tabelle full-width e word wrap celle
-e6b900c fix: DOCX tabelle full-width, word wrap, header migliorato
-3ca807c fix(pps-docx): numerazione sezioni dinamica + Note operative nei dettagli
-8bae329 feat: wizard PPS 6 step - situazione, pericoli, dettagli, AI
-0e21c66 fix: supabaseClient resiliente a env mancanti (evita crash mount landing/CS)
-8315878 feat: landing Piattaforma Operativa
-cdc9f05 feat: modulo PPS con Supabase (lista + salva/carica)
-af66021 style(home): card CS e PPS uniformate (stesso stampo)
-089c616 refactor: tema blu CS-PPS, home ridisegnata, testo PPS corretto
-ab89e5d feat(pps): nuovo modulo PPS/SPADO separato dal CS
-```
+
+---
+
+## 6. Autenticazione
+
+- Supabase Auth (email + password)
+- Nessuna self-registration — utenti creati solo da admin via AdminPanel
+- Ruoli: **admin** (accesso completo) / **utente** (solo PPS, no elimina, no sblocca)
+- Utenti attivi: marco.poletti@delta.ch (admin), paolo.manasseri@delta.ch (admin)
+- LoginPage mostrata se sessione assente
+
+---
+
+## 7. Routing App.jsx
+
+| View | Condizione | Componente |
+|------|-----------|-----------|
+| login | !sessione | LoginPage |
+| home | default | LandingHome (2 card: CS / PPS) |
+| cs-home | / cs-list / wizard / modify / preview | CS flow |
+| pps-list | default PPS | PpsList (archivio per cliente) |
+| pps-edit | onOpen(id) / onNew | PpsWizard |
+| admin | solo admin | AdminPanel |
+
+---
+
+## 8. Modulo PPS — Wizard 7 step
+
+1. Dati servizio (codice, cliente, luogo, data, orario, tipo, agenti)
+2. Situazione (textarea + AI)
+3. Compiti (lista + differenze PGS + AI)
+4. Pericoli particolari (tabella: Pericolo | Conseguenze | Misure)
+5. Dettagli operativi (divisa, equipaggiamento, radio, ecc.)
+6. Referenti (nome, ruolo, tel, email)
+7. Allegati/Foto (upload, resize 1200px, Supabase Storage, didascalia)
+
+---
+
+## 9. Sistema Lock/Versioning PPS
+
+- **bloccata=false** → wizard modificabile + bottone [🔒 Valida]
+- **bloccata=true** → PpsDocView (vista documento sola lettura):
+  - Mostra riepilogo documento + [📄 Scarica DOCX]
+  - [📋 Crea copia] → nuova riga versione+1, bloccata=false
+  - [🔓 Sblocca] (solo admin) → torna al wizard
+- Ogni azione registrata in pps_audit
+
+---
+
+## 10. Archivio PPS (PpsList)
+
+- Accordion per cliente (chiuso default)
+- Per ogni cliente espanso:
+  - **✏️ In lavorazione** (bloccata=false) — bordo sx blu AC
+  - **🔒 Validate** (bloccata=true) — sfondo grigio
+- Ricerca per cliente
+- Azioni: Modifica/Vedi, Valida/Sblocca (admin), Crea copia
+
+---
+
+## 11. AdminPanel
+
+- Lista utenti con toggle attivo/ruolo
+- Form aggiungi nuovo utente
+- Sezione "📋 Attività recenti PPS" (ultimi 50 record pps_audit)
+
+---
+
+## 12. PWA
+
+- manifest.json: name "DELTAgroup CS-PPS", short_name "CS-PPS"
+- theme_color: #1E40AF
+- Installabile: iOS (Safari → Aggiungi a schermata Home) / 
+  Android (Chrome → Installa app) / Desktop (Chrome → icona +)
+- Responsive: hook isMobile (<768px) in App.jsx
+
+---
+
+## 13. Dati aziendali fissi
+
+**Colori brand:**
+- AC = #1E40AF (blu — colore identitario CS-PPS)
+- GL = #f8f9fa (grigio chiaro sfondo)
+
+---
+
+## 14. Convenzioni critiche
+
+1. **MAI componenti React dentro altri componenti** — 
+   bug di focus, re-mount. Tutti top-level del modulo.
+2. **npm run build → 0 errori** prima di ogni push.
+3. **Stili inline JSX** — no file CSS separati.
+4. **Lingua italiana** — label, messaggi, prompt AI.
+5. **CHF** — nessun EUR.
+6. **supabaseClient.js** — stub thenable se env mancanti 
+   (per build locale senza .env).
+7. **api/admin-users.js** è ES Module (import/export, 
+   non require/module.exports).
+
+---
+
+## 15. Deploy
+
+---
+
+## 16. Coda sviluppo
+
+### Completato ✅
+- Modulo PPS completo (wizard 7 step, DOCX, Supabase)
+- Autenticazione Supabase Auth + AdminPanel
+- Archivio CS su Supabase (cs_documenti)
+- Lock/versioning PPS (bloccata, pps_audit)
+- Archivio PPS per cliente (accordion In lavorazione/Validate)
+- Vista documento PpsDocView per PPS bloccate
+- PWA installabile (manifest, meta tag)
+- Responsive mobile (isMobile hook)
+- Footer telefono: +41 91 921 49 49
+
+### In sospeso
+- [ ] Icona PWA triangolo blu (commit recente, verificare)
+- [ ] Dominio Vercel: delt-agroup-cs (rinominato ma URL non cambia)
+- [ ] Riordino sottocapitoli CS (▲▼ non funzionano)
+
+### Prossimo — Integrazione PLAN (progetto separato)
+Foundation DB già pronta (pps_servizi, pps_letture).
+Flusso da implementare:
+1. API CS-PPS: GET /pps?cliente=X
+2. PLAN: bottone "Aggiungi PPS" → collega a servizio
+3. App agente: vede PPS → legge → conferma lettura
+4. CS-PPS admin: vista "Conferme lettura"
+
+---
+
+*Aggiornato: 14 giugno 2026*
