@@ -3688,6 +3688,31 @@ function AdminPanel({ onBack }) {
   };
   React.useEffect(() => { load(); }, []);
 
+  // Attività recenti PPS (audit log)
+  const [audit, setAudit] = useState([]);
+  const [auditLoading, setAuditLoading] = useState(true);
+  const [auditErr, setAuditErr] = useState(null);
+  React.useEffect(() => {
+    (async () => {
+      setAuditLoading(true); setAuditErr(null);
+      const { data, error } = await supabase
+        .from("pps_audit")
+        .select("*, pps(codice, cliente)")
+        .order("created_at", { ascending: false })
+        .limit(50);
+      if (error) { setAuditErr(`Errore nel caricamento dell'attività: ${error.message}`); setAudit([]); }
+      else setAudit(data || []);
+      setAuditLoading(false);
+    })();
+  }, []);
+
+  const fmtDataOra = (iso) => {
+    if (!iso) return "—";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "—";
+    return d.toLocaleString("it-CH", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  };
+
   // Form "Aggiungi utente"
   const [nNome, setNNome] = useState("");
   const [nEmail, setNEmail] = useState("");
@@ -3801,6 +3826,41 @@ function AdminPanel({ onBack }) {
             </button>
           </div>
         </div>
+
+        {/* ── Attività recenti PPS ─────────────────────────────────────────── */}
+        <div style={{borderTop:`2px solid ${GB}`,marginTop:"32px",paddingTop:"24px"}}>
+          <h2 style={{...SERIF,fontSize:"20px",fontWeight:700,color:N,margin:"0 0 16px"}}>📋 Attività recenti PPS</h2>
+          <div style={{background:WH,border:`1px solid ${GB}`,borderRadius:"14px",padding:"8px",boxShadow:"0 2px 12px rgba(12,29,61,0.06)"}}>
+            {auditErr && <div style={{...SANS,margin:"12px",padding:"10px 12px",background:"#fdeced",border:`1px solid ${RD}55`,borderRadius:"8px",color:RD,fontSize:"12.5px"}}>{auditErr}</div>}
+            {auditLoading ? (
+              <div style={{...SANS,padding:"40px",textAlign:"center",color:TM,fontSize:"14px"}}>Caricamento attività…</div>
+            ) : audit.length === 0 ? (
+              <div style={{...SANS,padding:"40px",textAlign:"center",color:TM,fontSize:"14px"}}>Nessuna attività registrata.</div>
+            ) : (
+              <div style={{overflowX:"auto"}}>
+                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                  <thead><tr>
+                    <th style={TH}>Data/Ora</th><th style={TH}>Utente</th><th style={TH}>Azione</th><th style={TH}>PPS</th>
+                  </tr></thead>
+                  <tbody>
+                    {audit.map((a) => (
+                      <tr key={a.id}>
+                        <td style={{...TD,whiteSpace:"nowrap",color:TM}}>{fmtDataOra(a.created_at)}</td>
+                        <td style={TD}>{a.utente_email || "—"}</td>
+                        <td style={{...TD,fontWeight:700,color:AC}}>{a.azione || "—"}</td>
+                        <td style={TD}>
+                          {a.pps
+                            ? `${a.pps.codice || "(senza codice)"}${a.pps.cliente ? ` · ${a.pps.cliente}` : ""}`
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -3902,6 +3962,7 @@ export default function App() {
       {view==="pps-list"&&
         <PpsList
           isMobile={isMobile}
+          profilo={profilo}
           onNew={()=>{ setPpsId(null); setView("pps-edit"); }}
           onOpen={(id)=>{ setPpsId(id); setView("pps-edit"); }}
           onBack={()=>setView("home")}
@@ -3910,6 +3971,7 @@ export default function App() {
         <PpsWizard
           ppsId={ppsId}
           isMobile={isMobile}
+          profilo={profilo}
           onBack={()=>setView("pps-list")}
           onSaved={(id)=>setPpsId(id)}
         />}

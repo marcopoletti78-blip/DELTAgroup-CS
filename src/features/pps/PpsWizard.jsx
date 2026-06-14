@@ -45,6 +45,17 @@ const INIT = {
   foto: [],
 };
 
+// ── Audit log ────────────────────────────────────────────────────────────────
+async function logAudit(supabase, ppsId, email, azione, dettagli = {}) {
+  const { error } = await supabase.from("pps_audit").insert({
+    pps_id: ppsId,
+    utente_email: email,
+    azione,
+    dettagli,
+  });
+  if (error) console.error("[PpsWizard] audit:", error.message);
+}
+
 // Retrocompatibilità: mappa un "contenuto" (anche vecchio formato) sullo schema nuovo.
 function normalizeLoaded(c) {
   c = c || {};
@@ -231,10 +242,13 @@ async function generaCompitiAI(f) {
 }
 
 // ── Wizard ───────────────────────────────────────────────────────────────────
-export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = false }) {
+export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = false, profilo = null }) {
   const gc = (cols) => (isMobile ? "1fr" : cols);
+  const isAdmin = profilo?.ruolo === "admin";
+  const email = profilo?.email || "";
   const [step, setStep] = useState(0);
   const [f, setF] = useState(INIT);
+  const [bloccata, setBloccata] = useState(false);
   const [aiSit, setAiSit] = useState(false);
   const [aiComp, setAiComp] = useState(false);
   const [docxLoading, setDocxLoading] = useState(false);
@@ -258,6 +272,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       setLocalId(null);
       setVersione(1);
       setF(INIT);
+      setBloccata(false);
       setStep(0);
       setSaveMsg(null);
       setErr(null);
@@ -278,8 +293,10 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       handledIdRef.current = ppsId;
       setLocalId(ppsId);
       setVersione(data.versione || 1);
+      setBloccata(!!data.bloccata);
       setF(normalizeLoaded(data.contenuto));
       setLoading(false);
+      logAudit(supabase, ppsId, email, "aperto");
     })();
     return () => { active = false; };
   }, [ppsId]);
@@ -390,15 +407,76 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
         handledIdRef.current = data.id;
         setLocalId(data.id);
         setVersione(data.versione || 1);
+        await logAudit(supabase, data.id, email, "modificato");
         onSaved?.(data.id);
       } else {
         const { error } = await supabase.from("pps").update(obj).eq("id", localId);
         if (error) throw error;
+        await logAudit(supabase, localId, email, "modificato");
       }
       setSaveMsg("Salvato ✓");
     } catch (e) {
       console.error("[PpsWizard] save", e);
       setErr(`Errore nel salvataggio: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Lock / copia ───────────────────────────────────────────────────────────
+  const doValida = async () => {
+    if (!localId) { setErr("Salva prima la PPS per poterla validare."); return; }
+    if (!window.confirm("Validare questa PPS? Non sarà più modificabile.")) return;
+    setSaving(true); setErr(null); setSaveMsg(null);
+    const { error } = await supabase.from("pps").update({
+      bloccata: true,
+      bloccata_da: email,
+      bloccata_il: new Date().toISOString(),
+    }).eq("id", localId);
+    setSaving(false);
+    if (error) { setErr(`Errore durante la validazione: ${error.message}`); return; }
+    await logAudit(supabase, localId, email, "bloccato");
+    setBloccata(true);
+  };
+
+  const doSblocca = async () => {
+    if (!localId) return;
+    if (!window.confirm("Sbloccare questa PPS? Tornerà modificabile.")) return;
+    setSaving(true); setErr(null); setSaveMsg(null);
+    const { error } = await supabase.from("pps").update({
+      bloccata: false,
+      bloccata_da: null,
+      bloccata_il: null,
+    }).eq("id", localId);
+    setSaving(false);
+    if (error) { setErr(`Errore durante lo sblocco: ${error.message}`); return; }
+    await logAudit(supabase, localId, email, "sbloccato");
+    setBloccata(false);
+  };
+
+  const copiaPps = async () => {
+    setSaving(true); setErr(null); setSaveMsg(null);
+    try {
+      const obj = {
+        codice: f.codice,
+        cliente: f.cliente,
+        luogo: f.luogo,
+        tipo_servizio: f.tipo_servizio,
+        versione: versione + 1,
+        stato: "bozza",
+        bloccata: false,
+        bloccata_da: null,
+        bloccata_il: null,
+        contenuto: { ...f },
+      };
+      const { data, error } = await supabase.from("pps").insert([obj]).select().single();
+      if (error) throw error;
+      if (localId) await logAudit(supabase, localId, email, "copiato", { nuovo_id: data.id });
+      await logAudit(supabase, data.id, email, "creato", { copia_da: localId });
+      onSaved?.(data.id); // naviga al nuovo record (il wizard ricarica sul nuovo ppsId)
+    } catch (e) {
+      console.error("[PpsWizard] copia", e);
+      setErr(`Errore durante la copia: ${e.message}`);
     } finally {
       setSaving(false);
     }
@@ -430,10 +508,20 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
               PPS{localId ? " — Modifica" : " — Nuova"}
             </h1>
           </div>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             {saveMsg && <span style={{ ...SANS, fontSize: "13px", fontWeight: 700, color: OK }}>{saveMsg}</span>}
             <Btn variant="ghost" on={onBack}>← Lista</Btn>
-            <Btn variant="accent" on={doSave} disabled={saving || loading}>{saving ? "Salvo…" : "💾 Salva"}</Btn>
+            {bloccata ? (
+              <>
+                <Btn variant="accent" on={copiaPps} disabled={saving || loading}>📋 Crea copia</Btn>
+                {isAdmin && <Btn variant="navy" on={doSblocca} disabled={saving || loading}>🔓 Sblocca</Btn>}
+              </>
+            ) : (
+              <>
+                <Btn variant="accent" on={doSave} disabled={saving || loading}>{saving ? "Salvo…" : "💾 Salva"}</Btn>
+                <Btn variant="navy" on={doValida} disabled={saving || loading || !localId}>🔒 Valida</Btn>
+              </>
+            )}
           </div>
         </div>
 
@@ -442,8 +530,16 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
             <div style={{ ...SANS, padding: "48px", textAlign: "center", color: TM, fontSize: "14px" }}>Caricamento della PPS in corso…</div>
           ) : (
           <>
+          {bloccata && (
+            <div style={{ ...SANS, background: "#FEF3C7", border: "1px solid #f59e0b", borderRadius: "10px", padding: "12px 14px", marginBottom: "18px", fontSize: "13px", color: "#92400e", fontWeight: 600, lineHeight: 1.5 }}>
+              🔒 PPS validata — sola lettura. Crea una copia per modificarla.
+            </div>
+          )}
+
           <StepBar cur={step} isMobile={isMobile} />
 
+          {/* I campi sono disabilitati in blocco quando la PPS è validata (sola lettura). */}
+          <fieldset disabled={bloccata} style={{ border: "none", padding: 0, margin: 0, minWidth: 0 }}>
           {/* STEP 1 — Dati servizio */}
           {step === 0 && (
             <div>
@@ -611,6 +707,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
               )}
             </div>
           )}
+          </fieldset>
 
           {err && (
             <div style={{ ...SANS, marginTop: "16px", padding: "10px 12px", background: "#fdeced", border: `1px solid ${ERR}55`, borderRadius: "8px", color: ERR, fontSize: "12.5px" }}>
