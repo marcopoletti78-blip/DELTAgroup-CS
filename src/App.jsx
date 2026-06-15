@@ -2226,24 +2226,34 @@ function Editor({ data: initialData, onBack, csDocId = null, setCsDocId, loadedC
     return null;
   };
 
-  // Per un sottocapitolo all'indice idx, trova l'indice del fratello (stesso parent effettivo)
-  // immediatamente prima (dir<0) o dopo (dir>0). Si ferma al primo capitolo/allegato incontrato.
-  const findSiblingSubchapterIdx = (order, idx, dir) => {
+  // Indici (in ordine) di tutti i sottocapitoli con lo stesso parent effettivo del
+  // sottocapitolo a `idx` — i suoi "fratelli", incluso se stesso.
+  const siblingSubchapterIdxs = (order, idx) => {
     const parentKey = effectiveParentKey(order, idx);
-    if (!parentKey) return -1;
-    const step = dir > 0 ? 1 : -1;
-    for (let j = idx + step; j >= 0 && j < order.length; j += step) {
+    if (!parentKey) return [];
+    const out = [];
+    for (let j = 0; j < order.length; j++) {
       const k = order[j];
-      if (!k) continue;
-      if (/^ps[1-6]$/.test(k) || k === "all1" || k === "all2") return -1;
-      if (!k.startsWith("custom:")) continue;
-      const cid = parseCustomSectionKey(k);
-      const cs = customSections.find((c) => c.id === cid);
-      if (!cs) continue;
-      if (cs.type !== "sottocapitolo") return -1;
-      if (effectiveParentKey(order, j) === parentKey) return j;
+      if (!k?.startsWith("custom:")) continue;
+      const cs = customSections.find((c) => c.id === parseCustomSectionKey(k));
+      if (cs?.type !== "sottocapitolo") continue;
+      if (effectiveParentKey(order, j) === parentKey) out.push(j);
     }
-    return -1;
+    return out;
+  };
+
+  // Indice del fratello immediatamente prima (dir<0) o dopo (dir>0) nel gruppo dei
+  // sottocapitoli con lo stesso parent effettivo; -1 se è il primo/ultimo del padre.
+  // Lavora sul GRUPPO e non sulla semplice adiacenza nell'order: così la freccia resta
+  // attiva anche quando un capitolo finisce tra due sottocapitoli dello stesso padre
+  // (caso in cui la vecchia scansione direzionale si fermava e ritornava -1).
+  const findSiblingSubchapterIdx = (order, idx, dir) => {
+    const sibs = siblingSubchapterIdxs(order, idx);
+    const pos = sibs.indexOf(idx);
+    if (pos < 0) return -1;
+    const target = pos + (dir > 0 ? 1 : -1);
+    if (target < 0 || target >= sibs.length) return -1;
+    return sibs[target];
   };
 
   const canMoveSection = (order, idx, dir) => {
