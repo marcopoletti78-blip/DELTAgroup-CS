@@ -155,7 +155,6 @@ export default function PpsList({ onNew, onOpen, onBack, profilo }) {
     setActingId(p.id); setErr(null);
     const { error } = await supabase.from("pps").delete().eq("id", p.id);
     if (error) { setErr(`Errore durante l'eliminazione: ${error.message}`); setActingId(null); return; }
-    await logAudit(p.id, email, "eliminato");
     setActingId(null);
     // Aggiorna la lista in locale, senza ricaricare la pagina.
     setRows((prev) => prev.filter((r) => r.id !== p.id));
