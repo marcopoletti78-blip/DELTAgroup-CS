@@ -21,6 +21,10 @@ const MUTED = "#52637a";
 const GREY = "#888888";
 const GB = "#d0dae8";       // bordo grigio tabelle
 const BL = "#EFF6FF";       // blu chiaro header tabelle
+const RED = "#c8102e";      // rosso DELTAgroup (titolo)
+const AG_COLOR = "#0c1d3d"; // header box agente (uniforme per tutti gli agenti)
+const AG_ORARIO_BG = "#e8ecf0"; // sfondo riga orario nel box agente
+const NOTE_BG = "#4a5568";  // sfondo titolo "Note operative" (distinto dalle sezioni)
 
 const FOOTER_TEXT = "DELTAgroup Security & Services AG · Filiale Ticino · Via alla Foce 4, 6933 Muzzano · T +41 91 921 49 49 · ticino@delta.ch · www.delta.ch";
 const FOOT_GREY = "#6B7280";   // grigio footer
@@ -55,19 +59,22 @@ const has = (v) => val(v) !== "";
 const STRIPE = "#F8FAFC";   // riga pari
 const HLINE = "#E5E7EB";    // bordo orizzontale sottile
 
-// Titolo di sezione: blocco pieno blu con testo bianco.
-function sectionTitle(text) {
+// Titolo di sezione: blocco pieno navy con testo bianco.
+// opts.fill / opts.fontSize per varianti (es. blocco "Note operative").
+function sectionTitle(text, opts = {}) {
+  const fill = opts.fill || NAVY;
+  const fontSize = opts.fontSize || 10;
   return {
     table: {
       widths: ["*"],
       body: [[{
         text: String(text).toUpperCase(),
-        fontSize: 10, bold: true, color: "#FFFFFF", fillColor: AC,
+        fontSize, bold: true, color: "#FFFFFF", fillColor: fill,
         border: [false, false, false, false],
       }]],
     },
     layout: { defaultBorder: false, paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 6, paddingBottom: () => 6 },
-    margin: [0, 16, 0, 8],
+    margin: [0, 14, 0, 10],
   };
 }
 
@@ -92,20 +99,26 @@ function renderCompiti(compiti) {
     const matchAgente = text.match(/^(AGENTE\s+\d+)\s*\(([^)]+)\)\s*:\s*([^—–]+)[—–]\s*(.+)$/s);
     if (matchAgente) {
       const [, agente, orario, ruolo, tasks] = matchAgente;
+      // Header box agente (sfondo navy uniforme)
       blocks.push({
         table: { widths: ["*"], body: [[{
           text: `${agente.toUpperCase()} — ${ruolo.trim().toUpperCase()}`,
-          bold: true, color: "#FFFFFF", fillColor: "#1E3A5F", fontSize: 9,
+          bold: true, color: "#FFFFFF", fillColor: AG_COLOR, fontSize: 9,
           border: [false, false, false, false],
         }]] },
         layout: { defaultBorder: false, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 5, paddingBottom: () => 5 },
-        margin: [0, 8, 0, 2],
+        margin: [0, 8, 0, 0],
       });
+      // Sub-header orario su sfondo grigio chiaro
       blocks.push({
-        text: [{ text: "Orario di servizio: ", bold: true, fontSize: 8 }, { text: orario, fontSize: 8 }],
+        table: { widths: ["*"], body: [[{
+          text: [{ text: "Orario di servizio: ", bold: true, fontSize: 9 }, { text: orario, fontSize: 9 }],
+          fillColor: AG_ORARIO_BG, border: [false, false, false, false],
+        }]] },
+        layout: { defaultBorder: false, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 4, paddingBottom: () => 4 },
         margin: [0, 0, 0, 4],
       });
-      blocks.push({ text: "COMPITI OPERATIVI", bold: true, fontSize: 8, color: AC, margin: [0, 2, 0, 3] });
+      blocks.push({ text: "COMPITI OPERATIVI", bold: true, fontSize: 9, color: NAVY, margin: [0, 2, 0, 4] });
       const taskList = tasks
         .split(/(?<=\.)\s+(?=[A-Z])|;\s*/)
         .map((t) => t.trim())
@@ -113,10 +126,10 @@ function renderCompiti(compiti) {
       taskList.forEach((task) => {
         blocks.push({
           columns: [
-            { text: "•", color: AC, width: 10, fontSize: 8 },
-            { text: task, fontSize: 8, width: "*" },
+            { text: "•", color: AC, width: 10, fontSize: 9.5 },
+            { text: task, fontSize: 9.5, width: "*" },
           ],
-          margin: [4, 1, 0, 1],
+          margin: [0, 3, 0, 0],
         });
       });
     } else {
@@ -215,8 +228,15 @@ export async function buildPpsPdfBlob(dati = {}) {
     content.push(sectionTitle(title));
   };
 
-  // 1. DATI SERVIZIO
-  startSection("1. Dati servizio");
+  // ── Blocco titolo centrato (pagina 1) ──
+  content.push({ text: codice || val(dati.cliente) || "PPS", bold: true, fontSize: 26, color: NAVY, alignment: "center", margin: [0, 0, 0, 4] });
+  content.push({ text: "PPS — Prescrizioni Particolari di Servizio", fontSize: 11, color: RED, alignment: "center", margin: [0, 0, 0, 2] });
+  if (has(dati.luogo)) content.push({ text: val(dati.luogo), fontSize: 10, color: RED, alignment: "center", margin: [0, 0, 0, 2] });
+  if (has(dati.data)) content.push({ text: val(dati.data), fontSize: 10, italics: true, color: "#6B7280", alignment: "center" });
+  content.push({ canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 1.5, lineColor: NAVY }], margin: [0, 8, 0, 16] });
+
+  // 1. DATI SERVIZIO (il titolo segue il divisore del blocco titolo: niente sep)
+  content.push(sectionTitle("1. Dati servizio"));
   const datiTable = kvTable([
     ["Cliente", dati.cliente],
     ["Codice", dati.codice],
@@ -256,7 +276,7 @@ export async function buildPpsPdfBlob(dati = {}) {
   if (pericoli.length) {
     startSection("4. Pericoli particolari");
     const head = ["Pericolo", "Conseguenze", "Misure"].map((h) => ({
-      text: h, bold: true, fontSize: 9, color: "#FFFFFF", fillColor: AC,
+      text: h, bold: true, fontSize: 9, color: "#FFFFFF", fillColor: NAVY,
     }));
     content.push({
       table: {
@@ -280,10 +300,12 @@ export async function buildPpsPdfBlob(dati = {}) {
   const equip = Array.isArray(dati.equipaggiamento)
     ? dati.equipaggiamento.map((s) => val(s)).filter(Boolean).join(", ")
     : val(dati.equipaggiamento);
+  const radioVal = has(dati.radio_canale) ? val(dati.radio_canale)
+    : (has(dati.radio) ? val(dati.radio) : "Canale 1 (salvo diversa indicazione)");
   const dettagliTable = kvTable([
     ["Divisa", dati.divisa],
     ["Equipaggiamento", equip],
-    ["Radio", dati.radio_canale != null ? dati.radio_canale : dati.radio],
+    ["Canale radio", radioVal],
     ["Vettovagliamento", dati.vettovagliamento],
     ["Parcheggio", dati.parcheggio],
   ]);
@@ -299,7 +321,7 @@ export async function buildPpsPdfBlob(dati = {}) {
   if (referenti.length) {
     startSection("6. Referenti");
     const head = ["Nome", "Ruolo", "Telefono", "Email"].map((h) => ({
-      text: h, bold: true, fontSize: 9, color: "#FFFFFF", fillColor: AC,
+      text: h, bold: true, fontSize: 9, color: "#FFFFFF", fillColor: NAVY,
     }));
     content.push({
       table: {
@@ -320,41 +342,50 @@ export async function buildPpsPdfBlob(dati = {}) {
     });
   }
 
-  // 7. NOTE OPERATIVE — lista puntata da note_operative / informazioni_aggiuntive
+  // NOTE OPERATIVE — blocco secondario (titolo ridotto, distinto dalle sezioni)
   const note = (dati.note_operative || dati.informazioni_aggiuntive || "").trim();
   if (note) {
-    startSection("7. Note operative");
-    const punti = note
-      .split(/(?<=\.)\s+(?=[A-Z])|(?<=:)\s+(?=[A-Z])|;\s*/)
-      .map((p) => p.trim())
-      .filter((p) => p.length > 10);
+    content.push(sep());
+    content.push(sectionTitle("Note operative", { fill: NOTE_BG, fontSize: 8 }));
+    const punti = note.split(/\n+/).map((p) => p.trim()).filter(Boolean);
     (punti.length ? punti : [note]).forEach((punto) => {
       content.push({
         columns: [
-          { text: "•", color: AC, width: 10, fontSize: 8 },
-          { text: punto, fontSize: 8, width: "*" },
+          { text: "•", color: AC, width: 10, fontSize: 9 },
+          { text: punto, fontSize: 9, width: "*" },
         ],
-        margin: [4, 2, 0, 2],
+        margin: [0, 3, 0, 0],
       });
     });
   }
 
-  // 8. VALIDITÀ
-  startSection("8. Validità");
+  // 7. VALIDITÀ
+  startSection("7. Validità");
   content.push({
     text: "Il presente documento è valido per il servizio indicato e deve essere conservato dall'agente durante tutta la durata del servizio.",
     fontSize: 9, color: TXT, margin: [0, 0, 0, 4], lineHeight: 1.25,
   });
-  const oggi = new Date();
-  const gg = String(oggi.getDate()).padStart(2, "0");
-  const mm = String(oggi.getMonth() + 1).padStart(2, "0");
-  const aaaa = oggi.getFullYear();
-  content.push({ text: `Data generazione: ${gg}/${mm}/${aaaa}`, fontSize: 9, color: MUTED, margin: [0, 4, 0, 0] });
+  // Blocco firma
+  content.push({ canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: "#cccccc" }], margin: [0, 10, 0, 0] });
+  const dataEmissione = new Date().toLocaleDateString("it-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
+  content.push({ text: `Data di emissione: ${dataEmissione}`, fontSize: 8.5, color: TXT, margin: [0, 12, 0, 0] });
+  content.push({
+    table: { widths: ["*", "*"], body: [[
+      { text: "Responsabile DELTAgroup: ____________________", fontSize: 8.5, border: [false, false, false, false] },
+      { text: "Firma: _______________", fontSize: 8.5, border: [false, false, false, false] },
+    ]] },
+    layout: { defaultBorder: false },
+    margin: [0, 16, 0, 0],
+  });
+  content.push({
+    text: "Il presente documento costituisce parte integrante del mandato di servizio e integra le Prescrizioni Generali di Sorveglianza (PGS).",
+    italics: true, fontSize: 7.5, color: "#6B7280", margin: [0, 8, 0, 0],
+  });
 
-  // 9. ALLEGATI / FOTO
+  // 8. ALLEGATI / FOTO
   const foto = (Array.isArray(dati.foto) ? dati.foto : []).filter((p) => p && p.url);
   if (foto.length) {
-    startSection("9. Allegati e foto");
+    startSection("8. Allegati e foto");
     for (const ph of foto) {
       const dataUrl = await fetchAsDataUrl(ph.url);
       if (!dataUrl) continue;
