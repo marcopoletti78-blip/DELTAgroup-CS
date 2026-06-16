@@ -72,7 +72,15 @@ const greyLayout = {
   paddingBottom: () => 4,
 };
 
+// Layout per tabelle dati con righe alternate (header escluso; il fillColor a
+// livello cella dell'header ha comunque la precedenza su quello del layout).
+const stripedLayout = {
+  ...greyLayout,
+  fillColor: (rowIndex) => (rowIndex > 0 && rowIndex % 2 === 0 ? "#F9FAFB" : null),
+};
+
 // Tabella chiave/valore (2 colonne). rows = [[label, value], ...]
+// La colonna label è ombreggiata come "intestazione di riga".
 function kvTable(rows) {
   const visible = rows.filter(([, v]) => has(v));
   if (!visible.length) return null;
@@ -80,7 +88,7 @@ function kvTable(rows) {
     table: {
       widths: [150, "*"],
       body: visible.map(([label, value]) => [
-        { text: label, bold: true, fontSize: 9, color: NAVY },
+        { text: label, bold: true, fontSize: 9, color: "#374151", fillColor: "#F8FAFC" },
         { text: val(value), fontSize: 9, color: TXT },
       ]),
     },
@@ -130,7 +138,7 @@ export async function buildPpsPdfBlob(dati = {}) {
   const content = [];
 
   // 1. DATI SERVIZIO
-  content.push(sectionTitle("Dati servizio"));
+  content.push(sectionTitle("1. Dati servizio"));
   const datiTable = kvTable([
     ["Cliente", dati.cliente],
     ["Codice", dati.codice],
@@ -144,7 +152,7 @@ export async function buildPpsPdfBlob(dati = {}) {
 
   // 2. SITUAZIONE
   if (has(dati.situazione)) {
-    content.push(sectionTitle("Situazione"));
+    content.push(sectionTitle("2. Situazione"));
     content.push(...paragraph(dati.situazione));
   }
 
@@ -153,7 +161,7 @@ export async function buildPpsPdfBlob(dati = {}) {
     .map((s) => String(s).replace(/^\s*[-*•]\s+/, "").replace(/^\s*\d+[\.\)]\s+/, "").trim())
     .filter(Boolean);
   if (compiti.length || has(dati.differenze_pgs)) {
-    content.push(sectionTitle("Compiti"));
+    content.push(sectionTitle("3. Compiti"));
     if (compiti.length) {
       content.push({ ul: compiti.map((c) => ({ text: c, fontSize: 9, color: TXT, margin: [0, 0, 0, 2] })), margin: [0, 0, 0, 4] });
     }
@@ -168,7 +176,7 @@ export async function buildPpsPdfBlob(dati = {}) {
     [r.pericolo, r.conseguenze, r.misure].some((v) => has(v))
   );
   if (pericoli.length) {
-    content.push(sectionTitle("Pericoli particolari"));
+    content.push(sectionTitle("4. Pericoli particolari"));
     const head = ["Pericolo", "Conseguenze", "Misure"].map((h) => ({
       text: h, bold: true, fontSize: 9, color: AC, fillColor: BL,
     }));
@@ -185,7 +193,7 @@ export async function buildPpsPdfBlob(dati = {}) {
           ]),
         ],
       },
-      layout: greyLayout,
+      layout: stripedLayout,
       margin: [0, 0, 0, 4],
     });
   }
@@ -202,7 +210,7 @@ export async function buildPpsPdfBlob(dati = {}) {
     ["Parcheggio", dati.parcheggio],
   ]);
   if (dettagliTable) {
-    content.push(sectionTitle("Dettagli operativi"));
+    content.push(sectionTitle("5. Dettagli operativi"));
     content.push(dettagliTable);
   }
 
@@ -211,7 +219,7 @@ export async function buildPpsPdfBlob(dati = {}) {
     [r.nome, r.ruolo, r.telefono, r.email].some((v) => has(v))
   );
   if (referenti.length) {
-    content.push(sectionTitle("Referenti"));
+    content.push(sectionTitle("6. Referenti"));
     const head = ["Nome", "Ruolo", "Telefono", "Email"].map((h) => ({
       text: h, bold: true, fontSize: 9, color: AC, fillColor: BL,
     }));
@@ -229,13 +237,13 @@ export async function buildPpsPdfBlob(dati = {}) {
           ]),
         ],
       },
-      layout: greyLayout,
+      layout: stripedLayout,
       margin: [0, 0, 0, 4],
     });
   }
 
   // 7. VALIDITÀ
-  content.push(sectionTitle("Validità"));
+  content.push(sectionTitle("7. Validità"));
   content.push({
     text: "Il presente documento è valido per il servizio indicato e deve essere conservato dall'agente durante tutta la durata del servizio.",
     fontSize: 9, color: TXT, margin: [0, 0, 0, 4], lineHeight: 1.25,
@@ -249,7 +257,7 @@ export async function buildPpsPdfBlob(dati = {}) {
   // 8. ALLEGATI / FOTO
   const foto = (Array.isArray(dati.foto) ? dati.foto : []).filter((p) => p && p.url);
   if (foto.length) {
-    content.push(sectionTitle("Allegati — Foto"));
+    content.push(sectionTitle("8. Allegati e foto"));
     for (const ph of foto) {
       const dataUrl = await fetchAsDataUrl(ph.url);
       if (!dataUrl) continue;
