@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import logoImg from "./assets/logo.jpg";
 import { generateDocxBlob } from "./buildDocx";
+import { buildCsPdfBlob } from "./buildCsPdf";
 import { saveAs } from "file-saver";
 import PpsWizard from "./features/pps/PpsWizard";
 import PpsList from "./features/pps/PpsList";
@@ -26,6 +27,50 @@ async function shareOrDownloadDocx(blob, filename, title, text) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+// ── CONDIVISIONE / DOWNLOAD PDF (Web Share API con fallback) ──────────────────
+async function shareOrDownloadPdf(blob, filename, title, text) {
+  const file = new File([blob], filename, { type: "application/pdf" });
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title, text });
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Estrae { title, html } da un nodo sezione della preview CS.
+// Convenzione: il titolo è il PRIMO figlio del nodo (barra/intestazione),
+// il resto è il corpo.
+function csSectionFromNode(node) {
+  if (!node) return null;
+  const clone = node.cloneNode(true);
+  clone.querySelectorAll("iframe").forEach((el) => el.remove());
+  const first = clone.firstElementChild;
+  let title = "";
+  if (first) { title = (first.textContent || "").replace(/\s+/g, " ").trim(); first.remove(); }
+  return { title, html: clone.innerHTML };
+}
+
+// Variante per contenuto HTML grezzo (presetOverrides).
+function csSectionFromHtml(htmlStr) {
+  if (!htmlStr) return null;
+  const tmp = document.createElement("div");
+  tmp.innerHTML = String(htmlStr);
+  tmp.querySelectorAll("iframe").forEach((el) => el.remove());
+  const first = tmp.firstElementChild;
+  let title = "";
+  if (first) { title = (first.textContent || "").replace(/\s+/g, " ").trim(); first.remove(); }
+  return { title, html: tmp.innerHTML };
 }
 
 // ── PALETTE ──────────────────────────────────────────────────────────────────
@@ -3033,7 +3078,85 @@ ${flowParts}
     }
   };
 
-  
+  // Costruisce l'array di sezioni { title, html } dalla preview renderizzata
+  // (#doc-preview), nell'ordine corrente, per il generatore PDF.
+  const buildCsSections = () => {
+    const el = document.getElementById("doc-preview");
+    if (!el) return [];
+    const getNode = (id) => el.querySelector(`#${CSS.escape(id)}`);
+    const order = sectionOrder?.length ? sectionOrder : DEFAULT_SECTION_ORDER;
+    const out = [];
+    const pushNode = (id) => { const s = csSectionFromNode(getNode(id)); if (s) out.push(s); };
+    const pushPreset = (key, ids) => {
+      const ovr = presetOverrides[key];
+      if (ovr != null) { if (ovr) { const s = csSectionFromHtml(ovr); if (s) out.push(s); } return; }
+      ids.forEach(pushNode);
+    };
+    for (const key of order) {
+      if (key === "ps1") pushPreset("ps1", ["ps1"]);
+      else if (key === "ps2") pushPreset("ps2", ["ps2"]);
+      else if (key === "ps3") pushPreset("ps3", ["ps3"]);
+      else if (key === "ps4") pushPreset("ps4", ["ps4"]);
+      else if (key === "ps5") pushPreset("ps5", ["ps5"]);
+      else if (key === "ps6") pushPreset("ps6", ["ps6a", "ps6b"]);
+      else if (key === "all1") pushPreset("all1", ["pall1"]);
+      else if (key === "all2") pushPreset("all2", ["pall2"]);
+      else if (key.startsWith("custom:")) {
+        const id = parseCustomSectionKey(key);
+        const s = customSections.find((c) => c.id === id);
+        if (!s) continue;
+        if (s.type === "capitolo") pushNode(`pcap-${id}`);
+        else if (s.type === "sottocapitolo") { /* renderizzato dentro il padre */ }
+        else pushNode(`pallc-${id}`);
+      }
+    }
+    return out;
+  };
+
+  const buildCsEvento = () => ({
+    nomeEvento: data.nomeEvento || "",
+    tipoEvento: data.eventSettings?.tipo || "",
+    luogo: data.luogo || data.eventSettings?.luogo || "",
+    date: data.eventSettings?.date || "",
+    organizzatore: data.eventSettings?.orgNome || "",
+    affluenza: data.eventSettings?.affluenza || "",
+    strutture: data.eventSettings?.strutture || "",
+  });
+
+  const doDownloadCsPdf = async () => {
+    setDocxLoading(true);
+    setErr(null);
+    try {
+      const nomeFile = (data.nomeEvento||"concetto").replace(/[^a-zA-Z0-9_\-]/g,"_");
+      const blob = await buildCsPdfBlob(buildCsSections(), buildCsEvento());
+      saveAs(blob, `CS_${nomeFile}.pdf`);
+    } catch (e) {
+      console.error("[doDownloadCsPdf]", e);
+      setErr(`Errore generazione PDF: ${e.message}`);
+    } finally {
+      setDocxLoading(false);
+    }
+  };
+
+  const doShareCsPdf = async () => {
+    setDocxLoading(true);
+    setErr(null);
+    try {
+      const nomeFile = (data.nomeEvento||"documento").replace(/[^a-zA-Z0-9_\-]/g,"_");
+      const blob = await buildCsPdfBlob(buildCsSections(), buildCsEvento());
+      await shareOrDownloadPdf(
+        blob,
+        `CS_${nomeFile}.pdf`,
+        `Concetto di Sicurezza — ${data.nomeEvento||""}`,
+        "DELTAgroup Security & Services AG"
+      );
+    } catch (e) {
+      console.error("[doShareCsPdf]", e);
+      setErr(`Errore condivisione PDF: ${e.message}`);
+    } finally {
+      setDocxLoading(false);
+    }
+  };
 
   const dropBase = (drag) => ({
     border:`2px dashed ${drag?N:GB}`, borderRadius:"8px", padding:"10px 14px",
@@ -3073,8 +3196,11 @@ ${flowParts}
                 <button onClick={()=>{doDownloadDocx();setShowSave(false);}} disabled={docxLoading} style={{...SANS,width:"100%",padding:"11px 16px",background:"none",border:"none",borderBottom:`1px solid ${GB}`,cursor:docxLoading?"wait":"pointer",textAlign:"left",fontSize:"13px",color:TX,display:"flex",gap:"10px",alignItems:"center"}}>
                   <span>📝</span><div><div style={{fontWeight:"600"}}>{docxLoading?"Generazione in corso…":"Scarica Word (DOCX)"}</div><div style={{fontSize:"10px",color:GR}}>Modificabile in Word, converti in PDF da lì</div></div>
                 </button>
-                <button onClick={()=>{doShareDocx();setShowSave(false);}} disabled={docxLoading} style={{...SANS,width:"100%",padding:"11px 16px",background:WH,border:"none",borderBottom:`1px solid ${GB}`,borderLeft:`3px solid ${AC}`,cursor:docxLoading?"wait":"pointer",textAlign:"left",fontSize:"13px",color:AC,display:"flex",gap:"10px",alignItems:"center"}}>
-                  <span>📤</span><div><div style={{fontWeight:"600",color:AC}}>{docxLoading?"Generazione in corso…":"Condividi DOCX"}</div><div style={{fontSize:"10px",color:GR}}>Invia tramite app (o scarica se non disponibile)</div></div>
+                <button onClick={()=>{doDownloadCsPdf();setShowSave(false);}} disabled={docxLoading} style={{...SANS,width:"100%",padding:"11px 16px",background:"none",border:"none",borderBottom:`1px solid ${GB}`,cursor:docxLoading?"wait":"pointer",textAlign:"left",fontSize:"13px",color:TX,display:"flex",gap:"10px",alignItems:"center"}}>
+                  <span>📋</span><div><div style={{fontWeight:"600"}}>{docxLoading?"Generazione in corso…":"Scarica PDF"}</div><div style={{fontSize:"10px",color:GR}}>PDF pronto da stampare o inviare</div></div>
+                </button>
+                <button onClick={()=>{doShareCsPdf();setShowSave(false);}} disabled={docxLoading} style={{...SANS,width:"100%",padding:"11px 16px",background:WH,border:"none",borderBottom:`1px solid ${GB}`,borderLeft:`3px solid ${AC}`,cursor:docxLoading?"wait":"pointer",textAlign:"left",fontSize:"13px",color:AC,display:"flex",gap:"10px",alignItems:"center"}}>
+                  <span>📤</span><div><div style={{fontWeight:"600",color:AC}}>{docxLoading?"Generazione in corso…":"Condividi PDF"}</div><div style={{fontSize:"10px",color:GR}}>Invia tramite app (o scarica se non disponibile)</div></div>
                 </button>
                 <button onClick={()=>{doDownloadHTML();setShowSave(false);}} style={{...SANS,width:"100%",padding:"11px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:"13px",color:TX,display:"flex",gap:"10px",alignItems:"center"}}>
                   <span>🌐</span><div><div style={{fontWeight:"600"}}>Scarica HTML</div><div style={{fontSize:"10px",color:GR}}>File completo con immagini</div></div>

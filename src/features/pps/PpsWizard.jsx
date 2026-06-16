@@ -7,6 +7,7 @@ import React, { useState, useEffect, useRef } from "react";
 import logoImg from "../../assets/logo.jpg";
 import { saveAs } from "file-saver";
 import { generatePpsDocxBlob } from "./buildPpsDocx";
+import { buildPpsPdfBlob } from "../../buildPpsPdf";
 import { supabase } from "../../supabaseClient";
 
 // ── CONDIVISIONE / DOWNLOAD DOCX (Web Share API con fallback) ─────────────────
@@ -14,6 +15,25 @@ async function shareOrDownloadDocx(blob, filename, title, text) {
   const file = new File([blob], filename, {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   });
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title, text });
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ── CONDIVISIONE / DOWNLOAD PDF (Web Share API con fallback) ──────────────────
+async function shareOrDownloadPdf(blob, filename, title, text) {
+  const file = new File([blob], filename, { type: "application/pdf" });
   if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title, text });
@@ -280,7 +300,7 @@ function RigaDato({ label, value }) {
   );
 }
 
-function PpsDocView({ data, versione, profilo, onBack, onDownload, onShare, onCopy, onUnlock, docxLoading = false, saving = false, err = null }) {
+function PpsDocView({ data, versione, profilo, onBack, onDownload, onPdf, onShare, onCopy, onUnlock, docxLoading = false, saving = false, err = null }) {
   const isAdmin = profilo?.ruolo === "admin";
   const compiti = (Array.isArray(data.compiti) ? data.compiti : []).map((s) => String(s || "").trim()).filter(Boolean);
   const compitiTop = compiti.slice(0, 5);
@@ -310,12 +330,17 @@ function PpsDocView({ data, versione, profilo, onBack, onDownload, onShare, onCo
         </div>
 
         {/* Bottoni principali */}
-        <div style={{ display: "flex", gap: "12px", marginBottom: "18px", flexWrap: "wrap" }}>
-          <button onClick={onDownload} disabled={docxLoading} style={{ ...SANS, flex: "1 1 240px", padding: "18px", borderRadius: "14px", border: "none", background: AC, color: WH, fontSize: "16px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer", boxShadow: "0 4px 16px rgba(30,64,175,0.25)" }}>
-            {docxLoading ? "Genero DOCX…" : "📄 Scarica DOCX"}
-          </button>
-          <button onClick={onShare} disabled={docxLoading} style={{ ...SANS, flex: "1 1 200px", padding: "18px", borderRadius: "14px", border: `2px solid ${AC}`, background: WH, color: AC, fontSize: "16px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer" }}>
-            {docxLoading ? "Genero DOCX…" : "📤 Condividi"}
+        <div style={{ marginBottom: "18px" }}>
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+            <button onClick={onDownload} disabled={docxLoading} style={{ ...SANS, flex: "1 1 200px", padding: "16px", borderRadius: "14px", border: `2px solid ${AC}`, background: WH, color: AC, fontSize: "15px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer" }}>
+              {docxLoading ? "Genero…" : "📄 Word"}
+            </button>
+            <button onClick={onPdf} disabled={docxLoading} style={{ ...SANS, flex: "1 1 200px", padding: "16px", borderRadius: "14px", border: `2px solid ${AC}`, background: WH, color: AC, fontSize: "15px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer" }}>
+              {docxLoading ? "Genero…" : "📋 PDF"}
+            </button>
+          </div>
+          <button onClick={onShare} disabled={docxLoading} style={{ ...SANS, width: "100%", padding: "18px", borderRadius: "14px", border: "none", background: AC, color: WH, fontSize: "16px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer", boxShadow: "0 4px 16px rgba(30,64,175,0.25)" }}>
+            {docxLoading ? "Genero…" : "📤 Condividi"}
           </button>
         </div>
 
@@ -636,19 +661,33 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
     }
   };
 
+  const doPdf = async () => {
+    setDocxLoading(true); setErr(null);
+    try {
+      const nomeFile = (f.codice || f.cliente || "pps").replace(/[^a-zA-Z0-9_\-]/g, "_");
+      const blob = await buildPpsPdfBlob(f);
+      saveAs(blob, `PPS_${nomeFile}.pdf`);
+    } catch (e) {
+      console.error("[PpsWizard] pdf", e);
+      setErr(`Errore generazione PDF: ${e.message}`);
+    } finally {
+      setDocxLoading(false);
+    }
+  };
+
   const doShare = async () => {
     setDocxLoading(true); setErr(null);
     try {
-      const blob = await generatePpsDocxBlob({ data: f, headerLogoUrl: `${window.location.origin}${logoImg}` });
-      await shareOrDownloadDocx(
+      const blob = await buildPpsPdfBlob(f);
+      await shareOrDownloadPdf(
         blob,
-        `PPS_${f.codice || f.cliente || "documento"}.docx`,
+        `PPS_${f.codice || f.cliente || "documento"}.pdf`,
         `PPS — ${f.cliente || ""} ${f.luogo || ""}`,
         "DELTAgroup Security & Services AG"
       );
     } catch (e) {
       console.error("[PpsWizard] share", e);
-      setErr(`Errore condivisione DOCX: ${e.message}`);
+      setErr(`Errore condivisione PDF: ${e.message}`);
     } finally {
       setDocxLoading(false);
     }
@@ -663,6 +702,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
         profilo={profilo}
         onBack={onBack}
         onDownload={doDownload}
+        onPdf={doPdf}
         onShare={doShare}
         onCopy={copiaPps}
         onUnlock={doSblocca}
