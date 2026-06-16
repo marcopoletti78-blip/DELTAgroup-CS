@@ -12,10 +12,11 @@ import { supabase } from "../../supabaseClient";
 
 // ── CONDIVISIONE / DOWNLOAD DOCX (Web Share API con fallback) ─────────────────
 async function shareOrDownloadDocx(blob, filename, title, text) {
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const file = new File([blob], filename, {
     type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
   });
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+  if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title, text });
       return;
@@ -33,8 +34,9 @@ async function shareOrDownloadDocx(blob, filename, title, text) {
 
 // ── CONDIVISIONE / DOWNLOAD PDF (Web Share API con fallback) ──────────────────
 async function shareOrDownloadPdf(blob, filename, title, text) {
+  const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
   const file = new File([blob], filename, { type: "application/pdf" });
-  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+  if (isMobile && navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title, text });
       return;
