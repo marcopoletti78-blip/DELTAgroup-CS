@@ -31,7 +31,9 @@ Rispondi SOLO con un oggetto JSON valido, nessun testo prima o dopo, nessun mark
   "tipo_servizio": "tipo di servizio",
   "agenti": "numero o descrizione agenti",
   "situazione": "descrizione generale del contesto e dell'evento",
-  "compiti": ["compito 1", "compito 2"],
+  "compiti": [
+    "Se il documento descrive più agenti con ruoli distinti, crea UN SOLO elemento per agente nel formato: 'AGENTE X (orario): Ruolo — sintesi compatti dei compiti principali in un unico testo'. Se i compiti non sono divisi per agente, elenca i compiti principali come bullet separati (max 8).",
+  ],
   "differenze_pgs": "eventuali differenze rispetto al piano generale di sicurezza",
   "pericoli": [
     {
@@ -56,7 +58,11 @@ Rispondi SOLO con un oggetto JSON valido, nessun testo prima o dopo, nessun mark
   "informazioni_aggiuntive": "tutte le informazioni presenti nel documento che non rientrano nei campi precedenti (procedure emergenza, standard condotta, note operative, ecc.) — testo libero"
 }
 
-Se un campo non è presente nel documento, usa null (non stringa vuota).`;
+Se un campo non è presente nel documento, usa null (non stringa vuota).
+
+REGOLA COMPITI: Se il documento elenca compiti separati per più agenti (AGENTE 1, AGENTE 2, ecc.), raggruppa TUTTI i compiti di ogni agente in UN SOLO elemento dell'array 'compiti', nel formato:
+'AGENTE 1 (orario inizio-fine): [sintesi compatta di tutti i suoi compiti in un unico paragrafo]'
+Non creare un elemento separato per ogni singolo task — massimo 1 elemento per agente.`;
 
 // Etichette per il riepilogo campi.
 const FIELD_LABELS = {
