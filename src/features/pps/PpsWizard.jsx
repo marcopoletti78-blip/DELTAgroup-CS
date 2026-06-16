@@ -409,12 +409,12 @@ function PpsDocView({ data, versione, profilo, onBack, onDownload, onPdf, onShar
 }
 
 // ── Wizard ───────────────────────────────────────────────────────────────────
-export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = false, profilo = null }) {
+export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = false, profilo = null, initialData = null, importMissing = null }) {
   const gc = (cols) => (isMobile ? "1fr" : cols);
   const isAdmin = profilo?.ruolo === "admin";
   const email = profilo?.email || "";
   const [step, setStep] = useState(0);
-  const [f, setF] = useState(INIT);
+  const [f, setF] = useState(initialData ? normalizeLoaded(initialData) : INIT);
   const [bloccata, setBloccata] = useState(false);
   const [aiSit, setAiSit] = useState(false);
   const [aiComp, setAiComp] = useState(false);
@@ -438,7 +438,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       handledIdRef.current = null;
       setLocalId(null);
       setVersione(1);
-      setF(INIT);
+      setF(initialData ? normalizeLoaded(initialData) : INIT);
       setBloccata(false);
       setStep(0);
       setSaveMsg(null);
@@ -466,7 +466,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       logAudit(supabase, ppsId, email, "aperto");
     })();
     return () => { active = false; };
-  }, [ppsId]);
+  }, [ppsId, initialData]);
 
   const u = (k, v) => { setSaveMsg(null); setF((p) => ({ ...p, [k]: v })); };
   // pericoli
@@ -752,6 +752,12 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
           {bloccata && (
             <div style={{ ...SANS, background: "#FEF3C7", border: "1px solid #f59e0b", borderRadius: "10px", padding: "12px 14px", marginBottom: "18px", fontSize: "13px", color: "#92400e", fontWeight: 600, lineHeight: 1.5 }}>
               🔒 PPS validata — sola lettura. Crea una copia per modificarla.
+            </div>
+          )}
+
+          {!bloccata && Array.isArray(importMissing) && importMissing.length > 0 && (
+            <div style={{ ...SANS, background: "#fffbeb", border: "1px solid #f59e0b55", borderRadius: "10px", padding: "12px 14px", marginBottom: "18px", fontSize: "12.5px", color: "#92400e", lineHeight: 1.55 }}>
+              <span style={{ fontWeight: 700 }}>⚠️ Da completare</span> — campi non trovati nel documento importato: {importMissing.join(", ")}.
             </div>
           )}
 

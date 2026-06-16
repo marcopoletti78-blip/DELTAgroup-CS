@@ -5,6 +5,7 @@ import { buildCsPdfBlob } from "./buildCsPdf";
 import { saveAs } from "file-saver";
 import PpsWizard from "./features/pps/PpsWizard";
 import PpsList from "./features/pps/PpsList";
+import PpsImport from "./features/pps/PpsImport";
 import CsList from "./features/cs/CsList";
 import { supabase } from "./supabaseClient";
 
@@ -3592,6 +3593,64 @@ ${flowParts}
   );
 }
 
+// ── PPS: hub e scelta nuova ───────────────────────────────────────────────────
+function HubCard({ icon, title, subtitle, onClick }) {
+  const [h, setH] = useState(false);
+  return (
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setH(true)}
+      onMouseLeave={() => setH(false)}
+      style={{
+        ...SANS, background: WH, border: `1px solid ${h ? AC : "#E5E7EB"}`,
+        borderRadius: "12px", padding: "32px", width: "280px", maxWidth: "100%",
+        cursor: "pointer", transition: "all 0.15s",
+        boxShadow: h ? "0 8px 24px rgba(30,64,175,0.12)" : "0 2px 8px rgba(12,29,61,0.06)",
+      }}
+    >
+      <div style={{ fontSize: "34px", marginBottom: "12px" }}>{icon}</div>
+      <div style={{ fontSize: "17px", fontWeight: 700, color: N, marginBottom: "6px" }}>{title}</div>
+      <div style={{ fontSize: "13px", color: TM, lineHeight: 1.5 }}>{subtitle}</div>
+    </div>
+  );
+}
+
+function PpsHome({ onArchivio, onNuova, onBack, isMobile = false }) {
+  return (
+    <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "40px 20px" }}>
+      <div style={{ maxWidth: "660px", margin: "0 auto" }}>
+        <button onClick={onBack} style={{ ...SANS, background: "none", border: "none", cursor: "pointer", color: TM, fontSize: "12.5px", fontWeight: 600, padding: 0, marginBottom: "10px" }}>
+          ← Home › <span style={{ color: N, fontWeight: 700 }}>PPS</span>
+        </button>
+        <h1 style={{ ...SERIF, fontSize: "26px", fontWeight: 700, color: N, margin: "0 0 6px" }}>Prescrizioni Particolari di Servizio</h1>
+        <div style={{ ...SANS, fontSize: "13px", color: TM, marginBottom: "28px" }}>Scegli cosa fare</div>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: "24px", justifyContent: "center", alignItems: "center" }}>
+          <HubCard icon="📁" title="Archivio PPS" subtitle="Consulta e gestisci le PPS esistenti" onClick={onArchivio} />
+          <HubCard icon="✨" title="Nuova PPS" subtitle="Crea o importa una nuova PPS" onClick={onNuova} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PpsNewChoice({ onImporta, onNuova, onBack, isMobile = false }) {
+  return (
+    <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "40px 20px" }}>
+      <div style={{ maxWidth: "660px", margin: "0 auto" }}>
+        <button onClick={onBack} style={{ ...SANS, background: "none", border: "none", cursor: "pointer", color: TM, fontSize: "12.5px", fontWeight: 600, padding: 0, marginBottom: "10px" }}>
+          ← Home › <span style={{ color: N, fontWeight: 700 }}>PPS</span>
+        </button>
+        <h1 style={{ ...SERIF, fontSize: "26px", fontWeight: 700, color: N, margin: "0 0 6px" }}>Nuova PPS</h1>
+        <div style={{ ...SANS, fontSize: "13px", color: TM, marginBottom: "28px" }}>Come vuoi creare la PPS?</div>
+        <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", gap: "24px", justifyContent: "center", alignItems: "center" }}>
+          <HubCard icon="📄" title="Importa documento" subtitle="Carica un PDF o DOCX esistente — il sistema estrae i dati e pre-compila la PPS" onClick={onImporta} />
+          <HubCard icon="✏️" title="Crea da zero" subtitle="Compila manualmente il wizard in 7 step" onClick={onNuova} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── LANDING ───────────────────────────────────────────────────────────────────
 function LandingHome({ onCs, onPps, isAdmin = false, isMobile = false }) {
   const [hov1, setHov1] = useState(false);
@@ -4062,6 +4121,8 @@ export default function App() {
   const [view, setView] = useState("home");
   const [doc, setDoc] = useState(null);
   const [ppsId, setPpsId] = useState(null);
+  const [ppsInitial, setPpsInitial] = useState(null);
+  const [ppsImportMissing, setPpsImportMissing] = useState(null);
   const [csDocId, setCsDocId] = useState(null);
   const [csLoadedContent, setCsLoadedContent] = useState(null);
   const [sessione, setSessione] = useState(undefined); // undefined = caricamento
@@ -4115,7 +4176,7 @@ export default function App() {
   React.useEffect(() => {
     if (profilo && !isAdmin) {
       const csViews = ["cs-home", "cs-list", "cs-load", "wizard", "modify", "preview", "admin"];
-      if (csViews.includes(view)) setView("pps-list");
+      if (csViews.includes(view)) setView("pps-home");
     }
   }, [profilo, isAdmin, view]);
 
@@ -4132,7 +4193,7 @@ export default function App() {
   return (
     <div style={{minHeight:"100vh",background:BG}}>
       {view!=="home"&&<Header onHome={()=>setView("home")} profilo={profilo} onLogout={logout} onAdmin={()=>setView("admin")} isAdmin={isAdmin} isMobile={isMobile}/>}
-      {view==="home"&&<LandingHome isAdmin={isAdmin} isMobile={isMobile} onCs={()=>setView("cs-home")} onPps={()=>setView("pps-list")}/>}
+      {view==="home"&&<LandingHome isAdmin={isAdmin} isMobile={isMobile} onCs={()=>setView("cs-home")} onPps={()=>setView("pps-home")}/>}
       {view==="admin"&&profilo?.ruolo==="admin"&&<AdminPanel onBack={()=>setView("home")}/>}
       {view==="cs-home"&&<CsHome isMobile={isMobile} onNew={()=>setView("wizard")} onMod={()=>setView("modify")} onBack={()=>setView("home")} onArchive={()=>setView("cs-list")}/>}
       {view==="wizard"&&<Wizard onBack={()=>setView("home")} onDone={done}/>}
@@ -4150,20 +4211,42 @@ export default function App() {
           onBack={()=>setView("cs-list")}
           onLoaded={(row)=>{ setDoc(buildLoadedDataFromRow(row)); setCsLoadedContent(buildLoadedContentFromRow(row)); setCsDocId(row.id); setView("preview"); }}
         />}
+      {view==="pps-home"&&
+        <PpsHome
+          isMobile={isMobile}
+          onArchivio={()=>setView("pps-list")}
+          onNuova={()=>setView("pps-new")}
+          onBack={()=>setView("home")}
+        />}
+      {view==="pps-new"&&
+        <PpsNewChoice
+          isMobile={isMobile}
+          onImporta={()=>setView("pps-import")}
+          onNuova={()=>{ setPpsId(null); setPpsInitial(null); setPpsImportMissing(null); setView("pps-edit"); }}
+          onBack={()=>setView("pps-home")}
+        />}
+      {view==="pps-import"&&
+        <PpsImport
+          isMobile={isMobile}
+          onBack={()=>setView("pps-new")}
+          onOpenWizard={(data, missing)=>{ setPpsId(null); setPpsInitial(data); setPpsImportMissing(missing); setView("pps-edit"); }}
+        />}
       {view==="pps-list"&&
         <PpsList
           isMobile={isMobile}
           profilo={profilo}
-          onNew={()=>{ setPpsId(null); setView("pps-edit"); }}
-          onOpen={(id)=>{ setPpsId(id); setView("pps-edit"); }}
-          onBack={()=>setView("home")}
+          onNew={()=>{ setPpsId(null); setPpsInitial(null); setPpsImportMissing(null); setView("pps-new"); }}
+          onOpen={(id)=>{ setPpsId(id); setPpsInitial(null); setPpsImportMissing(null); setView("pps-edit"); }}
+          onBack={()=>setView("pps-home")}
         />}
       {view==="pps-edit"&&
         <PpsWizard
           ppsId={ppsId}
+          initialData={ppsInitial}
+          importMissing={ppsImportMissing}
           isMobile={isMobile}
           profilo={profilo}
-          onBack={()=>setView("pps-list")}
+          onBack={()=>setView("pps-home")}
           onSaved={(id)=>setPpsId(id)}
         />}
       {view==="preview"&&<Editor data={doc} onBack={()=>setView("home")} csDocId={csDocId} setCsDocId={setCsDocId} loadedContent={csLoadedContent}/>}
