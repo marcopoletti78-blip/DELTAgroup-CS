@@ -113,6 +113,7 @@ function bodyParagraphs(text) {
 // ── Funzione principale ──────────────────────────────────────────────────────
 // sections: [{ title, html }] — già estratte e ordinate dalla preview.
 export async function buildCsPdfBlob(sections = [], evento = {}) {
+  try {
   const pdfMake = await getPdfMake();
 
   const logoDataUrl = await fetchAsDataUrl("/logo.jpg");
@@ -192,12 +193,23 @@ export async function buildCsPdfBlob(sections = [], evento = {}) {
     info: { title: `Concetto di Sicurezza - ${nomeEvento}` },
   };
 
-  return new Promise((resolve, reject) => {
+  const blob = await new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("Timeout: getBlob non ha risposto entro 20s (font/vfs?)")),
+      20000
+    );
     try {
       const doc = pdfMake.createPdf(docDef);
-      doc.getBlob((blob) => resolve(blob));
+      doc.getBlob((b) => { clearTimeout(timer); resolve(b); });
     } catch (e) {
+      clearTimeout(timer);
       reject(e);
     }
   });
+  return blob;
+  } catch (err) {
+    console.error("buildCsPdfBlob error:", err);
+    alert("Errore PDF: " + err.message);
+    throw err;
+  }
 }

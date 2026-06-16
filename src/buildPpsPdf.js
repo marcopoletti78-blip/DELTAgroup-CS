@@ -114,6 +114,7 @@ function kvTable(rows) {
 
 // ── Funzione principale ──────────────────────────────────────────────────────
 export async function buildPpsPdfBlob(dati = {}) {
+  try {
   const pdfMake = await getPdfMake();
 
   const logoDataUrl = await fetchAsDataUrl("/logo.jpg");
@@ -294,12 +295,23 @@ export async function buildPpsPdfBlob(dati = {}) {
     info: { title: `PPS - ${dati.codice || dati.cliente || ""}` },
   };
 
-  return new Promise((resolve, reject) => {
+  const blob = await new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("Timeout: getBlob non ha risposto entro 20s (font/vfs?)")),
+      20000
+    );
     try {
       const doc = pdfMake.createPdf(docDef);
-      doc.getBlob((blob) => resolve(blob));
+      doc.getBlob((b) => { clearTimeout(timer); resolve(b); });
     } catch (e) {
+      clearTimeout(timer);
       reject(e);
     }
   });
+  return blob;
+  } catch (err) {
+    console.error("buildPpsPdfBlob error:", err);
+    alert("Errore PDF: " + err.message);
+    throw err;
+  }
 }
