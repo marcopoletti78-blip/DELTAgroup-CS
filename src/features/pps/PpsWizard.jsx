@@ -177,10 +177,21 @@ const inpStyle = {
   fontSize: "14px", color: N, background: WH, outline: "none", ...SANS, boxSizing: "border-box",
 };
 
-function Field({ label, children }) {
+// Colore label: rosso se il campo risulta tra quelli mancanti dall'importazione.
+function labelColor(fieldName, importMissing) {
+  if (!importMissing || !importMissing.length) return "#374151";
+  const missing = importMissing.map((f) => f.toLowerCase());
+  return missing.some((f) =>
+    fieldName.toLowerCase().includes(f) || f.includes(fieldName.toLowerCase())
+  )
+    ? "#EF4444"
+    : "#374151";
+}
+
+function Field({ label, children, color = TM }) {
   return (
     <label style={{ display: "block", marginBottom: "14px" }}>
-      <span style={{ ...SANS, display: "block", fontSize: "12px", fontWeight: 600, color: TM, marginBottom: "5px" }}>{label}</span>
+      <span style={{ ...SANS, display: "block", fontSize: "12px", fontWeight: 600, color, marginBottom: "5px" }}>{label}</span>
       {children}
     </label>
   );
@@ -775,13 +786,13 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
               <Field label="Cliente / Committente"><Txt v={f.cliente} set={(v) => u("cliente", v)} ph="Nome del cliente" /></Field>
               <Field label="Luogo / Indirizzo"><Txt v={f.luogo} set={(v) => u("luogo", v)} ph="Indirizzo / località" /></Field>
               <div style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr 1fr"), gap: "12px" }}>
-                <Field label="Data servizio"><Txt v={f.data} set={(v) => u("data", v)} ph="gg.mm.aaaa" /></Field>
+                <Field label="Data servizio" color={labelColor("data", importMissing)}><Txt v={f.data} set={(v) => u("data", v)} ph="gg.mm.aaaa" /></Field>
                 <Field label="Orario inizio"><Txt v={f.orario_inizio} set={(v) => u("orario_inizio", v)} ph="20:00" /></Field>
                 <Field label="Orario fine"><Txt v={f.orario_fine} set={(v) => u("orario_fine", v)} ph="06:00" /></Field>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: gc("2fr 1fr"), gap: "12px" }}>
                 <Field label="Tipo di servizio"><Sel v={f.tipo_servizio} set={(v) => u("tipo_servizio", v)} opts={TIPI_SERVIZIO} /></Field>
-                <Field label="Numero agenti"><Txt v={f.num_agenti} set={(v) => u("num_agenti", v)} ph="Es. 2" /></Field>
+                <Field label="Numero agenti" color={labelColor("agenti", importMissing)}><Txt v={f.num_agenti} set={(v) => u("num_agenti", v)} ph="Es. 2" /></Field>
               </div>
               <Field label="Note (opzionale)"><Area v={f.note_dati} set={(v) => u("note_dati", v)} ph="Indicazioni particolari, dotazioni, accessi…" rows={3} /></Field>
             </div>
@@ -791,7 +802,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
           {step === 1 && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                <span style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: TM }}>Descrizione della situazione</span>
+                <span style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: labelColor("situazione", importMissing) }}>Descrizione della situazione</span>
                 <Btn variant="accent" on={doAiSituazione} disabled={aiSit}>{aiSit ? "Generazione in corso…" : "✨ Genera con AI"}</Btn>
               </div>
               <Area v={f.situazione} set={(v) => u("situazione", v)} rows={6}
@@ -803,7 +814,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
           {step === 2 && (
             <div>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
-                <span style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: TM }}>Compiti del personale</span>
+                <span style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: labelColor("compiti", importMissing) }}>Compiti del personale</span>
                 <Btn variant="accent" on={doAiCompiti} disabled={aiComp}>{aiComp ? "Generazione in corso…" : "✨ Genera con AI"}</Btn>
               </div>
               <ListEditor items={f.compiti} setItems={(arr) => u("compiti", arr)} ph="Es. Garantire la sicurezza degli accessi" addLabel="+ Aggiungi compito" />
@@ -818,7 +829,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
           {/* STEP 4 — Pericoli particolari */}
           {step === 3 && (
             <div>
-              <div style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: TM, marginBottom: "10px" }}>Pericoli particolari</div>
+              <div style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: labelColor("pericoli", importMissing), marginBottom: "10px" }}>Pericoli particolari</div>
               {!isMobile && (
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 34px", gap: "8px", marginBottom: "6px", ...SANS, fontSize: "11px", fontWeight: 700, color: GR, textTransform: "uppercase", letterSpacing: "0.04em" }}>
                 <div>Pericolo</div><div>Conseguenze</div><div>Misure di protezione</div><div></div>
@@ -843,15 +854,15 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
           {step === 4 && (
             <div>
               <div style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr"), gap: "12px" }}>
-                <Field label="Divisa / Tenue"><Txt v={f.divisa} set={(v) => u("divisa", v)} ph="Es. Uniforme DELTAgroup" /></Field>
-                <Field label="Canale radio"><Txt v={f.radio_canale} set={(v) => u("radio_canale", v)} ph="Es. Canale 4" /></Field>
+                <Field label="Divisa / Tenue" color={labelColor("divisa", importMissing)}><Txt v={f.divisa} set={(v) => u("divisa", v)} ph="Es. Uniforme DELTAgroup" /></Field>
+                <Field label="Canale radio" color={labelColor("radio", importMissing)}><Txt v={f.radio_canale} set={(v) => u("radio_canale", v)} ph="Es. Canale 4" /></Field>
               </div>
               <Field label="Equipaggiamento">
                 <ListEditor items={f.equipaggiamento} setItems={(arr) => u("equipaggiamento", arr)} ph="Es. Torcia, radio, telefono di servizio" addLabel="+ Aggiungi equipaggiamento" />
               </Field>
               <div style={{ display: "grid", gridTemplateColumns: gc("1fr 1fr"), gap: "12px", marginTop: "4px" }}>
-                <Field label="Vettovagliamento"><Txt v={f.vettovagliamento} set={(v) => u("vettovagliamento", v)} ph="Es. A carico dell'agente" /></Field>
-                <Field label="Punto di incontro / Parcheggio"><Txt v={f.parcheggio} set={(v) => u("parcheggio", v)} ph="Es. Ingresso principale" /></Field>
+                <Field label="Vettovagliamento" color={labelColor("vettovagliamento", importMissing)}><Txt v={f.vettovagliamento} set={(v) => u("vettovagliamento", v)} ph="Es. A carico dell'agente" /></Field>
+                <Field label="Punto di incontro / Parcheggio" color={labelColor("parcheggio", importMissing)}><Txt v={f.parcheggio} set={(v) => u("parcheggio", v)} ph="Es. Ingresso principale" /></Field>
               </div>
               <Field label="Note operative (opzionale)"><Area v={f.note_operative} set={(v) => u("note_operative", v)} ph="Indicazioni operative aggiuntive…" rows={3} /></Field>
             </div>
@@ -863,7 +874,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
               {f.referenti.map((r, i) => (
                 <div key={i} style={{ border: `1px solid ${GB}`, borderRadius: "10px", padding: "14px", marginBottom: "12px", background: GL }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                    <span style={{ ...SANS, fontSize: "12px", fontWeight: 700, color: N }}>Referente {i + 1}</span>
+                    <span style={{ ...SANS, fontSize: "12px", fontWeight: 700, color: labelColor("referenti", importMissing) === "#EF4444" ? "#EF4444" : N }}>Referente {i + 1}</span>
                     {f.referenti.length > 1 && (
                       <button onClick={() => delRef(i)} style={{ ...SANS, background: "none", border: "none", color: ERR, cursor: "pointer", fontSize: "12px", fontWeight: 600 }}>Rimuovi</button>
                     )}
