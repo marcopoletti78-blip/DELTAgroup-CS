@@ -65,6 +65,7 @@ function sectionTitle(text, opts = {}) {
   const fill = opts.fill || NAVY;
   const fontSize = opts.fontSize || 10;
   return {
+    style: "sectionTitle",
     table: {
       widths: ["*"],
       body: [[{
@@ -99,8 +100,11 @@ function renderCompiti(compiti) {
     const matchAgente = text.match(/^(AGENTE\s+\d+)\s*\(([^)]+)\)\s*:\s*([^—–]+)[—–]\s*(.+)$/s);
     if (matchAgente) {
       const [, agente, orario, ruolo, tasks] = matchAgente;
+      // Tutto il box agente in un unico contenitore: lo wrappiamo in uno stack
+      // unbreakable così header, orario e compiti non finiscono su pagine diverse.
+      const boxAgente = [];
       // Header box agente (sfondo navy uniforme)
-      blocks.push({
+      boxAgente.push({
         table: { widths: ["*"], body: [[{
           text: `${agente.toUpperCase()} — ${ruolo.trim().toUpperCase()}`,
           bold: true, color: "#FFFFFF", fillColor: AG_COLOR, fontSize: 9,
@@ -110,7 +114,7 @@ function renderCompiti(compiti) {
         margin: [0, 8, 0, 0],
       });
       // Sub-header orario su sfondo grigio chiaro
-      blocks.push({
+      boxAgente.push({
         table: { widths: ["*"], body: [[{
           text: [{ text: "Orario di servizio: ", bold: true, fontSize: 9 }, { text: orario, fontSize: 9 }],
           fillColor: AG_ORARIO_BG, border: [false, false, false, false],
@@ -118,7 +122,7 @@ function renderCompiti(compiti) {
         layout: { defaultBorder: false, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 4, paddingBottom: () => 4 },
         margin: [0, 0, 0, 4],
       });
-      blocks.push({ text: "COMPITI OPERATIVI", bold: true, fontSize: 9, color: NAVY, margin: [0, 2, 0, 4] });
+      boxAgente.push({ text: "COMPITI OPERATIVI", bold: true, fontSize: 9, color: NAVY, margin: [0, 2, 0, 4] });
       // Delimitatore primario: newline. Se il testo contiene più righe → un bullet
       // per riga; altrimenti fallback a un unico bullet con tutto il testo.
       const splitByNewline = tasks
@@ -127,7 +131,7 @@ function renderCompiti(compiti) {
         .filter((t) => t.length > 0);
       const taskList = splitByNewline.length > 1 ? splitByNewline : [tasks.trim()];
       taskList.forEach((task) => {
-        blocks.push({
+        boxAgente.push({
           columns: [
             { text: "•", color: AC, width: 10, fontSize: 9.5 },
             { text: task, fontSize: 9.5, width: "*" },
@@ -135,6 +139,7 @@ function renderCompiti(compiti) {
           margin: [0, 3, 0, 0],
         });
       });
+      blocks.push({ stack: boxAgente, unbreakable: true });
     } else {
       blocks.push({
         columns: [
@@ -191,25 +196,13 @@ export async function buildPpsPdfBlob(dati = {}) {
   const logoDataUrl = await fetchAsDataUrl("/logo.jpg");
   const codice = val(dati.codice);
 
-  // Header ripetuto su ogni pagina (lato destro: codice servizio + titolo)
+  // Header ripetuto su ogni pagina: solo logo a sinistra + linea separatrice.
   const header = (currentPage, pageCount) => ({
     margin: [40, 18, 40, 0],
     stack: [
-      {
-        columns: [
-          logoDataUrl
-            ? { image: logoDataUrl, width: 80, margin: [0, 0, 12, 0] }
-            : { text: "", width: 80 },
-          {
-            width: "*",
-            stack: [
-              ...(codice ? [{ text: codice, bold: true, fontSize: 10, color: AC, alignment: "right" }] : []),
-              { text: "PPS — Prescrizioni Particolari di Servizio", fontSize: 8, color: "#6B7280", alignment: "right", margin: [0, codice ? 2 : 0, 0, 0] },
-            ],
-            margin: [0, 4, 0, 0],
-          },
-        ],
-      },
+      logoDataUrl
+        ? { image: logoDataUrl, width: 115 }
+        : { text: "", width: 115 },
       { canvas: [{ type: "line", x1: 0, y1: 8, x2: 515, y2: 8, lineWidth: 2, lineColor: AC }] },
     ],
   });
@@ -429,6 +422,12 @@ export async function buildPpsPdfBlob(dati = {}) {
     header,
     footer,
     content,
+    // Evita i titoli di sezione orfani a fondo pagina: se un sectionTitle
+    // resta da solo in fondo (nessun nodo dopo di lui sulla pagina), lo
+    // spinge alla pagina successiva.
+    pageBreakBefore: function (currentNode, followingNodesOnPage) {
+      return currentNode.style === "sectionTitle" && followingNodesOnPage.length === 0;
+    },
     defaultStyle: { font: "Roboto", fontSize: 9, color: TXT },
     info: { title: `PPS - ${dati.codice || dati.cliente || ""}` },
   };
