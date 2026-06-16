@@ -119,10 +119,13 @@ function renderCompiti(compiti) {
         margin: [0, 0, 0, 4],
       });
       blocks.push({ text: "COMPITI OPERATIVI", bold: true, fontSize: 9, color: NAVY, margin: [0, 2, 0, 4] });
-      const taskList = tasks
-        .split(/(?<=\.)\s+(?=[A-Z])|;\s*/)
+      // Delimitatore primario: newline. Se il testo contiene più righe → un bullet
+      // per riga; altrimenti fallback a un unico bullet con tutto il testo.
+      const splitByNewline = tasks
+        .split(/\r?\n/)
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
+      const taskList = splitByNewline.length > 1 ? splitByNewline : [tasks.trim()];
       taskList.forEach((task) => {
         blocks.push({
           columns: [
@@ -302,11 +305,14 @@ export async function buildPpsPdfBlob(dati = {}) {
     : val(dati.equipaggiamento);
   const radioVal = has(dati.radio_canale) ? val(dati.radio_canale)
     : (has(dati.radio) ? val(dati.radio) : "Canale 1 (salvo diversa indicazione)");
+  // Vettovagliamento: nascondi la riga se vuoto o placeholder ("-" / "—")
+  const vettoRaw = val(dati.vettovagliamento);
+  const vettovagliamento = (vettoRaw === "-" || vettoRaw === "—") ? "" : vettoRaw;
   const dettagliTable = kvTable([
     ["Divisa", dati.divisa],
     ["Equipaggiamento", equip],
     ["Canale radio", radioVal],
-    ["Vettovagliamento", dati.vettovagliamento],
+    ["Vettovagliamento", vettovagliamento],
     ["Parcheggio", dati.parcheggio],
   ]);
   if (dettagliTable) {
@@ -347,16 +353,37 @@ export async function buildPpsPdfBlob(dati = {}) {
   if (note) {
     content.push(sep());
     content.push(sectionTitle("Note operative", { fill: NOTE_BG, fontSize: 8 }));
-    const punti = note.split(/\n+/).map((p) => p.trim()).filter(Boolean);
-    (punti.length ? punti : [note]).forEach((punto) => {
-      content.push({
-        columns: [
-          { text: "•", color: AC, width: 10, fontSize: 9 },
-          { text: punto, fontSize: 9, width: "*" },
-        ],
-        margin: [0, 3, 0, 0],
-      });
+    // Keyword inline che fanno da delimitatori di sezione nel testo unico.
+    const KEYWORDS = ["MAPPE OPERATIVE:", "STANDARD DI CONDOTTA:", "PROCEDURE EMERGENZA:", "NOTE AGGIUNTIVE:"];
+    // Trova le occorrenze delle keyword e relativa posizione nel testo.
+    const markers = [];
+    KEYWORDS.forEach((kw) => {
+      const idx = note.indexOf(kw);
+      if (idx !== -1) markers.push({ kw, idx });
     });
+    markers.sort((a, b) => a.idx - b.idx);
+    if (markers.length) {
+      markers.forEach((m, i) => {
+        const start = m.idx + m.kw.length;
+        const end = i + 1 < markers.length ? markers[i + 1].idx : note.length;
+        const heading = m.kw.replace(/:\s*$/, ""); // "MAPPE OPERATIVE"
+        const body = note.slice(start, end).trim();
+        content.push({ text: heading, bold: true, fontSize: 9, color: NAVY, margin: [0, i === 0 ? 2 : 4, 0, 2] });
+        if (body) content.push({ text: body, fontSize: 9, color: TXT, margin: [0, 0, 0, 6], lineHeight: 1.25 });
+      });
+    } else {
+      // Fallback: nessuna keyword → bullet list spezzato su newline.
+      const punti = note.split(/\n+/).map((p) => p.trim()).filter(Boolean);
+      (punti.length ? punti : [note]).forEach((punto) => {
+        content.push({
+          columns: [
+            { text: "•", color: AC, width: 10, fontSize: 9 },
+            { text: punto, fontSize: 9, width: "*" },
+          ],
+          margin: [0, 3, 0, 0],
+        });
+      });
+    }
   }
 
   // 7. VALIDITÀ
