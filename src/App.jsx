@@ -114,7 +114,7 @@ async function callAI(userMsg, mainDoc=null, attachments=[], sysOverride=null) {
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5",
       max_tokens: 8000,
       system: withWordLimitSysPrefix(sysOverride||SYS_PROMPT),
       messages: [{ role: "user", content }]
@@ -138,7 +138,7 @@ async function callAIText(userMsg, sysOverride = null) {
       "anthropic-dangerous-direct-browser-access": "true",
     },
     body: JSON.stringify({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-5",
       max_tokens: 4000,
       system: withWordLimitSysPrefix(sysOverride || "Sei un redattore tecnico italiano. Rispondi SOLO con il testo richiesto, senza markdown fence, senza commenti introduttivi."),
       messages: [{ role: "user", content: userMsg }],
