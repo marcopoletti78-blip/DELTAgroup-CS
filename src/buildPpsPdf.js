@@ -22,7 +22,9 @@ const GREY = "#888888";
 const GB = "#d0dae8";       // bordo grigio tabelle
 const BL = "#EFF6FF";       // blu chiaro header tabelle
 
-const FOOTER_TEXT = "DELTAgroup Security & Services AG · Via alla Foce 4, 6933 Muzzano · T +41 91 921 49 49 · TICINO@delta.ch";
+const FOOTER_TEXT = "DELTAgroup Security & Services AG · Filiale Ticino · Via alla Foce 4, 6933 Muzzano · T +41 91 921 49 49 · ticino@delta.ch · www.delta.ch";
+const FOOT_GREY = "#6B7280";   // grigio footer
+const FOOT_LINE = "#D1D5DB";   // grigio linea footer
 
 const MM = 2.834645669;          // 1mm in pt
 const MARGIN = Math.round(20 * MM);  // 20mm ≈ 57pt (lati / fondo)
@@ -126,12 +128,13 @@ export async function buildPpsPdfBlob(dati = {}) {
     ],
   });
 
-  // Footer ripetuto su ogni pagina
+  // Footer ripetuto su ogni pagina (centrato, con linea grigia sopra)
   const footer = (currentPage, pageCount) => ({
-    margin: [MARGIN, 6, MARGIN, 0],
-    columns: [
-      { text: FOOTER_TEXT, fontSize: 7, color: GREY, width: "*" },
-      { text: `${currentPage} / ${pageCount}`, fontSize: 7, color: GREY, alignment: "right", width: "auto" },
+    margin: [MARGIN, 0, MARGIN, 20],
+    stack: [
+      { canvas: [{ type: "line", x1: 0, y1: 0, x2: CONTENT_W, y2: 0, lineWidth: 0.5, lineColor: FOOT_LINE }] },
+      { text: FOOTER_TEXT, alignment: "center", fontSize: 7, color: FOOT_GREY, margin: [0, 4, 0, 2] },
+      { text: `Pagina ${currentPage} di ${pageCount}`, alignment: "center", fontSize: 7, color: FOOT_GREY },
     ],
   });
 
