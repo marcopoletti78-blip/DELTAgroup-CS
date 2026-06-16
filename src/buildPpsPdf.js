@@ -123,9 +123,9 @@ function kvTable(rows) {
 export async function buildPpsPdfBlob(dati = {}) {
   try {
   const logoDataUrl = await fetchAsDataUrl("/logo.jpg");
-  const sub = [dati.cliente, dati.luogo].filter((s) => has(s)).join(" · ");
+  const codice = val(dati.codice);
 
-  // Header ripetuto su ogni pagina
+  // Header ripetuto su ogni pagina (lato destro: codice servizio + titolo)
   const header = (currentPage, pageCount) => ({
     margin: [40, 18, 40, 0],
     stack: [
@@ -137,8 +137,8 @@ export async function buildPpsPdfBlob(dati = {}) {
           {
             width: "*",
             stack: [
-              { text: "PPS — Prescrizioni Particolari di Servizio", bold: true, fontSize: 11, color: NAVY, alignment: "right" },
-              { text: sub || " ", fontSize: 9, color: "#6B7280", alignment: "right", margin: [0, 2, 0, 0] },
+              ...(codice ? [{ text: codice, bold: true, fontSize: 10, color: AC, alignment: "right" }] : []),
+              { text: "PPS — Prescrizioni Particolari di Servizio", fontSize: 8, color: "#6B7280", alignment: "right", margin: [0, codice ? 2 : 0, 0, 0] },
             ],
             margin: [0, 4, 0, 0],
           },

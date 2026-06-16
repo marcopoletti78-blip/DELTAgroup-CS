@@ -227,17 +227,27 @@ function Btn({ children, on, variant = "navy", disabled = false }) {
 }
 
 // Editor di lista stringhe con add/remove (compiti, equipaggiamento)
-function ListEditor({ items, setItems, ph, addLabel }) {
+function ListEditor({ items, setItems, ph, addLabel, multiline = false }) {
   return (
     <div>
       {items.map((it, i) => (
-        <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: "center" }}>
-          <input
-            value={it}
-            placeholder={ph}
-            onChange={(e) => setItems(items.map((x, idx) => (idx === i ? e.target.value : x)))}
-            style={inpStyle}
-          />
+        <div key={i} style={{ display: "flex", gap: "8px", marginBottom: "8px", alignItems: multiline ? "flex-start" : "center" }}>
+          {multiline ? (
+            <textarea
+              value={it}
+              placeholder={ph}
+              rows={String(it || "").length > 100 ? 3 : 2}
+              onChange={(e) => setItems(items.map((x, idx) => (idx === i ? e.target.value : x)))}
+              style={{ ...inpStyle, width: "100%", resize: "vertical", lineHeight: 1.6 }}
+            />
+          ) : (
+            <input
+              value={it}
+              placeholder={ph}
+              onChange={(e) => setItems(items.map((x, idx) => (idx === i ? e.target.value : x)))}
+              style={inpStyle}
+            />
+          )}
           <button
             onClick={() => setItems(items.length > 1 ? items.filter((_, idx) => idx !== i) : [""])}
             title="Rimuovi"
@@ -817,7 +827,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
                 <span style={{ ...SANS, fontSize: "12px", fontWeight: 600, color: labelColor("compiti", importMissing) }}>Compiti del personale</span>
                 <Btn variant="accent" on={doAiCompiti} disabled={aiComp}>{aiComp ? "Generazione in corso…" : "✨ Genera con AI"}</Btn>
               </div>
-              <ListEditor items={f.compiti} setItems={(arr) => u("compiti", arr)} ph="Es. Garantire la sicurezza degli accessi" addLabel="+ Aggiungi compito" />
+              <ListEditor items={f.compiti} setItems={(arr) => u("compiti", arr)} ph="Es. Garantire la sicurezza degli accessi" addLabel="+ Aggiungi compito" multiline />
               <div style={{ marginTop: "18px" }}>
                 <Field label="Differenze rispetto alle PGS (opzionale)">
                   <Area v={f.differenze_pgs} set={(v) => u("differenze_pgs", v)} ph="Eventuali deroghe o integrazioni rispetto alle Prescrizioni Generali di Servizio…" rows={3} />
