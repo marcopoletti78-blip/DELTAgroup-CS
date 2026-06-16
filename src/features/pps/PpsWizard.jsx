@@ -301,8 +301,58 @@ async function generaSituazioneAI(f) {
 }
 
 async function generaCompitiAI(f) {
-  const content = `Genera una lista di 5-7 compiti per un servizio di sicurezza.\nTipo: ${f.tipo_servizio}, Luogo: ${f.luogo}.\nSituazione: ${f.situazione}.\nFormato: frasi brevi all'imperativo (es. 'Garantire la sicurezza...').\nRestituisci SOLO la lista, un compito per riga.`;
-  return callGenerate(content, 400);
+  const orario = [f.orario_inizio, f.orario_fine].filter(Boolean).join("-");
+  const datiServizio = [
+    `Cliente: ${f.cliente || "n/d"}`,
+    `Luogo: ${f.luogo || "n/d"}`,
+    `Tipo servizio: ${f.tipo_servizio || "n/d"}`,
+    `Orario complessivo: ${orario || "n/d"}`,
+    `Numero agenti: ${f.num_agenti || "n/d"}`,
+    `Situazione: ${f.situazione || "n/d"}`,
+  ].join("\n");
+
+  const content = `Sei un assistente operativo di DELTAgroup Security & Services AG.
+Genera i compiti del personale per una PPS (Prescrizioni Particolari di Servizio) in base ai dati del servizio forniti.
+
+DATI DEL SERVIZIO:
+${datiServizio}
+
+FORMATO OBBLIGATORIO — rispettalo alla lettera:
+
+AGENTE N (orario_inizio-orario_fine): [Ruolo sintetico] — [Primo compito]
+[Secondo compito]
+[Terzo compito]
+[Ulteriori compiti, uno per riga]
+
+Separa ogni agente con una riga vuota.
+
+REGOLE:
+1. Il primo compito segue il "—" sulla stessa riga dell'intestazione
+2. Ogni compito successivo va su una riga separata (a capo reale, \\n)
+3. Ogni compito inizia con un verbo: "Entra", "Verifica", "Mantiene", "Controlla", "Coordina", "Effettua", "Si posiziona"...
+4. Ogni compito: max 15 parole, concreto, azionabile
+5. NON usare virgole per separare compiti diversi
+6. NON mettere punto alla fine dei compiti
+7. NON usare bullet, trattini o numerazione — solo righe pulite
+
+ESEMPIO DI OUTPUT CORRETTO:
+AGENTE 1 (17:30-02:00): Gestione entrate e sicurezza Terrazza — Entra in servizio e prende contatto con i responsabili
+Verifica il perimetro della Terrazza e le infrastrutture
+Si posiziona all'entrata e controlla il flusso di persone
+Mantiene il contatto radio con Agente 2 e Agente 3
+A turno con Agente 3 verifica che nessuno acceda alle aree vietate
+Coordina il deflusso finale in modo fluido e tranquillo
+Effettua debriefing con i responsabili e verifica le infrastrutture
+Raggiunge gli altri agenti e indica la fine del servizio
+
+AGENTE 2 (20:00-02:00): Gestione posteggio e strada — Entra in servizio e conferma via radio ad Agente 1
+Fornisce indicazioni sui posteggi disponibili senza fungere da posteggiatore
+Effettua ronde regolari nell'area assegnata
+Monitora che arrivi e partenze non creino problemi di ordine pubblico
+Al deflusso finale riceve il supporto di Agente 3
+
+Restituisci SOLO i blocchi degli agenti, senza testo introduttivo o conclusivo.`;
+  return callGenerate(content, 1500);
 }
 
 // ── Vista documento (PPS validata, sola lettura) ─────────────────────────────
@@ -565,10 +615,23 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
   const doAiCompiti = async () => {
     setAiComp(true); setErr(null);
     try {
-      const text = await generaCompitiAI(f);
-      const list = text.split(/\r?\n/)
-        .map((s) => s.replace(/^\s*[-*•]\s+/, "").replace(/^\s*\d+[\.\)]\s+/, "").trim())
-        .filter(Boolean);
+      const text = (await generaCompitiAI(f)).trim();
+      // Il nuovo prompt produce blocchi-agente separati da riga vuota, con i
+      // compiti su righe separate (\n) dentro al blocco. Ogni blocco-agente =
+      // un elemento di compiti[]: i \n interni vengono mantenuti perché
+      // buildPpsPdf li usa per generare un bullet per compito.
+      const blocchi = text.split(/\n\s*\n+/).map((b) => b.trim()).filter(Boolean);
+      const isFormatoAgenti = /^AGENTE\s+\d+/i.test(text);
+      let list;
+      if (isFormatoAgenti) {
+        // Mantieni i blocchi multi-riga così come sono.
+        list = blocchi;
+      } else {
+        // Fallback formato legacy: lista piatta, un compito per riga.
+        list = text.split(/\r?\n/)
+          .map((s) => s.replace(/^\s*[-*•]\s+/, "").replace(/^\s*\d+[\.\)]\s+/, "").trim())
+          .filter(Boolean);
+      }
       u("compiti", list.length ? list : [""]);
     } catch (e) {
       setErr(`Assist AI non disponibile: ${e.message}. Puoi inserire i compiti manualmente.`);
