@@ -1,6 +1,6 @@
 # STATO PROGETTO — DELTAgroup CS-PPS
 > Documento autosufficiente per ripresa sviluppo in nuova chat.
-> Aggiornato: 14 giugno 2026.
+> Aggiornato: 17 giugno 2026.
 
 ---
 
@@ -27,8 +27,8 @@
 - PWA — installabile su iOS/Android/Desktop
 - Libreria docx — export DOCX
 
-**Cartella locale:** C:\Users\pom\Desktop\DELTAgroup-CS
-**Claude Code:** cmd.exe → cd C:\Users\pom\Desktop\DELTAgroup-CS → claude
+**Cartella locale:** C:\Dev\DELTAgroup-CS
+**Claude Code:** cmd.exe → cd C:\Dev\DELTAgroup-CS → claude
 
 ---
 
@@ -49,13 +49,19 @@ src/
   App.jsx                    — routing + autenticazione + AdminPanel
   supabaseClient.js          — client Supabase (stub se env mancanti)
   buildDocx.js               — generatore DOCX Concetti di Sicurezza
+  buildPpsPdf.js             — generatore PDF PPS (pdfmake) · 449 righe
   assets/
     logo.jpg
   features/
     pps/
-      PpsWizard.jsx          — wizard 7 step + lock + audit + PpsDocView
-      PpsList.jsx            — archivio per cliente accordion
+      PpsWizard.jsx          — wizard 7 step + lock + audit + PpsDocView · 1058 righe
+      PpsList.jsx            — archivio per cliente accordion · 309 righe
       buildPpsDocx.js        — generatore DOCX PPS
+
+### Versioni file modificati il 17/06/2026 (wc -l)
+- src/buildPpsPdf.js — 449 righe
+- src/features/pps/PpsWizard.jsx — 1058 righe
+- src/features/pps/PpsList.jsx — 309 righe
 
 api/
   generate.js                — proxy Anthropic per CS
@@ -88,10 +94,10 @@ Tutte le tabelle: RLS disabilitata. GRANT ALL a anon e authenticated su ogni tab
 
 ### Tabella pps_audit
 - id: uuid PK
-- pps_id: uuid FK → pps(id) ON DELETE CASCADE
+- pps_id: uuid FK → pps(id) ON DELETE SET NULL (riconfigurata 17/06/2026: conserva il log dopo eliminazione PPS)
 - utente_email: text
-- azione: text (aperto / modificato / bloccato / sbloccato / copiato / creato)
-- dettagli: jsonb
+- azione: text (aperto / modificato / bloccato / sbloccato / copiato / creato / eliminato)
+- dettagli: jsonb (per "eliminato" contiene codice e cliente della PPS rimossa)
 - created_at: timestamptz
 
 ### Tabella pps_servizi (foundation per integrazione PLAN)
@@ -159,6 +165,12 @@ Pubblico, policy anon SELECT/INSERT/DELETE. Upload foto allegate alle PPS.
 5. Dettagli operativi (divisa, equipaggiamento, radio, ecc.)
 6. Referenti (nome, ruolo, tel, email)
 7. Allegati/Foto (upload, resize 1200px, Supabase Storage, didascalia)
+
+### Funzionalità aggiunte il 17/06/2026
+- Generazione PDF con pdfmake: titolo centrato, box agenti con bullet compiti separati, firma, page break (sezioni e box agenti unbreakable)
+- Generazione compiti via AI con bullet su newline (formato "AGENTE N (orario): Ruolo — compiti", un compito per riga)
+- Delete PPS admin-only con audit trail (FK pps_audit.pps_id → ON DELETE SET NULL, codice/cliente salvati nei dettagli)
+- Versionamento: v+1 automatico su unlock+save (PPS già validata almeno una volta)
 
 ---
 
@@ -242,6 +254,16 @@ Colori brand:
 
 ---
 
+## Commit recenti (sessione 17/06/2026)
+
+- 6aa6e57 — feat: visual upgrade PDF PPS
+- 7fd7c20 — fix: prompt AI compiti + doAiCompiti + max_tokens
+- f563e01 — fix: validità unbreakable (header già ok)
+- 1798d5c — feat: delete PPS admin-only, versioning
+- 4c3a3fc — fix: ripristino audit eliminazione (FK SET NULL)
+
+---
+
 ## 16. Coda sviluppo
 
 ### Completato
@@ -255,11 +277,17 @@ Colori brand:
 - Responsive mobile (isMobile hook)
 - Footer telefono corretto: +41 91 921 49 49
 - Foundation DB integrazione PLAN (pps_servizi, pps_letture)
+- [x] Creare src/buildPpsPdf.js (generatore PDF pdfmake)
+- [x] Visual upgrade PDF PPS
+- [x] Delete admin-only
+- [x] Versioning
 
 ### In sospeso
 - Icona PWA triangolo blu (commit recente, verificare su telefono)
 - Dominio Vercel: rimasto delt-agroup-cs (rinominato progetto ma URL non cambia)
-- Riordino sottocapitoli CS (frecce su/giu non funzionano per sottocapitoli custom)
+- [ ] Aggiornare PpsWizard.jsx con campi emergenze strutturati (emergenze, emergenza_nota, standard_condotta come array separati)
+- [ ] Riordino sottocapitoli CS (bug ▲▼)
+- [ ] Modifica impostazioni evento dall'editor CS
 
 ### Prossimo — Integrazione CS-PPS con PLAN (progetto separato)
 Foundation DB già pronta (tabelle pps_servizi e pps_letture create il 14/06/2026).
