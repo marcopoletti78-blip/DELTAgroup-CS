@@ -669,7 +669,6 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       saveAs(blob, `PPS_${nomeFile}.pdf`);
     } catch (e) {
       console.error("PDF error:", e);
-      alert("Errore generazione PDF: " + e.message);
       setErr(`Errore generazione PDF: ${e.message}`);
     } finally {
       setDocxLoading(false);
@@ -688,7 +687,6 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       );
     } catch (e) {
       console.error("PDF error:", e);
-      alert("Errore generazione PDF: " + e.message);
       setErr(`Errore condivisione PDF: ${e.message}`);
     } finally {
       setDocxLoading(false);

@@ -1,3 +1,7 @@
+import pdfMake from "pdfmake/build/pdfmake";
+import { vfs } from "./pdfVfs";
+pdfMake.vfs = vfs;
+
 // Generatore PDF per il Concetto di Sicurezza (CS).
 // Usa pdfmake (browser). Stile coerente con buildPpsPdf.js / buildDocx.js.
 //
@@ -20,33 +24,6 @@ const MM = 2.834645669;
 const MARGIN = Math.round(20 * MM);
 const A4_WIDTH = 595.28;
 const CONTENT_W = A4_WIDTH - MARGIN * 2;
-
-// ── Inizializzazione pdfmake (lazy import, robusto su più versioni) ──────────
-let _pdfMake = null;
-function pickVfs(m) {
-  const cands = [m?.vfs, m?.pdfMake?.vfs, m?.default?.vfs, m?.default?.pdfMake?.vfs, m?.default, m];
-  for (const c of cands) {
-    if (c && typeof c === "object" && Object.keys(c).some((k) => k.endsWith(".ttf"))) return c;
-  }
-  return m?.default || m;
-}
-async function getPdfMake() {
-  if (_pdfMake) return _pdfMake;
-  const pm = (await import("pdfmake/build/pdfmake")).default;
-  const fontsMod = await import("pdfmake/build/vfs_fonts");
-  const vfs = pickVfs(fontsMod);
-  if (vfs) pm.vfs = vfs;
-  pm.fonts = pm.fonts || {
-    Roboto: {
-      normal: "Roboto-Regular.ttf",
-      bold: "Roboto-Medium.ttf",
-      italics: "Roboto-Italic.ttf",
-      bolditalics: "Roboto-MediumItalic.ttf",
-    },
-  };
-  _pdfMake = pm;
-  return pm;
-}
 
 async function fetchAsDataUrl(url) {
   try {
@@ -114,8 +91,6 @@ function bodyParagraphs(text) {
 // sections: [{ title, html }] — già estratte e ordinate dalla preview.
 export async function buildCsPdfBlob(sections = [], evento = {}) {
   try {
-  const pdfMake = await getPdfMake();
-
   const logoDataUrl = await fetchAsDataUrl("/logo.jpg");
   const nomeEvento = evento?.nomeEvento ? String(evento.nomeEvento) : "";
 
@@ -193,23 +168,11 @@ export async function buildCsPdfBlob(sections = [], evento = {}) {
     info: { title: `Concetto di Sicurezza - ${nomeEvento}` },
   };
 
-  const blob = await new Promise((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error("Timeout: getBlob non ha risposto entro 20s (font/vfs?)")),
-      20000
-    );
-    try {
-      const doc = pdfMake.createPdf(docDef);
-      doc.getBlob((b) => { clearTimeout(timer); resolve(b); });
-    } catch (e) {
-      clearTimeout(timer);
-      reject(e);
-    }
+  return new Promise((resolve) => {
+    pdfMake.createPdf(docDef).getBlob(resolve);
   });
-  return blob;
   } catch (err) {
     console.error("buildCsPdfBlob error:", err);
-    alert("Errore PDF: " + err.message);
     throw err;
   }
 }
