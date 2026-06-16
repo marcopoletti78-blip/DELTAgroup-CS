@@ -153,6 +153,9 @@ export default function PpsList({ onNew, onOpen, onBack, profilo }) {
     if (!window.confirm("Eliminare definitivamente questa PPS? L'operazione non è reversibile.")) return;
     if (p.bloccata === true && !window.confirm("Questa PPS è validata. Sei sicuro di volerla eliminare?")) return;
     setActingId(p.id); setErr(null);
+    // Log PRIMA del DELETE. Con ON DELETE SET NULL, pps_id diventerà null
+    // dopo l'eliminazione: salviamo codice/cliente nei dettagli per leggibilità.
+    await logAudit(p.id, email, "eliminato", { codice: p.codice || "", cliente: p.cliente || "" });
     const { error } = await supabase.from("pps").delete().eq("id", p.id);
     if (error) { setErr(`Errore durante l'eliminazione: ${error.message}`); setActingId(null); return; }
     setActingId(null);
