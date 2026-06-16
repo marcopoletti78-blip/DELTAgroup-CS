@@ -9,6 +9,27 @@ import { saveAs } from "file-saver";
 import { generatePpsDocxBlob } from "./buildPpsDocx";
 import { supabase } from "../../supabaseClient";
 
+// ── CONDIVISIONE / DOWNLOAD DOCX (Web Share API con fallback) ─────────────────
+async function shareOrDownloadDocx(blob, filename, title, text) {
+  const file = new File([blob], filename, {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  });
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title, text });
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── Palette (allineata ad App.jsx) ──────────────────────────────────────────
 const N = "#0c1d3d";
 const AC = "#1E40AF";
@@ -259,7 +280,7 @@ function RigaDato({ label, value }) {
   );
 }
 
-function PpsDocView({ data, versione, profilo, onBack, onDownload, onCopy, onUnlock, docxLoading = false, saving = false, err = null }) {
+function PpsDocView({ data, versione, profilo, onBack, onDownload, onShare, onCopy, onUnlock, docxLoading = false, saving = false, err = null }) {
   const isAdmin = profilo?.ruolo === "admin";
   const compiti = (Array.isArray(data.compiti) ? data.compiti : []).map((s) => String(s || "").trim()).filter(Boolean);
   const compitiTop = compiti.slice(0, 5);
@@ -288,10 +309,15 @@ function PpsDocView({ data, versione, profilo, onBack, onDownload, onCopy, onUnl
           </span>
         </div>
 
-        {/* Bottone principale */}
-        <button onClick={onDownload} disabled={docxLoading} style={{ ...SANS, width: "100%", padding: "18px", borderRadius: "14px", border: "none", background: AC, color: WH, fontSize: "16px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer", boxShadow: "0 4px 16px rgba(30,64,175,0.25)", marginBottom: "18px" }}>
-          {docxLoading ? "Genero DOCX…" : "📄 Scarica DOCX"}
-        </button>
+        {/* Bottoni principali */}
+        <div style={{ display: "flex", gap: "12px", marginBottom: "18px", flexWrap: "wrap" }}>
+          <button onClick={onDownload} disabled={docxLoading} style={{ ...SANS, flex: "1 1 240px", padding: "18px", borderRadius: "14px", border: "none", background: AC, color: WH, fontSize: "16px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer", boxShadow: "0 4px 16px rgba(30,64,175,0.25)" }}>
+            {docxLoading ? "Genero DOCX…" : "📄 Scarica DOCX"}
+          </button>
+          <button onClick={onShare} disabled={docxLoading} style={{ ...SANS, flex: "1 1 200px", padding: "18px", borderRadius: "14px", border: `2px solid ${AC}`, background: WH, color: AC, fontSize: "16px", fontWeight: 700, cursor: docxLoading ? "wait" : "pointer" }}>
+            {docxLoading ? "Genero DOCX…" : "📤 Condividi"}
+          </button>
+        </div>
 
         {err && (
           <div style={{ ...SANS, marginBottom: "18px", padding: "10px 12px", background: "#fdeced", border: `1px solid ${ERR}55`, borderRadius: "8px", color: ERR, fontSize: "12.5px" }}>{err}</div>
@@ -610,6 +636,24 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
     }
   };
 
+  const doShare = async () => {
+    setDocxLoading(true); setErr(null);
+    try {
+      const blob = await generatePpsDocxBlob({ data: f, headerLogoUrl: `${window.location.origin}${logoImg}` });
+      await shareOrDownloadDocx(
+        blob,
+        `PPS_${f.codice || f.cliente || "documento"}.docx`,
+        `PPS — ${f.cliente || ""} ${f.luogo || ""}`,
+        "DELTAgroup Security & Services AG"
+      );
+    } catch (e) {
+      console.error("[PpsWizard] share", e);
+      setErr(`Errore condivisione DOCX: ${e.message}`);
+    } finally {
+      setDocxLoading(false);
+    }
+  };
+
   // PPS validata → vista documento di sola lettura (nessun wizard).
   if (!loading && bloccata) {
     return (
@@ -619,6 +663,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
         profilo={profilo}
         onBack={onBack}
         onDownload={doDownload}
+        onShare={doShare}
         onCopy={copiaPps}
         onUnlock={doSblocca}
         docxLoading={docxLoading}

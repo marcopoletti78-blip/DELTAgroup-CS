@@ -7,6 +7,27 @@ import PpsList from "./features/pps/PpsList";
 import CsList from "./features/cs/CsList";
 import { supabase } from "./supabaseClient";
 
+// ── CONDIVISIONE / DOWNLOAD DOCX (Web Share API con fallback) ─────────────────
+async function shareOrDownloadDocx(blob, filename, title, text) {
+  const file = new File([blob], filename, {
+    type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  });
+  if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share({ files: [file], title, text });
+      return;
+    } catch (err) {
+      if (err.name === "AbortError") return;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 // ── PALETTE ──────────────────────────────────────────────────────────────────
 const N = "#0c1d3d";    // navy
 const NM = "#1a3461";   // navy mid
@@ -2983,6 +3004,35 @@ ${flowParts}
     }
   };
 
+  const doShareDocx = async () => {
+    setDocxLoading(true);
+    setErr(null);
+    try {
+      const nomeFile = (data.nomeEvento||"documento").replace(/[^a-zA-Z0-9_\-]/g,"_");
+      const blob = await generateDocxBlob({
+        data,
+        customSections,
+        sectionOrder,
+        presetDeletedItems,
+        presetSubOrder,
+        headerLogoUrl: `${window.location.origin}${logoImg}`,
+        PRESET_SUB_COUNT,
+        DEFAULT_SECTION_ORDER,
+      });
+      await shareOrDownloadDocx(
+        blob,
+        `CS_${nomeFile}.docx`,
+        `Concetto di Sicurezza — ${data.nomeEvento||""}`,
+        "DELTAgroup Security & Services AG"
+      );
+    } catch (e) {
+      console.error("[doShareDocx]", e);
+      setErr(`Errore condivisione DOCX: ${e.message}`);
+    } finally {
+      setDocxLoading(false);
+    }
+  };
+
   
 
   const dropBase = (drag) => ({
@@ -3022,6 +3072,9 @@ ${flowParts}
                 </button>
                 <button onClick={()=>{doDownloadDocx();setShowSave(false);}} disabled={docxLoading} style={{...SANS,width:"100%",padding:"11px 16px",background:"none",border:"none",borderBottom:`1px solid ${GB}`,cursor:docxLoading?"wait":"pointer",textAlign:"left",fontSize:"13px",color:TX,display:"flex",gap:"10px",alignItems:"center"}}>
                   <span>📝</span><div><div style={{fontWeight:"600"}}>{docxLoading?"Generazione in corso…":"Scarica Word (DOCX)"}</div><div style={{fontSize:"10px",color:GR}}>Modificabile in Word, converti in PDF da lì</div></div>
+                </button>
+                <button onClick={()=>{doShareDocx();setShowSave(false);}} disabled={docxLoading} style={{...SANS,width:"100%",padding:"11px 16px",background:WH,border:"none",borderBottom:`1px solid ${GB}`,borderLeft:`3px solid ${AC}`,cursor:docxLoading?"wait":"pointer",textAlign:"left",fontSize:"13px",color:AC,display:"flex",gap:"10px",alignItems:"center"}}>
+                  <span>📤</span><div><div style={{fontWeight:"600",color:AC}}>{docxLoading?"Generazione in corso…":"Condividi DOCX"}</div><div style={{fontSize:"10px",color:GR}}>Invia tramite app (o scarica se non disponibile)</div></div>
                 </button>
                 <button onClick={()=>{doDownloadHTML();setShowSave(false);}} style={{...SANS,width:"100%",padding:"11px 16px",background:"none",border:"none",cursor:"pointer",textAlign:"left",fontSize:"13px",color:TX,display:"flex",gap:"10px",alignItems:"center"}}>
                   <span>🌐</span><div><div style={{fontWeight:"600"}}>Scarica HTML</div><div style={{fontSize:"10px",color:GR}}>File completo con immagini</div></div>
