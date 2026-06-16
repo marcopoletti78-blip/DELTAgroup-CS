@@ -54,6 +54,7 @@ function MiniBtn({ children, on, tone = "neutral", disabled = false, title }) {
     accent: { bg: WH, col: AC, bd: AC },
     ok: { bg: WH, col: OK, bd: OK },
     warn: { bg: WH, col: "#b45309", bd: "#f59e0b" },
+    danger: { bg: WH, col: ERR, bd: ERR },
   };
   const t = tones[tone] || tones.neutral;
   return (
@@ -140,12 +141,24 @@ export default function PpsList({ onNew, onOpen, onBack, profilo }) {
     const { error } = await supabase.from("pps").update({
       bloccata: false,
       bloccata_da: null,
-      bloccata_il: null,
     }).eq("id", p.id);
     if (error) { setErr(`Errore durante lo sblocco: ${error.message}`); setActingId(null); return; }
     await logAudit(p.id, email, "sbloccato");
     setActingId(null);
     load();
+  };
+
+  // Eliminazione definitiva (solo admin). Doppia conferma se la PPS è validata.
+  const doElimina = async (p) => {
+    if (!window.confirm("Eliminare definitivamente questa PPS? L'operazione non è reversibile.")) return;
+    if (p.bloccata === true && !window.confirm("Questa PPS è validata. Sei sicuro di volerla eliminare?")) return;
+    setActingId(p.id); setErr(null);
+    const { error } = await supabase.from("pps").delete().eq("id", p.id);
+    if (error) { setErr(`Errore durante l'eliminazione: ${error.message}`); setActingId(null); return; }
+    await logAudit(p.id, email, "eliminato");
+    setActingId(null);
+    // Aggiorna la lista in locale, senza ricaricare la pagina.
+    setRows((prev) => prev.filter((r) => r.id !== p.id));
   };
 
   const doCopia = async (p) => {
@@ -180,6 +193,7 @@ export default function PpsList({ onNew, onOpen, onBack, profilo }) {
       <div style={{ display: "flex", gap: "8px", flexShrink: 0 }}>
         <MiniBtn tone="accent" on={() => onOpen(p.id)}>Modifica →</MiniBtn>
         {isAdmin && <MiniBtn tone="ok" disabled={actingId === p.id} on={() => doValida(p)}>🔒 Valida</MiniBtn>}
+        {isAdmin && <MiniBtn tone="danger" disabled={actingId === p.id} on={() => doElimina(p)}>🗑 Elimina</MiniBtn>}
       </div>
     </div>
   );
@@ -194,6 +208,7 @@ export default function PpsList({ onNew, onOpen, onBack, profilo }) {
         <MiniBtn on={() => onOpen(p.id)}>Vedi →</MiniBtn>
         <MiniBtn tone="accent" disabled={actingId === p.id} on={() => doCopia(p)}>📋 Copia</MiniBtn>
         {isAdmin && <MiniBtn tone="warn" disabled={actingId === p.id} on={() => doSblocca(p)}>🔓 Sblocca</MiniBtn>}
+        {isAdmin && <MiniBtn tone="danger" disabled={actingId === p.id} on={() => doElimina(p)}>🗑 Elimina</MiniBtn>}
       </div>
     </div>
   );

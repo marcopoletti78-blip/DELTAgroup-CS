@@ -487,6 +487,9 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
   const [step, setStep] = useState(0);
   const [f, setF] = useState(initialData ? normalizeLoaded(initialData) : INIT);
   const [bloccata, setBloccata] = useState(false);
+  // bloccata_il originale letto dalla riga: serve a capire se la PPS era già
+  // stata validata almeno una volta (incremento versione su sblocco+salvataggio).
+  const [bloccataIl, setBloccataIl] = useState(null);
   const [aiSit, setAiSit] = useState(false);
   const [aiComp, setAiComp] = useState(false);
   const [docxLoading, setDocxLoading] = useState(false);
@@ -511,6 +514,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       setVersione(1);
       setF(initialData ? normalizeLoaded(initialData) : INIT);
       setBloccata(false);
+      setBloccataIl(null);
       setStep(0);
       setSaveMsg(null);
       setErr(null);
@@ -532,6 +536,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       setLocalId(ppsId);
       setVersione(data.versione || 1);
       setBloccata(!!data.bloccata);
+      setBloccataIl(data.bloccata_il ?? null);
       setF(normalizeLoaded(data.contenuto));
       setLoading(false);
       logAudit(supabase, ppsId, email, "aperto");
@@ -643,15 +648,22 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
   const doSave = async () => {
     setSaving(true); setErr(null); setSaveMsg(null);
     try {
+      // Incremento versione: solo se la PPS era già validata almeno una volta
+      // (bloccataIl != null) ed è ora di nuovo modificabile (sbloccata).
+      const eraValidataEOraModificata = !!localId && !bloccata && bloccataIl != null;
+      const nuovaVersione = eraValidataEOraModificata ? versione + 1 : (localId ? versione : 1);
       const obj = {
         codice: f.codice,
         cliente: f.cliente,
         luogo: f.luogo,
         tipo_servizio: f.tipo_servizio,
-        versione: localId ? versione : 1,
+        versione: nuovaVersione,
         stato: "bozza",
         contenuto: { ...f },
       };
+      // Azzera il flag dopo aver incrementato, così salvataggi successivi
+      // non incrementano di nuovo finché non si rivalida e risblocca.
+      if (eraValidataEOraModificata) obj.bloccata_il = null;
       if (!localId) {
         const { data, error } = await supabase.from("pps").insert([obj]).select().single();
         if (error) throw error;
@@ -663,6 +675,8 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
       } else {
         const { error } = await supabase.from("pps").update(obj).eq("id", localId);
         if (error) throw error;
+        setVersione(nuovaVersione);
+        if (eraValidataEOraModificata) setBloccataIl(null);
         await logAudit(supabase, localId, email, "modificato");
       }
       setSaveMsg("Salvato ✓");
@@ -679,25 +693,28 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
     if (!localId) { setErr("Salva prima la PPS per poterla validare."); return; }
     if (!window.confirm("Validare questa PPS? Non sarà più modificabile.")) return;
     setSaving(true); setErr(null); setSaveMsg(null);
+    const bloccataIlNuovo = new Date().toISOString();
     const { error } = await supabase.from("pps").update({
       bloccata: true,
       bloccata_da: email,
-      bloccata_il: new Date().toISOString(),
+      bloccata_il: bloccataIlNuovo,
     }).eq("id", localId);
     setSaving(false);
     if (error) { setErr(`Errore durante la validazione: ${error.message}`); return; }
     await logAudit(supabase, localId, email, "bloccato");
     setBloccata(true);
+    setBloccataIl(bloccataIlNuovo);
   };
 
   const doSblocca = async () => {
     if (!localId) return;
     if (!window.confirm("Sbloccare questa PPS? Tornerà modificabile.")) return;
     setSaving(true); setErr(null); setSaveMsg(null);
+    // Non azzeriamo bloccata_il: serve a marcare che la PPS è già stata
+    // validata, così il prossimo salvataggio incrementa la versione.
     const { error } = await supabase.from("pps").update({
       bloccata: false,
       bloccata_da: null,
-      bloccata_il: null,
     }).eq("id", localId);
     setSaving(false);
     if (error) { setErr(`Errore durante lo sblocco: ${error.message}`); return; }
