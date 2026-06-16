@@ -379,27 +379,34 @@ export async function buildPpsPdfBlob(dati = {}) {
     }
   }
 
-  // 7. VALIDITÀ
-  startSection("7. Validità");
-  content.push({
-    text: "Il presente documento è valido per il servizio indicato e deve essere conservato dall'agente durante tutta la durata del servizio.",
-    fontSize: 9, color: TXT, margin: [0, 0, 0, 4], lineHeight: 1.25,
-  });
-  // Blocco firma
-  content.push({ canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: "#cccccc" }], margin: [0, 10, 0, 0] });
+  // 7. VALIDITÀ — titolo + contenuto + firma in un unico blocco unbreakable
+  // così il titolo non resta orfano a fondo pagina con il resto sulla successiva.
+  if (content.length) content.push(sep());
   const dataEmissione = new Date().toLocaleDateString("it-CH", { day: "2-digit", month: "2-digit", year: "numeric" });
-  content.push({ text: `Data di emissione: ${dataEmissione}`, fontSize: 8.5, color: TXT, margin: [0, 12, 0, 0] });
   content.push({
-    table: { widths: ["*", "*"], body: [[
-      { text: "Responsabile DELTAgroup: ____________________", fontSize: 8.5, border: [false, false, false, false] },
-      { text: "Firma: _______________", fontSize: 8.5, border: [false, false, false, false] },
-    ]] },
-    layout: { defaultBorder: false },
-    margin: [0, 16, 0, 0],
-  });
-  content.push({
-    text: "Il presente documento costituisce parte integrante del mandato di servizio e integra le Prescrizioni Generali di Sorveglianza (PGS).",
-    italics: true, fontSize: 7.5, color: "#6B7280", margin: [0, 8, 0, 0],
+    unbreakable: true,
+    stack: [
+      sectionTitle("7. Validità"),
+      {
+        text: "Il presente documento è valido per il servizio indicato e deve essere conservato dall'agente durante tutta la durata del servizio.",
+        fontSize: 9, color: TXT, margin: [0, 0, 0, 4], lineHeight: 1.25,
+      },
+      // Blocco firma
+      { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: "#cccccc" }], margin: [0, 10, 0, 0] },
+      { text: `Data di emissione: ${dataEmissione}`, fontSize: 8.5, color: TXT, margin: [0, 12, 0, 0] },
+      {
+        table: { widths: ["*", "*"], body: [[
+          { text: "Responsabile DELTAgroup: ____________________", fontSize: 8.5, border: [false, false, false, false] },
+          { text: "Firma: _______________", fontSize: 8.5, border: [false, false, false, false] },
+        ]] },
+        layout: { defaultBorder: false },
+        margin: [0, 16, 0, 0],
+      },
+      {
+        text: "Il presente documento costituisce parte integrante del mandato di servizio e integra le Prescrizioni Generali di Sorveglianza (PGS).",
+        italics: true, fontSize: 7.5, color: "#6B7280", margin: [0, 8, 0, 0],
+      },
+    ],
   });
 
   // 8. ALLEGATI / FOTO
