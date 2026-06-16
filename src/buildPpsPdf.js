@@ -128,11 +128,11 @@ export async function buildPpsPdfBlob(dati = {}) {
     ],
   });
 
-  // Footer ripetuto su ogni pagina (centrato, con linea grigia sopra)
+  // Footer ripetuto su ogni pagina (centrato, con linea grigia sopra) — uguale al DOCX
   const footer = (currentPage, pageCount) => ({
-    margin: [MARGIN, 0, MARGIN, 20],
+    margin: [40, 0, 40, 20],
     stack: [
-      { canvas: [{ type: "line", x1: 0, y1: 0, x2: CONTENT_W, y2: 0, lineWidth: 0.5, lineColor: FOOT_LINE }] },
+      { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.5, lineColor: FOOT_LINE }] },
       { text: FOOTER_TEXT, alignment: "center", fontSize: 7, color: FOOT_GREY, margin: [0, 4, 0, 2] },
       { text: `Pagina ${currentPage} di ${pageCount}`, alignment: "center", fontSize: 7, color: FOOT_GREY },
     ],
