@@ -82,6 +82,56 @@ function paragraph(text) {
   return lines.map((l) => ({ text: l, fontSize: 9, color: TXT, margin: [0, 0, 0, 4], lineHeight: 1.25 }));
 }
 
+// Rendering dei compiti: riconosce il formato "AGENTE N (orario): Ruolo — tasks"
+// e lo struttura (box agente, orario, lista puntata dei task). Altrimenti bullet.
+function renderCompiti(compiti) {
+  const blocks = [];
+  (compiti || []).forEach((c) => {
+    const text = String(c || "").trim();
+    if (!text) return;
+    const matchAgente = text.match(/^(AGENTE\s+\d+)\s*\(([^)]+)\)\s*:\s*([^—–]+)[—–]\s*(.+)$/s);
+    if (matchAgente) {
+      const [, agente, orario, ruolo, tasks] = matchAgente;
+      blocks.push({
+        table: { widths: ["*"], body: [[{
+          text: `${agente.toUpperCase()} — ${ruolo.trim().toUpperCase()}`,
+          bold: true, color: "#FFFFFF", fillColor: "#1E3A5F", fontSize: 9,
+          border: [false, false, false, false],
+        }]] },
+        layout: { defaultBorder: false, paddingLeft: () => 8, paddingRight: () => 8, paddingTop: () => 5, paddingBottom: () => 5 },
+        margin: [0, 8, 0, 2],
+      });
+      blocks.push({
+        text: [{ text: "Orario di servizio: ", bold: true, fontSize: 8 }, { text: orario, fontSize: 8 }],
+        margin: [0, 0, 0, 4],
+      });
+      blocks.push({ text: "COMPITI OPERATIVI", bold: true, fontSize: 8, color: AC, margin: [0, 2, 0, 3] });
+      const taskList = tasks
+        .split(/(?<=\.)\s+(?=[A-Z])|;\s*/)
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+      taskList.forEach((task) => {
+        blocks.push({
+          columns: [
+            { text: "•", color: AC, width: 10, fontSize: 8 },
+            { text: task, fontSize: 8, width: "*" },
+          ],
+          margin: [4, 1, 0, 1],
+        });
+      });
+    } else {
+      blocks.push({
+        columns: [
+          { text: "▸", color: AC, width: 12, fontSize: 8 },
+          { text: text, fontSize: 8, width: "*" },
+        ],
+        margin: [0, 2, 0, 2],
+      });
+    }
+  });
+  return blocks;
+}
+
 // Layout: solo bordi orizzontali sottili, nessun bordo verticale.
 // fillFn(rowIndex) determina l'ombreggiatura della riga (override a livello cella).
 function hLayout(fillFn) {
@@ -191,13 +241,7 @@ export async function buildPpsPdfBlob(dati = {}) {
   if (compiti.length || has(dati.differenze_pgs)) {
     startSection("3. Compiti");
     if (compiti.length) {
-      content.push(...compiti.map((c) => ({
-        columns: [
-          { text: "▸", color: AC, width: 12 },
-          { text: c, width: "*", fontSize: 9, color: TXT },
-        ],
-        margin: [0, 2, 0, 2],
-      })));
+      content.push(...renderCompiti(compiti));
     }
     if (has(dati.differenze_pgs)) {
       content.push({ text: "Differenze rispetto al PGS:", bold: true, fontSize: 9, color: NAVY, margin: [0, 6, 0, 3] });
@@ -276,8 +320,27 @@ export async function buildPpsPdfBlob(dati = {}) {
     });
   }
 
-  // 7. VALIDITÀ
-  startSection("7. Validità");
+  // 7. NOTE OPERATIVE — lista puntata da note_operative / informazioni_aggiuntive
+  const note = (dati.note_operative || dati.informazioni_aggiuntive || "").trim();
+  if (note) {
+    startSection("7. Note operative");
+    const punti = note
+      .split(/(?<=\.)\s+(?=[A-Z])|(?<=:)\s+(?=[A-Z])|;\s*/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 10);
+    (punti.length ? punti : [note]).forEach((punto) => {
+      content.push({
+        columns: [
+          { text: "•", color: AC, width: 10, fontSize: 8 },
+          { text: punto, fontSize: 8, width: "*" },
+        ],
+        margin: [4, 2, 0, 2],
+      });
+    });
+  }
+
+  // 8. VALIDITÀ
+  startSection("8. Validità");
   content.push({
     text: "Il presente documento è valido per il servizio indicato e deve essere conservato dall'agente durante tutta la durata del servizio.",
     fontSize: 9, color: TXT, margin: [0, 0, 0, 4], lineHeight: 1.25,
@@ -288,10 +351,10 @@ export async function buildPpsPdfBlob(dati = {}) {
   const aaaa = oggi.getFullYear();
   content.push({ text: `Data generazione: ${gg}/${mm}/${aaaa}`, fontSize: 9, color: MUTED, margin: [0, 4, 0, 0] });
 
-  // 8. ALLEGATI / FOTO
+  // 9. ALLEGATI / FOTO
   const foto = (Array.isArray(dati.foto) ? dati.foto : []).filter((p) => p && p.url);
   if (foto.length) {
-    startSection("8. Allegati e foto");
+    startSection("9. Allegati e foto");
     for (const ph of foto) {
       const dataUrl = await fetchAsDataUrl(ph.url);
       if (!dataUrl) continue;
