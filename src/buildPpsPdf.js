@@ -52,8 +52,28 @@ async function fetchAsDataUrl(url) {
 const val = (v) => (v == null ? "" : String(v).trim());
 const has = (v) => val(v) !== "";
 
+const STRIPE = "#F8FAFC";   // riga pari
+const HLINE = "#E5E7EB";    // bordo orizzontale sottile
+
+// Titolo di sezione: blocco pieno blu con testo bianco.
 function sectionTitle(text) {
-  return { text: String(text).toUpperCase(), bold: true, fontSize: 10, color: AC, margin: [0, 14, 0, 6] };
+  return {
+    table: {
+      widths: ["*"],
+      body: [[{
+        text: String(text).toUpperCase(),
+        fontSize: 10, bold: true, color: "#FFFFFF", fillColor: AC,
+        border: [false, false, false, false],
+      }]],
+    },
+    layout: { defaultBorder: false, paddingLeft: () => 10, paddingRight: () => 10, paddingTop: () => 6, paddingBottom: () => 6 },
+    margin: [0, 16, 0, 8],
+  };
+}
+
+// Separatore sottile tra le sezioni.
+function sep() {
+  return { canvas: [{ type: "line", x1: 0, y1: 0, x2: 515, y2: 0, lineWidth: 0.3, lineColor: HLINE }], margin: [0, 4, 0, 0] };
 }
 
 function paragraph(text) {
@@ -62,39 +82,39 @@ function paragraph(text) {
   return lines.map((l) => ({ text: l, fontSize: 9, color: TXT, margin: [0, 0, 0, 4], lineHeight: 1.25 }));
 }
 
-// Layout tabella: bordo sottile grigio
-const greyLayout = {
-  hLineWidth: () => 0.5,
-  vLineWidth: () => 0.5,
-  hLineColor: () => GB,
-  vLineColor: () => GB,
-  paddingLeft: () => 6,
-  paddingRight: () => 6,
-  paddingTop: () => 4,
-  paddingBottom: () => 4,
-};
+// Layout: solo bordi orizzontali sottili, nessun bordo verticale.
+// fillFn(rowIndex) determina l'ombreggiatura della riga (override a livello cella).
+function hLayout(fillFn) {
+  return {
+    hLineWidth: () => 0.5,
+    vLineWidth: () => 0,
+    hLineColor: () => HLINE,
+    paddingLeft: () => 8,
+    paddingRight: () => 8,
+    paddingTop: () => 4,
+    paddingBottom: () => 4,
+    fillColor: fillFn,
+  };
+}
 
-// Layout per tabelle dati con righe alternate (header escluso; il fillColor a
-// livello cella dell'header ha comunque la precedenza su quello del layout).
-const stripedLayout = {
-  ...greyLayout,
-  fillColor: (rowIndex) => (rowIndex > 0 && rowIndex % 2 === 0 ? "#F9FAFB" : null),
-};
+// Righe alternate per tabella chiave/valore (senza header): pari → STRIPE.
+const kvLayout = hLayout((rowIndex) => (rowIndex % 2 === 0 ? STRIPE : null));
+// Righe alternate per tabelle dati con header (riga 0 = header, gestita a cella).
+const dataLayout = hLayout((rowIndex) => (rowIndex > 0 && rowIndex % 2 === 0 ? STRIPE : null));
 
 // Tabella chiave/valore (2 colonne). rows = [[label, value], ...]
-// La colonna label è ombreggiata come "intestazione di riga".
 function kvTable(rows) {
   const visible = rows.filter(([, v]) => has(v));
   if (!visible.length) return null;
   return {
     table: {
-      widths: [150, "*"],
+      widths: [160, "*"],
       body: visible.map(([label, value]) => [
-        { text: label, bold: true, fontSize: 9, color: "#374151", fillColor: "#F8FAFC" },
+        { text: label, bold: true, fontSize: 9, color: AC, fillColor: "#EFF6FF" },
         { text: val(value), fontSize: 9, color: TXT },
       ]),
     },
-    layout: greyLayout,
+    layout: kvLayout,
     margin: [0, 0, 0, 4],
   };
 }
@@ -107,7 +127,7 @@ export async function buildPpsPdfBlob(dati = {}) {
 
   // Header ripetuto su ogni pagina
   const header = (currentPage, pageCount) => ({
-    margin: [MARGIN, 18, MARGIN, 0],
+    margin: [40, 18, 40, 0],
     stack: [
       {
         columns: [
@@ -117,14 +137,14 @@ export async function buildPpsPdfBlob(dati = {}) {
           {
             width: "*",
             stack: [
-              { text: "PPS — Prescrizioni Particolari di Servizio", bold: true, fontSize: 9, color: NAVY, alignment: "right" },
-              { text: sub || " ", fontSize: 9, color: GREY, alignment: "right", margin: [0, 2, 0, 0] },
+              { text: "PPS — Prescrizioni Particolari di Servizio", bold: true, fontSize: 11, color: NAVY, alignment: "right" },
+              { text: sub || " ", fontSize: 9, color: "#6B7280", alignment: "right", margin: [0, 2, 0, 0] },
             ],
-            margin: [0, 6, 0, 0],
+            margin: [0, 4, 0, 0],
           },
         ],
       },
-      { canvas: [{ type: "line", x1: 0, y1: 8, x2: CONTENT_W, y2: 8, lineWidth: 1.3, lineColor: AC }] },
+      { canvas: [{ type: "line", x1: 0, y1: 8, x2: 515, y2: 8, lineWidth: 2, lineColor: AC }] },
     ],
   });
 
@@ -139,9 +159,14 @@ export async function buildPpsPdfBlob(dati = {}) {
   });
 
   const content = [];
+  // Inserisce un separatore prima di ogni sezione successiva alla prima.
+  const startSection = (title) => {
+    if (content.length) content.push(sep());
+    content.push(sectionTitle(title));
+  };
 
   // 1. DATI SERVIZIO
-  content.push(sectionTitle("1. Dati servizio"));
+  startSection("1. Dati servizio");
   const datiTable = kvTable([
     ["Cliente", dati.cliente],
     ["Codice", dati.codice],
@@ -155,18 +180,24 @@ export async function buildPpsPdfBlob(dati = {}) {
 
   // 2. SITUAZIONE
   if (has(dati.situazione)) {
-    content.push(sectionTitle("2. Situazione"));
+    startSection("2. Situazione");
     content.push(...paragraph(dati.situazione));
   }
 
   // 3. COMPITI
   const compiti = (Array.isArray(dati.compiti) ? dati.compiti : String(dati.compiti || "").split(/\r?\n/))
-    .map((s) => String(s).replace(/^\s*[-*•]\s+/, "").replace(/^\s*\d+[\.\)]\s+/, "").trim())
+    .map((s) => String(s).replace(/^\s*[-*•▸]\s+/, "").replace(/^\s*\d+[\.\)]\s+/, "").trim())
     .filter(Boolean);
   if (compiti.length || has(dati.differenze_pgs)) {
-    content.push(sectionTitle("3. Compiti"));
+    startSection("3. Compiti");
     if (compiti.length) {
-      content.push({ ul: compiti.map((c) => ({ text: c, fontSize: 9, color: TXT, margin: [0, 0, 0, 2] })), margin: [0, 0, 0, 4] });
+      content.push(...compiti.map((c) => ({
+        columns: [
+          { text: "▸", color: AC, width: 12 },
+          { text: c, width: "*", fontSize: 9, color: TXT },
+        ],
+        margin: [0, 2, 0, 2],
+      })));
     }
     if (has(dati.differenze_pgs)) {
       content.push({ text: "Differenze rispetto al PGS:", bold: true, fontSize: 9, color: NAVY, margin: [0, 6, 0, 3] });
@@ -179,9 +210,9 @@ export async function buildPpsPdfBlob(dati = {}) {
     [r.pericolo, r.conseguenze, r.misure].some((v) => has(v))
   );
   if (pericoli.length) {
-    content.push(sectionTitle("4. Pericoli particolari"));
+    startSection("4. Pericoli particolari");
     const head = ["Pericolo", "Conseguenze", "Misure"].map((h) => ({
-      text: h, bold: true, fontSize: 9, color: AC, fillColor: BL,
+      text: h, bold: true, fontSize: 9, color: "#FFFFFF", fillColor: AC,
     }));
     content.push({
       table: {
@@ -196,7 +227,7 @@ export async function buildPpsPdfBlob(dati = {}) {
           ]),
         ],
       },
-      layout: stripedLayout,
+      layout: dataLayout,
       margin: [0, 0, 0, 4],
     });
   }
@@ -213,7 +244,7 @@ export async function buildPpsPdfBlob(dati = {}) {
     ["Parcheggio", dati.parcheggio],
   ]);
   if (dettagliTable) {
-    content.push(sectionTitle("5. Dettagli operativi"));
+    startSection("5. Dettagli operativi");
     content.push(dettagliTable);
   }
 
@@ -222,9 +253,9 @@ export async function buildPpsPdfBlob(dati = {}) {
     [r.nome, r.ruolo, r.telefono, r.email].some((v) => has(v))
   );
   if (referenti.length) {
-    content.push(sectionTitle("6. Referenti"));
+    startSection("6. Referenti");
     const head = ["Nome", "Ruolo", "Telefono", "Email"].map((h) => ({
-      text: h, bold: true, fontSize: 9, color: AC, fillColor: BL,
+      text: h, bold: true, fontSize: 9, color: "#FFFFFF", fillColor: AC,
     }));
     content.push({
       table: {
@@ -240,13 +271,13 @@ export async function buildPpsPdfBlob(dati = {}) {
           ]),
         ],
       },
-      layout: stripedLayout,
+      layout: dataLayout,
       margin: [0, 0, 0, 4],
     });
   }
 
   // 7. VALIDITÀ
-  content.push(sectionTitle("7. Validità"));
+  startSection("7. Validità");
   content.push({
     text: "Il presente documento è valido per il servizio indicato e deve essere conservato dall'agente durante tutta la durata del servizio.",
     fontSize: 9, color: TXT, margin: [0, 0, 0, 4], lineHeight: 1.25,
@@ -260,7 +291,7 @@ export async function buildPpsPdfBlob(dati = {}) {
   // 8. ALLEGATI / FOTO
   const foto = (Array.isArray(dati.foto) ? dati.foto : []).filter((p) => p && p.url);
   if (foto.length) {
-    content.push(sectionTitle("8. Allegati e foto"));
+    startSection("8. Allegati e foto");
     for (const ph of foto) {
       const dataUrl = await fetchAsDataUrl(ph.url);
       if (!dataUrl) continue;
@@ -273,7 +304,7 @@ export async function buildPpsPdfBlob(dati = {}) {
 
   const docDef = {
     pageSize: "A4",
-    pageMargins: [MARGIN, 84, MARGIN, MARGIN + 18],
+    pageMargins: [40, 80, 40, 60],
     header,
     footer,
     content,
