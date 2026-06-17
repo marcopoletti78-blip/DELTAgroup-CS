@@ -4248,6 +4248,7 @@ export default function App() {
           profilo={profilo}
           onBack={()=>setView("pps-home")}
           onSaved={(id)=>setPpsId(id)}
+          onArchive={()=>setView("pps-list")}
         />}
       {view==="preview"&&<Editor data={doc} onBack={()=>setView("home")} csDocId={csDocId} setCsDocId={setCsDocId} loadedContent={csLoadedContent}/>}
     </div>

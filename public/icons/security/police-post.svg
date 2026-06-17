@@ -1,8 +1,11 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Postazione Polizia">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Postazione Polizia">
   <title>Postazione Polizia</title>
-  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#0057B8)"/>
-  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M32 13l16 6v10c0 10.5-6.5 18.2-16 22-9.5-3.8-16-11.5-16-22V19l16-6z" fill="none" stroke-width="4"/>
-    <path d="M32 23l2.8 5.6 6.2.9-4.5 4.3 1.1 6.1L32 37l-5.6 2.9 1.1-6.1-4.5-4.3 6.2-.9L32 23z" stroke-width="1.5"/>
-  </g>
+  <rect width="64" height="64" rx="12" fill="#0057B8"/>
+  <circle cx="32" cy="23" r="11" fill="#2563EB" stroke="#BFDBFE" stroke-width="2"/>
+  <circle cx="32" cy="23" r="6" fill="#BFDBFE"/>
+  <circle cx="32" cy="23" r="3" fill="white"/>
+  <rect x="19" y="33" width="26" height="5" rx="2.5" fill="white"/>
+  <text x="32" y="55" text-anchor="middle" fill="white"
+        font-size="13" font-family="Arial,sans-serif"
+        font-weight="bold">117</text>
 </svg>

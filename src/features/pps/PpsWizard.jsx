@@ -481,7 +481,7 @@ function PpsDocView({ data, versione, profilo, onBack, onDownload, onPdf, onShar
 }
 
 // ── Wizard ───────────────────────────────────────────────────────────────────
-export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = false, profilo = null, initialData = null, importMissing = null }) {
+export default function PpsWizard({ ppsId = null, onBack, onSaved, onArchive, isMobile = false, profilo = null, initialData = null, importMissing = null }) {
   const gc = (cols) => (isMobile ? "1fr" : cols);
   const isAdmin = profilo?.ruolo === "admin";
   const email = profilo?.email || "";
@@ -731,6 +731,8 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
         await logAudit(supabase, localId, email, "modificato");
       }
       setSaveMsg("Salvato ✓");
+      // Dopo un salvataggio riuscito torna all'archivio PPS (vista pps-list).
+      onArchive?.();
     } catch (e) {
       console.error("[PpsWizard] save", e);
       setErr(`Errore nel salvataggio: ${e.message}`);
@@ -868,7 +870,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
   }
 
   return (
-    <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px" }}>
+    <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px 70px" }}>
       <div style={{ maxWidth: "820px", margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
           <div>
@@ -1095,15 +1097,6 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
               {err}
             </div>
           )}
-
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "24px" }}>
-            <Btn variant="ghost" on={() => (step === 0 ? onBack() : setStep(step - 1))}>
-              {step === 0 ? "Annulla" : "← Indietro"}
-            </Btn>
-            {step < STEPS.length - 1
-              ? <Btn on={() => setStep(step + 1)}>Avanti →</Btn>
-              : <Btn variant="accent" on={doDownload} disabled={docxLoading}>{docxLoading ? "Genero DOCX…" : "⬇ Genera DOCX"}</Btn>}
-          </div>
           </>
           )}
         </div>
@@ -1126,6 +1119,25 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
               <AnnotationEditor imageSrc={annotSrc} onSave={onSaveAnnotation} onCancel={closeAnnotation} />
             )}
           </div>
+        </div>
+      )}
+
+      {/* Barra di navigazione fissa in fondo alla viewport */}
+      {!loading && (
+        <div style={{
+          position: "fixed", bottom: 0, left: 0, right: 0, background: WH,
+          borderTop: "1px solid #e5e7eb", padding: "12px 24px",
+          display: "flex", justifyContent: "space-between", alignItems: "center", zIndex: 50,
+        }}>
+          <Btn variant="ghost" on={() => (step === 0 ? onBack() : setStep(step - 1))}>
+            {step === 0 ? "Annulla" : "← Indietro"}
+          </Btn>
+          <span style={{ ...SANS, fontSize: "13px", fontWeight: 700, color: TM }}>
+            Step {step + 1} di {STEPS.length}
+          </span>
+          {step < STEPS.length - 1
+            ? <Btn on={() => setStep(step + 1)}>Avanti →</Btn>
+            : <Btn variant="accent" on={doDownload} disabled={docxLoading}>{docxLoading ? "Genero DOCX…" : "⬇ Genera DOCX"}</Btn>}
         </div>
       )}
     </div>

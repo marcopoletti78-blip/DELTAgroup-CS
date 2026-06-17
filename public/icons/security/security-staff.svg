@@ -1,10 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Agente sicurezza">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Agente sicurezza">
   <title>Agente sicurezza</title>
-  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#263238)"/>
-  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="24" cy="22" r="6"/>
-    <path d="M13 50v-7c0-7 5-12 11-12 4 0 7 1 10 4" fill="none" stroke-width="4"/>
-    <path d="M42 30l11 4v7c0 7-4 12-11 15-7-3-11-8-11-15v-7l11-4z" fill="none" stroke-width="3.5"/>
-    <path d="M38 42l3 3 7-8" fill="none" stroke-width="3.5"/>
-  </g>
+  <rect width="64" height="64" rx="12" fill="#0EA5E9"/>
+  <circle cx="32" cy="18" r="8" fill="white"/>
+  <path d="M16 52c0-12 32-12 32 0" fill="white"/>
+  <rect x="28" y="26" width="8" height="18" rx="3" fill="white"/>
+  <text x="32" y="62" text-anchor="middle" fill="white"
+        font-size="8" font-family="Arial,sans-serif"
+        font-weight="bold">SEC</text>
 </svg>
