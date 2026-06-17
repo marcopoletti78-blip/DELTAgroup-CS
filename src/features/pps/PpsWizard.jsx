@@ -115,7 +115,7 @@ function normalizeLoaded(c) {
   const referenti = Array.isArray(c.referenti) && c.referenti.length
     ? c.referenti.map((r) => ({ nome: r.nome ?? "", ruolo: r.ruolo ?? "", telefono: r.telefono ?? "", email: r.email ?? "" }))
     : [{ nome: "", ruolo: "", telefono: "", email: "" }];
-  const foto = Array.isArray(c.foto) ? c.foto.filter((p) => p && p.url).map((p) => ({ url: p.url, didascalia: p.didascalia ?? "", annotatedUrl: p.annotatedUrl ?? null, legenda: p.legenda ?? [] })) : [];
+  const foto = Array.isArray(c.foto) ? c.foto.filter((p) => p && p.url).map((p) => ({ url: p.url, didascalia: p.didascalia ?? "", annotatedUrl: p.annotatedUrl ?? null, legenda: p.legenda ?? [], shapesJson: p.shapesJson ?? [] })) : [];
   return {
     codice: c.codice ?? "",
     numero_cliente: c.numero_cliente ?? c.numeroCliente ?? "",
@@ -647,10 +647,10 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, onArchive, is
   const closeAnnotation = () => { setAnnotIdx(null); setAnnotSrc(null); };
 
   // Salva l'annotazione su campi separati (annotatedUrl + legenda), senza toccare l'originale.
-  const onSaveAnnotation = async ({ annotatedDataUrl, legenda }) => {
+  const onSaveAnnotation = async ({ annotatedDataUrl, legenda, shapesJson }) => {
     const idx = annotIdx;
     if (idx == null) return;
-    const newFoto = f.foto.map((x, i) => (i === idx ? { ...x, annotatedUrl: annotatedDataUrl, legenda: legenda || [] } : x));
+    const newFoto = f.foto.map((x, i) => (i === idx ? { ...x, annotatedUrl: annotatedDataUrl, legenda: legenda || [], shapesJson: shapesJson || [] } : x));
     u("foto", newFoto);
     await persistFoto(newFoto);
     closeAnnotation();
@@ -870,7 +870,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, onArchive, is
   }
 
   return (
-    <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px 70px" }}>
+    <div style={{ minHeight: "calc(100vh - 60px)", background: BG, padding: "32px 20px" }}>
       <div style={{ maxWidth: "820px", margin: "0 auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "20px", flexWrap: "wrap", gap: "12px" }}>
           <div>
@@ -897,6 +897,24 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, onArchive, is
             )}
           </div>
         </div>
+
+        {/* Barra di navigazione — sopra il card, in flusso normale (no fixed bottom). */}
+        {!loading && (
+          <div style={{
+            display: "flex", justifyContent: "space-between", alignItems: "center",
+            padding: "8px 0", marginBottom: "8px", borderBottom: "1px solid #e5e7eb",
+          }}>
+            <Btn variant="ghost" on={() => (step === 0 ? onBack() : setStep(step - 1))}>
+              {step === 0 ? "Annulla" : "← Indietro"}
+            </Btn>
+            <span style={{ ...SANS, fontSize: "13px", fontWeight: 700, color: TM }}>
+              Step {step + 1} di {STEPS.length}
+            </span>
+            {step < STEPS.length - 1
+              ? <Btn on={() => setStep(step + 1)}>Avanti →</Btn>
+              : <Btn variant="accent" on={doDownload} disabled={docxLoading}>{docxLoading ? "Genero DOCX…" : "⬇ Genera DOCX"}</Btn>}
+          </div>
+        )}
 
         <div style={{ background: WH, border: `1px solid ${GB}`, borderRadius: "14px", padding: "26px", boxShadow: "0 2px 12px rgba(12,29,61,0.06)" }}>
           {loading ? (
@@ -1116,30 +1134,12 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, onArchive, is
             {annotLoading || !annotSrc ? (
               <div style={{ ...SANS, padding: "60px", textAlign: "center", color: TM, fontSize: "14px" }}>Caricamento immagine…</div>
             ) : (
-              <AnnotationEditor imageSrc={annotSrc} onSave={onSaveAnnotation} onCancel={closeAnnotation} />
+              <AnnotationEditor imageSrc={annotSrc} initialShapes={f.foto[annotIdx]?.shapesJson ?? []} onSave={onSaveAnnotation} onCancel={closeAnnotation} />
             )}
           </div>
         </div>
       )}
 
-      {/* Barra di navigazione fissa in fondo alla viewport */}
-      {!loading && (
-        <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, background: WH,
-          borderTop: "1px solid #e5e7eb", padding: "12px 24px",
-          display: "flex", justifyContent: "space-between", alignItems: "center", zIndex: 50,
-        }}>
-          <Btn variant="ghost" on={() => (step === 0 ? onBack() : setStep(step - 1))}>
-            {step === 0 ? "Annulla" : "← Indietro"}
-          </Btn>
-          <span style={{ ...SANS, fontSize: "13px", fontWeight: 700, color: TM }}>
-            Step {step + 1} di {STEPS.length}
-          </span>
-          {step < STEPS.length - 1
-            ? <Btn on={() => setStep(step + 1)}>Avanti →</Btn>
-            : <Btn variant="accent" on={doDownload} disabled={docxLoading}>{docxLoading ? "Genero DOCX…" : "⬇ Genera DOCX"}</Btn>}
-        </div>
-      )}
     </div>
   );
 }

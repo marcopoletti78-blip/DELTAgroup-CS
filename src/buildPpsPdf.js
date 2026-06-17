@@ -52,6 +52,19 @@ async function fetchAsDataUrl(url) {
   }
 }
 
+// Scarica un SVG come testo grezzo: pdfmake (0.2.x) rende gli SVG col nodo
+// { svg: "<svg…>" }, non con { image: dataUrl } (l'image accetta solo PNG/JPEG).
+async function fetchSvgText(url) {
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return null;
+    const t = await r.text();
+    return t && t.includes("<svg") ? t : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── Helpers testo ────────────────────────────────────────────────────────────
 const val = (v) => (v == null ? "" : String(v).trim());
 const has = (v) => val(v) !== "";
@@ -190,34 +203,54 @@ function kvTable(rows) {
   };
 }
 
-// Legenda annotazioni di una foto: titolo ridotto + tabella N° / Tipo / Descrizione.
+// Etichette leggibili per i tipi di shape (fallback testuale quando manca l'icona).
 const TIPO_LABEL = { rect: "Rettangolo", circle: "Cerchio", arrow: "Freccia", text: "Testo", marker: "Marcatore", icon: "Icona" };
-function legendaBlocks(legenda) {
-  const head = ["N°", "Tipo", "Descrizione"].map((h, i) => ({
-    text: h, bold: true, fontSize: 8, color: "#FFFFFF", fillColor: NOTE_BG, alignment: i === 0 ? "center" : "left",
+
+// Legenda COMPATTA da mostrare immediatamente sotto ogni foto: tabella 3 colonne
+// (N° / Tipo / Descrizione) con l'icona SVG renderizzata per gli item 'icon'.
+// Async perché pre-carica gli SVG delle icone in base all'iconId salvato.
+async function legendaCompatta(legenda) {
+  // Mostra solo gli item che hanno una descrizione.
+  const items = (legenda || []).filter((it) => has(it.descrizione));
+  if (!items.length) return [];
+
+  // Pre-carica gli SVG (iconId → testo SVG) per gli item di tipo 'icon'.
+  const svgs = await Promise.all(items.map((it) => {
+    if (it.tipo !== "icon") return Promise.resolve(null);
+    const slug = it.iconId ?? (it.tipo ? it.tipo.toLowerCase().replace(/ /g, "-") : null);
+    if (!slug) return Promise.resolve(null);
+    return fetchSvgText(`/icons/security/${slug}.svg`).catch(() => null);
   }));
-  const rows = legenda.map((item) => {
-    const tipoLabel = item.tipo === "icon" ? (item.nome || "Icona") : (TIPO_LABEL[item.tipo] || item.tipo);
-    const tipoCell = (item.tipo !== "icon" && item.colore)
-      ? { columns: [
-          { canvas: [{ type: "rect", x: 0, y: 1, w: 8, h: 8, color: item.colore }], width: 11 },
-          { text: tipoLabel, fontSize: 8, color: TXT, width: "*" },
-        ], columnGap: 2 }
-      : { text: tipoLabel, fontSize: 8, color: TXT };
-    return [
-      { text: String(item.num), fontSize: 8, bold: true, alignment: "center", color: TXT },
+
+  // Header: bold 7pt su sfondo grigio chiaro.
+  const head = ["N°", "Tipo", "Descrizione"].map((h, i) => ({
+    text: h, bold: true, fontSize: 7, color: TXT, fillColor: "#f0f0f0", alignment: i === 0 ? "center" : "left",
+  }));
+
+  const body = [head];
+  items.forEach((it, i) => {
+    const svg = svgs[i];
+    const tipoLabel = it.tipo === "icon" ? (it.nome || "Icona") : (TIPO_LABEL[it.tipo] || it.tipo);
+    const tipoCell = svg
+      ? { svg, width: 16, height: 16, alignment: "center" }
+      : { text: tipoLabel, fontSize: 7, color: TXT };
+    body.push([
+      { text: String(i + 1), fontSize: 7, alignment: "center", color: TXT },
       tipoCell,
-      { text: item.descrizione || "", fontSize: 8, color: TXT },
-    ];
+      { text: it.descrizione || "", fontSize: 7, color: TXT },
+    ]);
   });
-  return [
-    sectionTitle("Legenda", { fill: NOTE_BG, fontSize: 8 }),
-    {
-      table: { headerRows: 1, widths: [30, 60, "*"], body: [head, ...rows] },
-      layout: dataLayout,
-      margin: [0, 0, 0, 8],
+
+  return [{
+    table: { headerRows: 1, widths: [20, 40, "*"], body },
+    layout: {
+      hLineWidth: () => 0.3, vLineWidth: () => 0.3,
+      hLineColor: () => "#cccccc", vLineColor: () => "#cccccc",
+      paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 3, paddingBottom: () => 3,
     },
-  ];
+    fontSize: 7,
+    margin: [0, 4, 0, 12],
+  }];
 }
 
 // ── Funzione principale ──────────────────────────────────────────────────────
@@ -446,12 +479,14 @@ export async function buildPpsPdfBlob(dati = {}) {
     for (const ph of foto) {
       const dataUrl = await fetchAsDataUrl(ph.annotatedUrl ?? ph.url);
       if (!dataUrl) continue;
-      content.push({ image: dataUrl, width: 400, margin: [0, 4, 0, 2] });
+      // Didascalia in grassetto SOPRA la foto (niente se vuota).
       if (has(ph.didascalia)) {
-        content.push({ text: val(ph.didascalia), italics: true, fontSize: 8, color: MUTED, margin: [0, 0, 0, 8] });
+        content.push({ text: val(ph.didascalia), bold: true, fontSize: 9, color: TXT, margin: [0, 4, 0, 4] });
       }
+      content.push({ image: dataUrl, width: 400, margin: [0, 0, 0, 2] });
+      // Legenda compatta immediatamente sotto la foto.
       if (Array.isArray(ph.legenda) && ph.legenda.length > 0) {
-        content.push(...legendaBlocks(ph.legenda));
+        content.push(...(await legendaCompatta(ph.legenda)));
       }
     }
   }

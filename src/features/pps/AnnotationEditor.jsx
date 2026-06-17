@@ -4,7 +4,8 @@
 // Props:
 //   - imageSrc: string  (dataURL base64 dell'immagine — il parent fa il pre-fetch
 //                         così toDataURL() non incappa in SecurityError CORS)
-//   - onSave: (annotatedDataUrl: string) => void
+//   - initialShapes: array  (shapes già salvate, per ripristinare l'editabilità al reload)
+//   - onSave: ({ annotatedDataUrl, legenda, shapesJson }) => void
 //   - onCancel: () => void
 //
 // Strumenti: select / rect / arrow / text. Transformer per spostare/ridimensionare.
@@ -56,7 +57,7 @@ function Divider() {
   return <span style={{ width: "1px", alignSelf: "stretch", background: GB, margin: "0 4px" }} />;
 }
 
-export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
+export default function AnnotationEditor({ imageSrc, initialShapes = [], onSave, onCancel }) {
   const stageRef = useRef(null);
   const trRef = useRef(null);
   const idCounter = useRef(0);
@@ -67,9 +68,9 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
 
   const [tool, setTool] = useState("select");
   const [color, setColor] = useState("#ff0000");
-  const [shapes, setShapes] = useState([]);
+  const [shapes, setShapes] = useState(initialShapes ?? []);
   const [selectedId, setSelectedId] = useState(null);
-  const [history, setHistory] = useState([[]]);
+  const [history, setHistory] = useState([JSON.parse(JSON.stringify(initialShapes ?? []))]);
   const [historyStep, setHistoryStep] = useState(0);
   const [isDrawing, setIsDrawing] = useState(false);
   const [drawStart, setDrawStart] = useState(null);
@@ -420,11 +421,13 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
         .map((s, i) => ({
           num: i + 1,
           tipo: s.type,
+          iconId: s.type === "icon" ? s.iconId : null, // serve a ritrovare l'SVG nella legenda PDF
           colore: shapeColor(s),
           descrizione: s.description.trim(),
           nome: s.type === "icon" ? (iconDef(s.iconId)?.label || null) : null, // nome icona per la legenda PDF
         }));
-      onSave({ annotatedDataUrl: uri, legenda });
+      // shapesJson: array shapes completo, persistito per ripristinare l'editabilità al reload.
+      onSave({ annotatedDataUrl: uri, legenda, shapesJson: shapes });
     });
   };
 
@@ -578,7 +581,13 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
                   );
                 }
                 if (s.type === "icon") {
-                  return <KonvaImage {...shapeProps(s)} x={s.x - s.width / 2} y={s.y - s.height / 2} width={s.width} height={s.height} image={iconImages[s.iconId]} rotation={s.rotation || 0} />;
+                  const iconImg = iconImages[s.iconId];
+                  // Finché l'icona non è caricata mostra un placeholder grigio:
+                  // così la shape è già selezionabile/spostabile anche al reload.
+                  if (!iconImg) {
+                    return <Rect {...shapeProps(s)} x={s.x - s.width / 2} y={s.y - s.height / 2} width={s.width} height={s.height} fill="#e2e8f0" stroke={GR} strokeWidth={1} cornerRadius={6} rotation={s.rotation || 0} />;
+                  }
+                  return <KonvaImage {...shapeProps(s)} x={s.x - s.width / 2} y={s.y - s.height / 2} width={s.width} height={s.height} image={iconImg} rotation={s.rotation || 0} />;
                 }
                 return null;
               })}
