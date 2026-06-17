@@ -224,9 +224,16 @@ async function legendaCompatta(legenda, imgWidth) {
     return fetchSvgText(`/icons/security/${slug}.svg`).catch(() => null);
   }));
 
-  // Larghezza colonna Descrizione = larghezza immagine − colonna Tipo (50pt).
+  // In pdfmake le `widths` sono la larghezza del CONTENUTO della colonna: il
+  // padding orizzontale viene aggiunto attorno. Per far combaciare la larghezza
+  // TOTALE di header e tabella con quella dell'immagine (imgWidth), sottraggo il
+  // padding orizzontale dalle widths.
+  const PAD = 4;                          // padding orizzontale celle (per lato)
   const TIPO_W = 50;
-  const descW = Math.max(60, imgWidth - TIPO_W);
+  // Header: 1 colonna → padding totale = 2*PAD.
+  const headerW = imgWidth - 2 * PAD;
+  // Tabella dati: 2 colonne → padding totale = 4*PAD.
+  const descW = Math.max(60, imgWidth - TIPO_W - 4 * PAD);
 
   const body = items.map((it, i) => {
     const svg = svgs[i];
@@ -247,18 +254,19 @@ async function legendaCompatta(legenda, imgWidth) {
   });
 
   return [
-    // Header "LEGENDA" largo quanto l'immagine.
+    // Header "LEGENDA" — larghezza totale = imgWidth (headerW + 2*PAD).
     {
-      table: { widths: [imgWidth], body: [[{ text: "LEGENDA", bold: true, fontSize: 8, color: TXT, fillColor: "#e8ecf0", border: [false, false, false, false] }]] },
-      layout: { defaultBorder: false, paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 3, paddingBottom: () => 3 },
+      table: { widths: [headerW], body: [[{ text: "LEGENDA", bold: true, fontSize: 8, color: TXT, fillColor: "#e8ecf0", border: [false, false, false, false] }]] },
+      layout: { defaultBorder: false, paddingLeft: () => PAD, paddingRight: () => PAD, paddingTop: () => 3, paddingBottom: () => 3 },
       margin: [0, 4, 0, 0],
     },
     {
+      // Larghezza totale = TIPO_W + descW + 4*PAD = imgWidth.
       table: { widths: [TIPO_W, descW], body },
       layout: {
         hLineWidth: () => 0.3, vLineWidth: () => 0.3,
         hLineColor: () => "#cccccc", vLineColor: () => "#cccccc",
-        paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 3, paddingBottom: () => 3,
+        paddingLeft: () => PAD, paddingRight: () => PAD, paddingTop: () => 3, paddingBottom: () => 3,
       },
       margin: [0, 0, 0, 12],
     },
@@ -491,16 +499,21 @@ export async function buildPpsPdfBlob(dati = {}) {
     for (const ph of foto) {
       const dataUrl = await fetchAsDataUrl(ph.annotatedUrl ?? ph.url);
       if (!dataUrl) continue;
+      const FOTO_W = 400;
+      const blocco = [];
       // Didascalia in grassetto SOPRA la foto (niente se vuota).
       if (has(ph.didascalia)) {
-        content.push({ text: val(ph.didascalia), bold: true, fontSize: 9, color: TXT, margin: [0, 4, 0, 4] });
+        blocco.push({ text: val(ph.didascalia), bold: true, fontSize: 9, color: TXT, margin: [0, 4, 0, 4] });
       }
-      const FOTO_W = 400;
-      content.push({ image: dataUrl, width: FOTO_W, margin: [0, 0, 0, 2] });
+      blocco.push({ image: dataUrl, width: FOTO_W, margin: [0, 0, 0, 2] });
       // Legenda compatta immediatamente sotto la foto, allineata alla sua larghezza.
       if (Array.isArray(ph.legenda) && ph.legenda.length > 0) {
-        content.push(...(await legendaCompatta(ph.legenda, FOTO_W)));
+        blocco.push(...(await legendaCompatta(ph.legenda, FOTO_W)));
       }
+      // Didascalia + immagine + legenda nello stesso blocco unbreakable: se il
+      // titolo non ha spazio per la foto sotto, l'intero blocco scivola alla
+      // pagina successiva (evita il titolo orfano a fondo pagina).
+      content.push({ stack: blocco, unbreakable: true });
     }
   }
 
