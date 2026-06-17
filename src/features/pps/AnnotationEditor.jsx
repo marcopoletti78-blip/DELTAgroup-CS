@@ -11,10 +11,21 @@
 // Undo/redo a snapshot. Color picker. Salvataggio via stage.toDataURL({pixelRatio:2}).
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Stage, Layer, Rect, Arrow, Text as KonvaText, Image as KonvaImage, Transformer } from "react-konva";
+import { Stage, Layer, Rect, Ellipse, Arrow, Circle, Group, Text as KonvaText, Image as KonvaImage, Transformer } from "react-konva";
 
 const MAX_W = 800;
 const MAX_H = 600;
+const MARKER_R = 22;
+
+// Converte #rrggbb in rgba(...) con alpha — usato per il riempimento semi-trasparente
+// (così il bordo resta pieno e nitido anche con fill attivo).
+function withAlpha(hex, a) {
+  const h = String(hex || "#000000").replace("#", "");
+  const full = h.length === 3 ? h.split("").map((c) => c + c).join("") : h;
+  const n = parseInt(full, 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return `rgba(${r},${g},${b},${a})`;
+}
 
 // Palette coerente con il resto dell'app
 const N = "#0c1d3d";
@@ -64,6 +75,9 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
   const [drawStart, setDrawStart] = useState(null);
   const [draft, setDraft] = useState(null); // shape provvisoria durante il disegno
   const [textInput, setTextInput] = useState({ visible: false, x: 0, y: 0, value: "" });
+  const [markerInput, setMarkerInput] = useState({ visible: false, x: 0, y: 0, value: "" });
+  const [filled, setFilled] = useState(false);       // riempimento on/off (rect/cerchio)
+  const [strokeWidth, setStrokeWidth] = useState(2);  // spessore bordi/frecce
 
   const newId = () => `s${Date.now()}_${idCounter.current++}`;
 
@@ -114,6 +128,24 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     setSelectedId(null);
   }, [selectedId, shapes, commit]);
 
+  // Toggle riempimento: cambia il default per le prossime shape e, se c'è una
+  // shape selezionata (rect/cerchio), la aggiorna subito (con snapshot history).
+  const toggleFill = () => {
+    const next = !filled;
+    setFilled(next);
+    if (selectedId) {
+      commit(shapes.map((s) => (s.id === selectedId && (s.type === "rect" || s.type === "circle") ? { ...s, filled: next } : s)));
+    }
+  };
+
+  // Spessore: default per le prossime shape + applicazione immediata alla selezione.
+  const setSW = (w) => {
+    setStrokeWidth(w);
+    if (selectedId) {
+      commit(shapes.map((s) => (s.id === selectedId && (s.type === "rect" || s.type === "circle" || s.type === "arrow") ? { ...s, strokeWidth: w } : s)));
+    }
+  };
+
   // ── Transformer agganciato alla shape selezionata (solo in select) ──
   useEffect(() => {
     const tr = trRef.current;
@@ -159,15 +191,17 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
       if (clickedEmpty) setSelectedId(null);
       return;
     }
-    if (tool === "text") return; // gestito su click
+    if (tool === "text" || tool === "marker") return; // gestiti su click
     const pos = pointer();
     if (!pos) return;
     setIsDrawing(true);
     setDrawStart(pos);
     if (tool === "rect") {
-      setDraft({ id: "preview", type: "rect", x: pos.x, y: pos.y, width: 0, height: 0, stroke: color });
+      setDraft({ id: "preview", type: "rect", x: pos.x, y: pos.y, width: 0, height: 0, stroke: color, strokeWidth, filled });
+    } else if (tool === "circle") {
+      setDraft({ id: "preview", type: "circle", x: pos.x, y: pos.y, radiusX: 0, radiusY: 0, stroke: color, strokeWidth, filled });
     } else if (tool === "arrow") {
-      setDraft({ id: "preview", type: "arrow", points: [pos.x, pos.y, pos.x, pos.y], stroke: color, fill: color });
+      setDraft({ id: "preview", type: "arrow", points: [pos.x, pos.y, pos.x, pos.y], stroke: color, fill: color, strokeWidth });
     }
   };
 
@@ -180,6 +214,12 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
         ...d,
         x: Math.min(drawStart.x, pos.x), y: Math.min(drawStart.y, pos.y),
         width: Math.abs(pos.x - drawStart.x), height: Math.abs(pos.y - drawStart.y),
+      });
+    } else if (tool === "circle") {
+      setDraft((d) => d && {
+        ...d,
+        x: drawStart.x + (pos.x - drawStart.x) / 2, y: drawStart.y + (pos.y - drawStart.y) / 2,
+        radiusX: Math.abs(pos.x - drawStart.x) / 2, radiusY: Math.abs(pos.y - drawStart.y) / 2,
       });
     } else if (tool === "arrow") {
       setDraft((d) => d && { ...d, points: [drawStart.x, drawStart.y, pos.x, pos.y] });
@@ -195,6 +235,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     if (!d) return;
     // Scarta i tratti accidentali troppo piccoli
     if (d.type === "rect" && (d.width < 3 || d.height < 3)) return;
+    if (d.type === "circle" && (d.radiusX < 2 || d.radiusY < 2)) return;
     if (d.type === "arrow") {
       const [x1, y1, x2, y2] = d.points;
       if (Math.hypot(x2 - x1, y2 - y1) < 3) return;
@@ -202,12 +243,16 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     commit([...shapes, { ...d, id: newId() }]);
   };
 
-  // ── Testo: click → input HTML in overlay → Enter conferma / Esc annulla ──
+  // ── Testo / Marker: click → input HTML in overlay → Enter conferma / Esc annulla ──
   const handleStageClick = () => {
-    if (tool !== "text") return;
     const pos = pointer();
     if (!pos) return;
-    setTextInput({ visible: true, x: pos.x, y: pos.y, value: "" });
+    if (tool === "text") {
+      setTextInput({ visible: true, x: pos.x, y: pos.y, value: "" });
+    } else if (tool === "marker") {
+      const n = shapes.filter((s) => s.type === "marker").length + 1;
+      setMarkerInput({ visible: true, x: pos.x, y: pos.y, value: String(n) });
+    }
   };
 
   const commitText = () => {
@@ -224,6 +269,21 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
   const onTextKey = (e) => {
     if (e.key === "Enter") { e.preventDefault(); commitText(); }
     else if (e.key === "Escape") { e.preventDefault(); setTextInput({ visible: false, x: 0, y: 0, value: "" }); }
+  };
+
+  const commitMarker = () => {
+    const v = markerInput.value.trim();
+    if (v) {
+      commit([...shapes, {
+        id: newId(), type: "marker", x: markerInput.x, y: markerInput.y, number: v, fill: color,
+      }]);
+    }
+    setMarkerInput({ visible: false, x: 0, y: 0, value: "" });
+  };
+
+  const onMarkerKey = (e) => {
+    if (e.key === "Enter") { e.preventDefault(); commitMarker(); }
+    else if (e.key === "Escape") { e.preventDefault(); setMarkerInput({ visible: false, x: 0, y: 0, value: "" }); }
   };
 
   // ── Drag / Transform: scrive le nuove geometrie in shapes[] (+ history) ──
@@ -247,6 +307,12 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
       commit(shapes.map((sh) => (sh.id === s.id ? {
         ...sh, x: node.x(), y: node.y(),
         width: Math.max(5, node.width() * scaleX), height: Math.max(5, node.height() * scaleY),
+        rotation: node.rotation(),
+      } : sh)));
+    } else if (s.type === "circle") {
+      commit(shapes.map((sh) => (sh.id === s.id ? {
+        ...sh, x: node.x(), y: node.y(),
+        radiusX: Math.max(3, node.radiusX() * scaleX), radiusY: Math.max(3, node.radiusY() * scaleY),
         rotation: node.rotation(),
       } : sh)));
     } else if (s.type === "text") {
@@ -286,8 +352,10 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
       <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", padding: "10px 12px", background: GL, border: `1px solid ${GB}`, borderRadius: "10px" }}>
         <ToolBtn on={() => setTool("select")} active={tool === "select"} title="Seleziona / sposta">🖱 Seleziona</ToolBtn>
         <ToolBtn on={() => setTool("rect")} active={tool === "rect"} title="Rettangolo">⬜ Rettangolo</ToolBtn>
+        <ToolBtn on={() => setTool("circle")} active={tool === "circle"} title="Cerchio / ellisse">○ Cerchio</ToolBtn>
         <ToolBtn on={() => setTool("arrow")} active={tool === "arrow"} title="Freccia">➡ Freccia</ToolBtn>
         <ToolBtn on={() => setTool("text")} active={tool === "text"} title="Testo">T Testo</ToolBtn>
+        <ToolBtn on={() => setTool("marker")} active={tool === "marker"} title="Marcatore posizione numerato">📍 Posizione</ToolBtn>
         <Divider />
         <input type="color" value={color} onChange={(e) => {
           const c = e.target.value;
@@ -296,18 +364,24 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
             // Applica anche alla shape selezionata (campi corretti per tipo) + snapshot history
             commit(shapes.map((s) => {
               if (s.id !== selectedId) return s;
-              if (s.type === "rect") return { ...s, stroke: c };
+              if (s.type === "rect" || s.type === "circle") return { ...s, stroke: c };
               if (s.type === "arrow") return { ...s, stroke: c, fill: c };
               if (s.type === "text") return { ...s, fill: c };
+              if (s.type === "marker") return { ...s, fill: c }; // testo resta bianco
               return s;
             }));
           }
         }} title="Colore"
           style={{ width: "38px", height: "34px", border: `1px solid ${GB}`, borderRadius: "8px", background: WH, cursor: "pointer", padding: "2px" }} />
+        <ToolBtn on={toggleFill} active={filled} title={filled ? "Riempimento attivo" : "Solo bordo"}>
+          {filled ? "■ Riempimento" : "□ Solo bordo"}
+        </ToolBtn>
+        <ToolBtn on={() => setSW(1.5)} active={strokeWidth === 1.5} title="Bordo sottile">─ Sottile</ToolBtn>
+        <ToolBtn on={() => setSW(3)} active={strokeWidth === 3} title="Bordo medio">— Medio</ToolBtn>
+        <ToolBtn on={() => setSW(5)} active={strokeWidth === 5} title="Bordo spesso">━ Spesso</ToolBtn>
         <Divider />
         <ToolBtn on={undo} disabled={historyStep === 0} title="Annulla">↩ Annulla</ToolBtn>
         <ToolBtn on={redo} disabled={historyStep >= history.length - 1} title="Ripristina">↪ Ripristina</ToolBtn>
-        <Divider />
         <ToolBtn on={deleteSelected} disabled={!selectedId} title="Elimina selezione">🗑 Elimina</ToolBtn>
       </div>
 
@@ -336,27 +410,43 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
               {image && <KonvaImage image={image} width={dims.width} height={dims.height} name="bg" listening />}
               {shapes.map((s) => {
                 if (s.type === "rect") {
-                  return <Rect {...shapeProps(s)} x={s.x} y={s.y} width={s.width} height={s.height} stroke={s.stroke} strokeWidth={2} fill="transparent" rotation={s.rotation || 0} />;
+                  return <Rect {...shapeProps(s)} x={s.x} y={s.y} width={s.width} height={s.height} stroke={s.stroke} strokeWidth={s.strokeWidth ?? 2} fill={s.filled ? withAlpha(s.stroke, 0.25) : "transparent"} rotation={s.rotation || 0} />;
+                }
+                if (s.type === "circle") {
+                  return <Ellipse {...shapeProps(s)} x={s.x} y={s.y} radiusX={s.radiusX} radiusY={s.radiusY} stroke={s.stroke} strokeWidth={s.strokeWidth ?? 2} fill={s.filled ? withAlpha(s.stroke, 0.25) : "transparent"} rotation={s.rotation || 0} />;
                 }
                 if (s.type === "arrow") {
-                  return <Arrow {...shapeProps(s)} points={s.points} stroke={s.stroke} fill={s.fill} strokeWidth={2} pointerLength={10} pointerWidth={8} />;
+                  return <Arrow {...shapeProps(s)} points={s.points} stroke={s.stroke} fill={s.fill} strokeWidth={s.strokeWidth ?? 2} pointerLength={10} pointerWidth={8} />;
                 }
                 if (s.type === "text") {
                   return <KonvaText {...shapeProps(s)} x={s.x} y={s.y} text={s.text} fill={s.fill} fontSize={s.fontSize} fontStyle={s.fontStyle} rotation={s.rotation || 0} />;
+                }
+                if (s.type === "marker") {
+                  return (
+                    <Group {...shapeProps(s)} x={s.x} y={s.y}>
+                      <Circle radius={MARKER_R} fill={s.fill} stroke="white" strokeWidth={1.5} />
+                      <KonvaText text={String(s.number)} fill="white" fontSize={14} fontStyle="bold"
+                        width={MARKER_R * 2} height={MARKER_R * 2} offsetX={MARKER_R} offsetY={MARKER_R}
+                        align="center" verticalAlign="middle" listening={false} />
+                    </Group>
+                  );
                 }
                 return null;
               })}
               {/* Shape provvisoria in disegno (non interattiva) */}
               {draft && draft.type === "rect" && (
-                <Rect x={draft.x} y={draft.y} width={draft.width} height={draft.height} stroke={draft.stroke} strokeWidth={2} fill="transparent" listening={false} />
+                <Rect x={draft.x} y={draft.y} width={draft.width} height={draft.height} stroke={draft.stroke} strokeWidth={draft.strokeWidth ?? 2} fill={draft.filled ? withAlpha(draft.stroke, 0.25) : "transparent"} listening={false} />
+              )}
+              {draft && draft.type === "circle" && (
+                <Ellipse x={draft.x} y={draft.y} radiusX={draft.radiusX} radiusY={draft.radiusY} stroke={draft.stroke} strokeWidth={draft.strokeWidth ?? 2} fill={draft.filled ? withAlpha(draft.stroke, 0.25) : "transparent"} listening={false} />
               )}
               {draft && draft.type === "arrow" && (
-                <Arrow points={draft.points} stroke={draft.stroke} fill={draft.fill} strokeWidth={2} pointerLength={10} pointerWidth={8} listening={false} />
+                <Arrow points={draft.points} stroke={draft.stroke} fill={draft.fill} strokeWidth={draft.strokeWidth ?? 2} pointerLength={10} pointerWidth={8} listening={false} />
               )}
               <Transformer
                 ref={trRef}
-                rotateEnabled
-                resizeEnabled={selectedShape ? selectedShape.type !== "arrow" : true}
+                rotateEnabled={selectedShape ? selectedShape.type !== "marker" : true}
+                resizeEnabled={selectedShape ? (selectedShape.type !== "arrow" && selectedShape.type !== "marker") : true}
                 boundBoxFunc={(oldBox, newBox) => (newBox.width < 5 || newBox.height < 5 ? oldBox : newBox)}
               />
             </Layer>
@@ -379,6 +469,25 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
               minWidth: "120px", zIndex: 5,
             }}
           />
+        )}
+
+        {/* Input numero marcatore posizione */}
+        {markerInput.visible && (
+          <div style={{
+            position: "absolute", left: markerInput.x, top: markerInput.y, zIndex: 6,
+            display: "flex", alignItems: "center", gap: "6px", background: "rgba(255,255,255,0.97)",
+            border: `1px dashed ${AC}`, borderRadius: "6px", padding: "4px 6px",
+          }}>
+            <span style={{ ...SANS, fontSize: "12px", fontWeight: 700, color: N, whiteSpace: "nowrap" }}>Numero posizione:</span>
+            <input
+              autoFocus
+              value={markerInput.value}
+              onChange={(e) => setMarkerInput((m) => ({ ...m, value: e.target.value }))}
+              onKeyDown={onMarkerKey}
+              onBlur={commitMarker}
+              style={{ width: "52px", fontSize: "14px", fontWeight: 700, textAlign: "center", border: `1px solid ${GB}`, borderRadius: "4px", padding: "2px 4px", outline: "none" }}
+            />
+          </div>
         )}
       </div>
 
