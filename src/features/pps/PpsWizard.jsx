@@ -115,7 +115,7 @@ function normalizeLoaded(c) {
   const referenti = Array.isArray(c.referenti) && c.referenti.length
     ? c.referenti.map((r) => ({ nome: r.nome ?? "", ruolo: r.ruolo ?? "", telefono: r.telefono ?? "", email: r.email ?? "" }))
     : [{ nome: "", ruolo: "", telefono: "", email: "" }];
-  const foto = Array.isArray(c.foto) ? c.foto.filter((p) => p && p.url).map((p) => ({ url: p.url, didascalia: p.didascalia ?? "", annotatedUrl: p.annotatedUrl ?? null })) : [];
+  const foto = Array.isArray(c.foto) ? c.foto.filter((p) => p && p.url).map((p) => ({ url: p.url, didascalia: p.didascalia ?? "", annotatedUrl: p.annotatedUrl ?? null, legenda: p.legenda ?? [] })) : [];
   return {
     codice: c.codice ?? "",
     numero_cliente: c.numero_cliente ?? c.numeroCliente ?? "",
@@ -646,11 +646,11 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
 
   const closeAnnotation = () => { setAnnotIdx(null); setAnnotSrc(null); };
 
-  // Salva l'annotazione su un campo separato (annotatedUrl), senza toccare l'originale.
-  const onSaveAnnotation = async (annotatedDataUrl) => {
+  // Salva l'annotazione su campi separati (annotatedUrl + legenda), senza toccare l'originale.
+  const onSaveAnnotation = async ({ annotatedDataUrl, legenda }) => {
     const idx = annotIdx;
     if (idx == null) return;
-    const newFoto = f.foto.map((x, i) => (i === idx ? { ...x, annotatedUrl: annotatedDataUrl } : x));
+    const newFoto = f.foto.map((x, i) => (i === idx ? { ...x, annotatedUrl: annotatedDataUrl, legenda: legenda || [] } : x));
     u("foto", newFoto);
     await persistFoto(newFoto);
     closeAnnotation();

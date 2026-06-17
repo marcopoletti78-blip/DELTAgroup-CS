@@ -68,17 +68,24 @@ const ICON_DEFINITIONS = [
     </svg>`
   },
   {
-    id: 'iso-f001',
-    label: 'Estintore / Pompieri',
-    sublabel: 'ISO F001',
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-      <rect width="80" height="80" rx="6" fill="#cc0000"/>
-      <rect x="31" y="26" width="22" height="38" rx="8" fill="white"/>
-      <rect x="35" y="13" width="14" height="14" rx="3" fill="white"/>
-      <rect x="28" y="16" width="22" height="5" rx="2" fill="white"/>
-      <path d="M53 36 Q65 36 65 46 Q65 56 55 59" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
-      <circle cx="55" cy="61" r="4" fill="white"/>
-      <circle cx="42" cy="34" r="4" fill="#cc0000" stroke="white" stroke-width="1.5"/>
+    id: 'custom-pompieri',
+    label: 'Postazione Pompieri',
+    sublabel: 'Operativo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 80">
+      <rect width="90" height="80" rx="6" fill="#cc0000"/>
+      <rect x="8" y="28" width="50" height="26" rx="3" fill="white"/>
+      <rect x="56" y="33" width="24" height="21" rx="3" fill="white"/>
+      <rect x="59" y="36" width="18" height="11" rx="2" fill="#88ccff"/>
+      <circle cx="24" cy="56" r="8" fill="#333"/>
+      <circle cx="24" cy="56" r="3.5" fill="#aaa"/>
+      <circle cx="66" cy="56" r="8" fill="#333"/>
+      <circle cx="66" cy="56" r="3.5" fill="#aaa"/>
+      <rect x="8" y="28" width="50" height="5" fill="#cc0000"/>
+      <rect x="12" y="22" width="44" height="4" rx="2" fill="#ccc"/>
+      <line x1="20" y1="22" x2="20" y2="14" stroke="#ccc" stroke-width="2" stroke-linecap="round"/>
+      <line x1="40" y1="22" x2="40" y2="14" stroke="#ccc" stroke-width="2" stroke-linecap="round"/>
+      <rect x="56" y="30" width="24" height="4" rx="2" fill="#cc0000"/>
+      <text x="45" y="74" text-anchor="middle" fill="white" font-size="8.5" font-family="Arial" font-weight="bold">POMPIERI</text>
     </svg>`
   },
   {
@@ -98,9 +105,14 @@ const ICON_DEFINITIONS = [
     sublabel: 'Operativo',
     svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
       <rect width="80" height="80" rx="6" fill="#003399"/>
-      <text x="40" y="17" text-anchor="middle" fill="white" font-size="8.5" font-family="Arial" font-weight="bold">POLIZIA</text>
-      <path d="M40 21 L63 31 L63 52 Q40 67 40 67 Q40 67 17 52 L17 31 Z" fill="none" stroke="white" stroke-width="2.5"/>
-      <polygon points="40,30 42.5,37.5 50.5,37.5 44,42.5 46.5,50 40,45 33.5,50 36,42.5 29.5,37.5 37.5,37.5" fill="white"/>
+      <rect x="25" y="32" width="30" height="20" rx="8" fill="#3399ff"/>
+      <rect x="20" y="50" width="40" height="6" rx="2" fill="white"/>
+      <line x1="40" y1="16" x2="40" y2="24" stroke="#ffff00" stroke-width="3.5" stroke-linecap="round"/>
+      <line x1="27" y1="20" x2="30" y2="27" stroke="#ffff00" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="53" y1="20" x2="50" y2="27" stroke="#ffff00" stroke-width="2.5" stroke-linecap="round"/>
+      <line x1="18" y1="30" x2="26" y2="35" stroke="#ffff00" stroke-width="2" stroke-linecap="round"/>
+      <line x1="62" y1="30" x2="54" y2="35" stroke="#ffff00" stroke-width="2" stroke-linecap="round"/>
+      <text x="40" y="70" text-anchor="middle" fill="white" font-size="8.5" font-family="Arial" font-weight="bold">POLIZIA</text>
     </svg>`
   },
   {
@@ -273,6 +285,29 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     setPendingIcon({ id: icon.id, label: icon.label, konvaImage: iconImages[icon.id] });
   };
 
+  // ── Legenda: colore "logico" della shape, preview e descrizione ──
+  const shapeColor = (s) => {
+    if (s.type === "rect" || s.type === "circle" || s.type === "arrow") return s.stroke;
+    if (s.type === "text" || s.type === "marker") return s.fill;
+    return null; // icona: immagine fissa
+  };
+  const iconDef = (id) => ICON_DEFINITIONS.find((d) => d.id === id) || null;
+
+  // Aggiorna la descrizione senza salvare in history (lo si fa onBlur)
+  const updateDescription = (id, value) => setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, description: value } : s)));
+  const commitDescriptionSnapshot = () => commit(shapes);
+
+  const renderPreview = (s) => {
+    const c = shapeColor(s);
+    if (s.type === "rect") return <span style={{ display: "inline-block", width: 16, height: 16, background: c, borderRadius: 2 }} />;
+    if (s.type === "circle") return <span style={{ display: "inline-block", width: 16, height: 16, background: c, borderRadius: "50%" }} />;
+    if (s.type === "arrow") return <span style={{ color: c, fontWeight: 700, fontSize: 16, lineHeight: "16px" }}>→</span>;
+    if (s.type === "text") return <span style={{ color: c, fontWeight: 700, fontSize: 14, lineHeight: "16px" }}>T</span>;
+    if (s.type === "marker") return <span style={{ display: "inline-flex", width: 16, height: 16, borderRadius: "50%", background: c, color: "#fff", fontSize: 9, fontWeight: 700, alignItems: "center", justifyContent: "center" }}>{s.number}</span>;
+    if (s.type === "icon") { const d = iconDef(s.iconId); return d ? <img src={svgToDataUrl(d.svg)} alt="" width={16} height={16} style={{ objectFit: "contain" }} /> : null; }
+    return null;
+  };
+
   // ── Transformer agganciato alla shape selezionata (solo in select) ──
   useEffect(() => {
     const tr = trRef.current;
@@ -367,7 +402,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
       const [x1, y1, x2, y2] = d.points;
       if (Math.hypot(x2 - x1, y2 - y1) < 3) return;
     }
-    commit([...shapes, { ...d, id: newId() }]);
+    commit([...shapes, { ...d, id: newId(), description: "" }]);
   };
 
   // ── Testo / Marker: click → input HTML in overlay → Enter conferma / Esc annulla ──
@@ -376,7 +411,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     if (!pos) return;
     if (pendingIcon) {
       const id = newId();
-      const newShape = { id, type: "icon", iconId: pendingIcon.id, label: pendingIcon.label, x: pos.x, y: pos.y, width: 70, height: 70 };
+      const newShape = { id, type: "icon", iconId: pendingIcon.id, label: pendingIcon.label, x: pos.x, y: pos.y, width: 70, height: 70, description: "" };
       commit([...shapes, newShape]);
       setPendingIcon(null);
       setTool("select");
@@ -396,7 +431,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     if (v) {
       commit([...shapes, {
         id: newId(), type: "text", x: textInput.x, y: textInput.y,
-        text: v, fill: color, fontSize: 16, fontStyle: "bold",
+        text: v, fill: color, fontSize: 16, fontStyle: "bold", description: "",
       }]);
     }
     setTextInput({ visible: false, x: 0, y: 0, value: "" });
@@ -411,7 +446,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     const v = markerInput.value.trim();
     if (v) {
       commit([...shapes, {
-        id: newId(), type: "marker", x: markerInput.x, y: markerInput.y, number: v, fill: color,
+        id: newId(), type: "marker", x: markerInput.x, y: markerInput.y, number: v, fill: color, description: "",
       }]);
     }
     setMarkerInput({ visible: false, x: 0, y: 0, value: "" });
@@ -476,7 +511,16 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
       const stage = stageRef.current;
       if (!stage) return;
       const uri = stage.toDataURL({ pixelRatio: 2 });
-      onSave(uri);
+      const legenda = shapes
+        .filter((s) => s.description && s.description.trim() !== "")
+        .map((s, i) => ({
+          num: i + 1,
+          tipo: s.type,
+          colore: shapeColor(s),
+          descrizione: s.description.trim(),
+          nome: s.type === "icon" ? (s.label || null) : null, // nome icona per la legenda PDF
+        }));
+      onSave({ annotatedDataUrl: uri, legenda });
     });
   };
 
@@ -666,6 +710,23 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
           </div>
         )}
       </div>
+
+      {/* Pannello LEGENDA — una riga per shape: preview, numero, descrizione */}
+      {shapes.length > 0 && (
+        <div style={{ ...SANS, borderTop: "1px solid #ddd", padding: "8px 12px", fontSize: "12px", maxHeight: "200px", overflowY: "auto" }}>
+          <div style={{ fontWeight: 700, fontSize: "11px", color: N, marginBottom: "6px", letterSpacing: "0.04em" }}>LEGENDA</div>
+          {shapes.map((s, i) => (
+            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
+              <span style={{ width: 18, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{renderPreview(s)}</span>
+              <span style={{ width: 16, flexShrink: 0, fontWeight: 700, color: TM, textAlign: "right" }}>{i + 1}</span>
+              <input type="text" placeholder="Descrizione..." value={s.description || ""}
+                onChange={(e) => updateDescription(s.id, e.target.value)}
+                onBlur={commitDescriptionSnapshot}
+                style={{ ...SANS, flex: 1, fontSize: "12px", border: `1px solid ${GB}`, borderRadius: "6px", padding: "5px 8px", outline: "none", color: N }} />
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Azioni in basso a destra */}
       <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "4px" }}>

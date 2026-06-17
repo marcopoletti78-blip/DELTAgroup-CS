@@ -190,6 +190,36 @@ function kvTable(rows) {
   };
 }
 
+// Legenda annotazioni di una foto: titolo ridotto + tabella N° / Tipo / Descrizione.
+const TIPO_LABEL = { rect: "Rettangolo", circle: "Cerchio", arrow: "Freccia", text: "Testo", marker: "Marcatore", icon: "Icona" };
+function legendaBlocks(legenda) {
+  const head = ["N°", "Tipo", "Descrizione"].map((h, i) => ({
+    text: h, bold: true, fontSize: 8, color: "#FFFFFF", fillColor: NOTE_BG, alignment: i === 0 ? "center" : "left",
+  }));
+  const rows = legenda.map((item) => {
+    const tipoLabel = item.tipo === "icon" ? (item.nome || "Icona") : (TIPO_LABEL[item.tipo] || item.tipo);
+    const tipoCell = (item.tipo !== "icon" && item.colore)
+      ? { columns: [
+          { canvas: [{ type: "rect", x: 0, y: 1, w: 8, h: 8, color: item.colore }], width: 11 },
+          { text: tipoLabel, fontSize: 8, color: TXT, width: "*" },
+        ], columnGap: 2 }
+      : { text: tipoLabel, fontSize: 8, color: TXT };
+    return [
+      { text: String(item.num), fontSize: 8, bold: true, alignment: "center", color: TXT },
+      tipoCell,
+      { text: item.descrizione || "", fontSize: 8, color: TXT },
+    ];
+  });
+  return [
+    sectionTitle("Legenda", { fill: NOTE_BG, fontSize: 8 }),
+    {
+      table: { headerRows: 1, widths: [30, 60, "*"], body: [head, ...rows] },
+      layout: dataLayout,
+      margin: [0, 0, 0, 8],
+    },
+  ];
+}
+
 // ── Funzione principale ──────────────────────────────────────────────────────
 export async function buildPpsPdfBlob(dati = {}) {
   try {
@@ -419,6 +449,9 @@ export async function buildPpsPdfBlob(dati = {}) {
       content.push({ image: dataUrl, width: 400, margin: [0, 4, 0, 2] });
       if (has(ph.didascalia)) {
         content.push({ text: val(ph.didascalia), italics: true, fontSize: 8, color: MUTED, margin: [0, 0, 0, 8] });
+      }
+      if (Array.isArray(ph.legenda) && ph.legenda.length > 0) {
+        content.push(...legendaBlocks(ph.legenda));
       }
     }
   }
