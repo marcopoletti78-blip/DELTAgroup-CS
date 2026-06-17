@@ -27,6 +27,101 @@ function withAlpha(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
+// ── Icone operative (ISO 7010 + custom) inseribili sulla mappa ──────────────
+const ICON_DEFINITIONS = [
+  {
+    id: 'iso-e001',
+    label: 'Uscita sicurezza',
+    sublabel: 'ISO E001',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80">
+      <rect width="120" height="80" rx="6" fill="#00a550"/>
+      <rect x="78" y="14" width="22" height="52" rx="2" fill="none" stroke="white" stroke-width="3"/>
+      <path d="M48 36 L72 36 M65 28 L72 36 L65 44" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="22" cy="17" r="7" fill="white"/>
+      <path d="M22 24 L31 43" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M27 31 L13 37" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M27 31 L38 26" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M31 43 L18 62" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M31 43 L41 59" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+    </svg>`
+  },
+  {
+    id: 'iso-e003',
+    label: 'Primo soccorso',
+    sublabel: 'ISO E003',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+      <rect width="80" height="80" rx="6" fill="#00a550"/>
+      <rect x="30" y="12" width="20" height="56" rx="4" fill="white"/>
+      <rect x="12" y="30" width="56" height="20" rx="4" fill="white"/>
+    </svg>`
+  },
+  {
+    id: 'iso-e007',
+    label: 'Punto di raccolta',
+    sublabel: 'ISO E007',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+      <rect width="80" height="80" rx="6" fill="#00a550"/>
+      <circle cx="40" cy="20" r="7" fill="white"/>
+      <path d="M40 27 L40 48 M29 34 L51 34 M40 48 L29 65 M40 48 L51 65" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+      <path d="M8 63 L23 63 L18 55 M23 63 L18 71" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M72 63 L57 63 L62 55 M57 63 L62 71" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`
+  },
+  {
+    id: 'iso-f001',
+    label: 'Estintore / Pompieri',
+    sublabel: 'ISO F001',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+      <rect width="80" height="80" rx="6" fill="#cc0000"/>
+      <rect x="31" y="26" width="22" height="38" rx="8" fill="white"/>
+      <rect x="35" y="13" width="14" height="14" rx="3" fill="white"/>
+      <rect x="28" y="16" width="22" height="5" rx="2" fill="white"/>
+      <path d="M53 36 Q65 36 65 46 Q65 56 55 59" stroke="white" stroke-width="3" fill="none" stroke-linecap="round"/>
+      <circle cx="55" cy="61" r="4" fill="white"/>
+      <circle cx="42" cy="34" r="4" fill="#cc0000" stroke="white" stroke-width="1.5"/>
+    </svg>`
+  },
+  {
+    id: 'iso-w001',
+    label: 'Pericolo / Attenzione',
+    sublabel: 'ISO W001',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+      <rect width="80" height="80" rx="6" fill="#ffcd00"/>
+      <path d="M40 10 L75 70 L5 70 Z" fill="none" stroke="#1a1a1a" stroke-width="5" stroke-linejoin="round"/>
+      <rect x="36" y="30" width="8" height="22" rx="3" fill="#1a1a1a"/>
+      <circle cx="40" cy="60" r="5" fill="#1a1a1a"/>
+    </svg>`
+  },
+  {
+    id: 'custom-polizia',
+    label: 'Postazione Polizia',
+    sublabel: 'Operativo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+      <rect width="80" height="80" rx="6" fill="#003399"/>
+      <text x="40" y="17" text-anchor="middle" fill="white" font-size="8.5" font-family="Arial" font-weight="bold">POLIZIA</text>
+      <path d="M40 21 L63 31 L63 52 Q40 67 40 67 Q40 67 17 52 L17 31 Z" fill="none" stroke="white" stroke-width="2.5"/>
+      <polygon points="40,30 42.5,37.5 50.5,37.5 44,42.5 46.5,50 40,45 33.5,50 36,42.5 29.5,37.5 37.5,37.5" fill="white"/>
+    </svg>`
+  },
+  {
+    id: 'custom-ambulanza',
+    label: 'Postazione Ambulanza',
+    sublabel: 'Operativo',
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
+      <rect width="80" height="80" rx="6" fill="#003399"/>
+      <text x="40" y="16" text-anchor="middle" fill="white" font-size="7.5" font-family="Arial" font-weight="bold">AMBULANZA</text>
+      <circle cx="40" cy="48" r="22" fill="white"/>
+      <rect x="33" y="31" width="14" height="34" rx="4" fill="#cc0000"/>
+      <rect x="23" y="41" width="34" height="14" rx="4" fill="#cc0000"/>
+    </svg>`
+  }
+];
+
+function svgToDataUrl(svgString) {
+  return 'data:image/svg+xml;charset=utf-8,' +
+    encodeURIComponent(svgString.trim());
+}
+
 // Palette coerente con il resto dell'app
 const N = "#0c1d3d";
 const AC = "#1E40AF";
@@ -78,6 +173,9 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
   const [markerInput, setMarkerInput] = useState({ visible: false, x: 0, y: 0, value: "" });
   const [filled, setFilled] = useState(false);       // riempimento on/off (rect/cerchio)
   const [strokeWidth, setStrokeWidth] = useState(2);  // spessore bordi/frecce
+  const [iconImages, setIconImages] = useState({});   // { [iconId]: HTMLImageElement }
+  const [iconPanelOpen, setIconPanelOpen] = useState(false);
+  const [pendingIcon, setPendingIcon] = useState(null); // { id, label, konvaImage } | null
 
   const newId = () => `s${Date.now()}_${idCounter.current++}`;
 
@@ -97,6 +195,29 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     img.src = imageSrc;
     return () => { active = false; };
   }, [imageSrc]);
+
+  // ── Pre-caricamento delle icone come window.Image (una volta al mount) ──
+  useEffect(() => {
+    const loaded = {};
+    let count = 0;
+    const done = () => {
+      count++;
+      if (count === ICON_DEFINITIONS.length) setIconImages({ ...loaded });
+    };
+    ICON_DEFINITIONS.forEach((icon) => {
+      const img = new window.Image();
+      img.onload = () => { loaded[icon.id] = img; done(); };
+      img.onerror = () => { done(); }; // non bloccare il pannello se una fallisce
+      img.src = svgToDataUrl(icon.svg);
+    });
+  }, []);
+
+  // ── Escape annulla la modalità "posiziona icona" ──
+  useEffect(() => {
+    const onEsc = (e) => { if (e.key === "Escape" && pendingIcon) setPendingIcon(null); };
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [pendingIcon]);
 
   // ── History: ogni mutazione di shapes[] crea uno snapshot ──
   const commit = useCallback((next) => {
@@ -144,6 +265,12 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     if (selectedId) {
       commit(shapes.map((s) => (s.id === selectedId && (s.type === "rect" || s.type === "circle" || s.type === "arrow") ? { ...s, strokeWidth: w } : s)));
     }
+  };
+
+  // Seleziona un'icona dal pannello → entra in modalità "posiziona icona".
+  const selezionaIcona = (icon) => {
+    setIconPanelOpen(false);
+    setPendingIcon({ id: icon.id, label: icon.label, konvaImage: iconImages[icon.id] });
   };
 
   // ── Transformer agganciato alla shape selezionata (solo in select) ──
@@ -247,6 +374,15 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
   const handleStageClick = () => {
     const pos = pointer();
     if (!pos) return;
+    if (pendingIcon) {
+      const id = newId();
+      const newShape = { id, type: "icon", iconId: pendingIcon.id, label: pendingIcon.label, x: pos.x, y: pos.y, width: 70, height: 70 };
+      commit([...shapes, newShape]);
+      setPendingIcon(null);
+      setTool("select");
+      setSelectedId(id);
+      return;
+    }
     if (tool === "text") {
       setTextInput({ visible: true, x: pos.x, y: pos.y, value: "" });
     } else if (tool === "marker") {
@@ -294,6 +430,9 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
       const np = s.points.map((v, i) => (i % 2 === 0 ? v + dx : v + dy));
       node.position({ x: 0, y: 0 });
       commit(shapes.map((sh) => (sh.id === s.id ? { ...sh, points: np } : sh)));
+    } else if (s.type === "icon") {
+      // L'icona è disegnata all'angolo (x - w/2): riconverto a centro.
+      commit(shapes.map((sh) => (sh.id === s.id ? { ...sh, x: node.x() + s.width / 2, y: node.y() + s.height / 2 } : sh)));
     } else {
       commit(shapes.map((sh) => (sh.id === s.id ? { ...sh, x: node.x(), y: node.y() } : sh)));
     }
@@ -319,6 +458,12 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
       commit(shapes.map((sh) => (sh.id === s.id ? {
         ...sh, x: node.x(), y: node.y(),
         fontSize: Math.max(8, sh.fontSize * scaleX), rotation: node.rotation(),
+      } : sh)));
+    } else if (s.type === "icon") {
+      const nw = Math.max(16, node.width() * scaleX);
+      const nh = Math.max(16, node.height() * scaleY);
+      commit(shapes.map((sh) => (sh.id === s.id ? {
+        ...sh, x: node.x() + nw / 2, y: node.y() + nh / 2, width: nw, height: nh, rotation: node.rotation(),
       } : sh)));
     }
   };
@@ -349,13 +494,33 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
   return (
     <div style={{ ...SANS, display: "flex", flexDirection: "column", gap: "12px", width: "100%" }}>
       {/* Toolbar */}
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", padding: "10px 12px", background: GL, border: `1px solid ${GB}`, borderRadius: "10px" }}>
+      <div style={{ position: "relative", display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", padding: "10px 12px", background: GL, border: `1px solid ${GB}`, borderRadius: "10px" }}>
         <ToolBtn on={() => setTool("select")} active={tool === "select"} title="Seleziona / sposta">🖱 Seleziona</ToolBtn>
         <ToolBtn on={() => setTool("rect")} active={tool === "rect"} title="Rettangolo">⬜ Rettangolo</ToolBtn>
         <ToolBtn on={() => setTool("circle")} active={tool === "circle"} title="Cerchio / ellisse">○ Cerchio</ToolBtn>
         <ToolBtn on={() => setTool("arrow")} active={tool === "arrow"} title="Freccia">➡ Freccia</ToolBtn>
         <ToolBtn on={() => setTool("text")} active={tool === "text"} title="Testo">T Testo</ToolBtn>
         <ToolBtn on={() => setTool("marker")} active={tool === "marker"} title="Marcatore posizione numerato">📍 Posizione</ToolBtn>
+        <Divider />
+        <ToolBtn on={() => setIconPanelOpen((o) => !o)} active={iconPanelOpen} title="Icone operative">🏷️ Icone ▾</ToolBtn>
+        {iconPanelOpen && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", left: "12px", zIndex: 50,
+            background: WH, border: `1px solid ${GB}`, borderRadius: "8px", boxShadow: "0 8px 24px rgba(12,29,61,0.18)",
+            padding: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", maxWidth: "320px",
+          }}>
+            {ICON_DEFINITIONS.map((icon) => (
+              <div key={icon.id} onClick={() => selezionaIcona(icon)} title={icon.label} style={{
+                display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
+                padding: "8px 6px", border: `1px solid ${GB}`, borderRadius: "8px", cursor: "pointer", background: WH,
+              }}>
+                <img src={svgToDataUrl(icon.svg)} alt={icon.label} width={48} height={48} style={{ objectFit: "contain" }} />
+                <span style={{ ...SANS, fontSize: "10px", fontWeight: 700, color: N, textAlign: "center", lineHeight: 1.2 }}>{icon.label}</span>
+                <span style={{ ...SANS, fontSize: "8px", color: GR, textAlign: "center" }}>{icon.sublabel}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <Divider />
         <input type="color" value={color} onChange={(e) => {
           const c = e.target.value;
@@ -385,6 +550,13 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
         <ToolBtn on={deleteSelected} disabled={!selectedId} title="Elimina selezione">🗑 Elimina</ToolBtn>
       </div>
 
+      {/* Indicatore modalità "posiziona icona" */}
+      {pendingIcon && (
+        <div style={{ ...SANS, background: "#fff3cd", color: "#856404", border: "1px solid #ffecb5", borderRadius: "8px", padding: "6px 12px", fontSize: "12px" }}>
+          📍 Clicca sulla mappa per posizionare: <b>{pendingIcon.label}</b> &nbsp;(Esc per annullare)
+        </div>
+      )}
+
       {/* Canvas */}
       <div style={{ position: "relative", width: dims.width, maxWidth: "100%", margin: "0 auto" }}>
         {loading ? (
@@ -404,7 +576,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
             onTouchEnd={handleMouseUp}
             onClick={handleStageClick}
             onTap={handleStageClick}
-            style={{ border: `1px solid ${GB}`, borderRadius: "8px", cursor: tool === "select" ? "default" : "crosshair", touchAction: "none" }}
+            style={{ border: `1px solid ${GB}`, borderRadius: "8px", cursor: (pendingIcon || tool !== "select") ? "crosshair" : "default", touchAction: "none" }}
           >
             <Layer>
               {image && <KonvaImage image={image} width={dims.width} height={dims.height} name="bg" listening />}
@@ -431,6 +603,9 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
                     </Group>
                   );
                 }
+                if (s.type === "icon") {
+                  return <KonvaImage {...shapeProps(s)} x={s.x - s.width / 2} y={s.y - s.height / 2} width={s.width} height={s.height} image={iconImages[s.iconId]} rotation={s.rotation || 0} />;
+                }
                 return null;
               })}
               {/* Shape provvisoria in disegno (non interattiva) */}
@@ -447,6 +622,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
                 ref={trRef}
                 rotateEnabled={selectedShape ? selectedShape.type !== "marker" : true}
                 resizeEnabled={selectedShape ? (selectedShape.type !== "arrow" && selectedShape.type !== "marker") : true}
+                keepRatio={selectedShape ? selectedShape.type === "icon" : false}
                 boundBoxFunc={(oldBox, newBox) => (newBox.width < 5 || newBox.height < 5 ? oldBox : newBox)}
               />
             </Layer>
