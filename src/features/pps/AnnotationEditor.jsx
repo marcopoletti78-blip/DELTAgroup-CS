@@ -289,7 +289,20 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
         <ToolBtn on={() => setTool("arrow")} active={tool === "arrow"} title="Freccia">➡ Freccia</ToolBtn>
         <ToolBtn on={() => setTool("text")} active={tool === "text"} title="Testo">T Testo</ToolBtn>
         <Divider />
-        <input type="color" value={color} onChange={(e) => setColor(e.target.value)} title="Colore"
+        <input type="color" value={color} onChange={(e) => {
+          const c = e.target.value;
+          setColor(c); // colore per le prossime shape
+          if (selectedId) {
+            // Applica anche alla shape selezionata (campi corretti per tipo) + snapshot history
+            commit(shapes.map((s) => {
+              if (s.id !== selectedId) return s;
+              if (s.type === "rect") return { ...s, stroke: c };
+              if (s.type === "arrow") return { ...s, stroke: c, fill: c };
+              if (s.type === "text") return { ...s, fill: c };
+              return s;
+            }));
+          }
+        }} title="Colore"
           style={{ width: "38px", height: "34px", border: `1px solid ${GB}`, borderRadius: "8px", background: WH, cursor: "pointer", padding: "2px" }} />
         <Divider />
         <ToolBtn on={undo} disabled={historyStep === 0} title="Annulla">↩ Annulla</ToolBtn>
