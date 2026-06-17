@@ -235,21 +235,24 @@ async function legendaCompatta(legenda, imgWidth) {
   // Tabella dati: 2 colonne → padding totale = 4*PAD.
   const descW = Math.max(60, imgWidth - TIPO_W - 4 * PAD);
 
+  // Cella Tipo bassa (solo icona/testo, niente numero) → la descrizione appare
+  // verticalmente centrata. Margin top ≈ (altezza cella − fontSize) / 2 per
+  // allineare la descrizione al centro dell'icona (icona 18 + padding 8 ≈ 26pt).
+  const DESC_TOP = Math.round((26 - 8) / 2); // ≈ 9
   const body = items.map((it, i) => {
     const svg = svgs[i];
-    const num = { text: String(i + 1), fontSize: 6, color: GREY, alignment: "center", margin: [0, 0, 0, 1] };
     let tipoCell;
     if (svg) {
-      // Icona disponibile: numero grigio sopra, icona 18x18 sotto, tutto centrato.
-      tipoCell = { stack: [num, { svg, width: 18, height: 18, alignment: "center" }], alignment: "center" };
+      // Icona disponibile: solo icona 18x18 centrata.
+      tipoCell = { svg, width: 18, height: 18, alignment: "center" };
     } else {
-      // Testo: numero grigio sopra, etichetta del tipo sotto, centrati.
+      // Testo: etichetta del tipo centrata (nessun numero).
       const tipoLabel = it.tipo === "icon" ? (it.nome || "Icona") : (TIPO_LABEL[it.tipo] || it.tipo);
-      tipoCell = { stack: [num, { text: tipoLabel, fontSize: 7, color: TXT, alignment: "center" }], alignment: "center" };
+      tipoCell = { text: tipoLabel, fontSize: 7, color: TXT, alignment: "center" };
     }
     return [
       tipoCell,
-      { text: it.descrizione || "", fontSize: 8, color: TXT, alignment: "left", margin: [0, 0, 0, 0] },
+      { text: it.descrizione || "", fontSize: 8, color: TXT, alignment: "left", margin: [0, svg ? DESC_TOP : 0, 0, 0] },
     ];
   });
 
