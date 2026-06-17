@@ -650,14 +650,13 @@ export default function AnnotationEditor({ imageSrc, initialShapes = [], onSave,
         )}
       </div>
 
-      {/* Pannello LEGENDA — una riga per shape: preview, numero, descrizione */}
+      {/* Pannello LEGENDA — una riga per shape: preview + descrizione (niente numero) */}
       {shapes.length > 0 && (
         <div style={{ ...SANS, borderTop: "1px solid #ddd", padding: "8px 12px", fontSize: "12px", maxHeight: "200px", overflowY: "auto" }}>
           <div style={{ fontWeight: 700, fontSize: "11px", color: N, marginBottom: "6px", letterSpacing: "0.04em" }}>LEGENDA</div>
-          {shapes.map((s, i) => (
+          {shapes.map((s) => (
             <div key={s.id} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "5px" }}>
               <span style={{ width: 18, flexShrink: 0, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{renderPreview(s)}</span>
-              <span style={{ width: 16, flexShrink: 0, fontWeight: 700, color: TM, textAlign: "right" }}>{i + 1}</span>
               <input type="text" placeholder="Descrizione..." value={s.description || ""}
                 onChange={(e) => updateDescription(s.id, e.target.value)}
                 onBlur={commitDescriptionSnapshot}

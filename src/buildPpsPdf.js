@@ -236,9 +236,7 @@ async function legendaCompatta(legenda, imgWidth) {
   const descW = Math.max(60, imgWidth - TIPO_W - 4 * PAD);
 
   // Cella Tipo bassa (solo icona/testo, niente numero) → la descrizione appare
-  // verticalmente centrata. Margin top ≈ (altezza cella − fontSize) / 2 per
-  // allineare la descrizione al centro dell'icona (icona 18 + padding 8 ≈ 26pt).
-  const DESC_TOP = Math.round((26 - 8) / 2); // ≈ 9
+  // verticalmente centrata grazie al margin top sul testo.
   const body = items.map((it, i) => {
     const svg = svgs[i];
     let tipoCell;
@@ -252,7 +250,8 @@ async function legendaCompatta(legenda, imgWidth) {
     }
     return [
       tipoCell,
-      { text: it.descrizione || "", fontSize: 8, color: TXT, alignment: "left", margin: [0, svg ? DESC_TOP : 0, 0, 0] },
+      // margin [left, top, right, bottom]: top ≈ centra la descrizione sull'icona.
+      { text: it.descrizione || "", fontSize: 8, color: TXT, alignment: "left", margin: [4, 6, 4, 0] },
     ];
   });
 
