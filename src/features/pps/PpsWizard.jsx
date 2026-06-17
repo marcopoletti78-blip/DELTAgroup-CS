@@ -623,8 +623,11 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, onArchive, is
       .catch(reject);
   });
 
-  // Apre l'editor di annotazione: pre-carica l'immagine (annotata se presente,
-  // altrimenti l'originale) come base64 e mostra il modal con loader.
+  // Apre l'editor di annotazione: pre-carica l'immagine come base64 e mostra il modal.
+  // Se ci sono shapes salvate riparte dall'originale pulito: le shapes vengono
+  // ridisegnate come layer Konva editabile (eliminarne una la rimuove davvero, il
+  // nuovo PNG è rigenerato da originale + shapes rimanenti). Senza shapes usa
+  // l'annotata se presente (retrocompatibilità con vecchie annotazioni "piatte").
   const openAnnotation = async (idx) => {
     setUpErr(null);
     setAnnotIdx(idx);
@@ -632,7 +635,7 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, onArchive, is
     setAnnotLoading(true);
     try {
       const ph = f.foto[idx];
-      const base = ph.annotatedUrl || ph.url;
+      const base = ph.shapesJson?.length > 0 ? ph.url : (ph.annotatedUrl ?? ph.url);
       const src = base.startsWith("data:") ? base : await fetchAsDataUrl(base);
       setAnnotSrc(src);
     } catch (e) {

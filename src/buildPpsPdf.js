@@ -206,10 +206,12 @@ function kvTable(rows) {
 // Etichette leggibili per i tipi di shape (fallback testuale quando manca l'icona).
 const TIPO_LABEL = { rect: "Rettangolo", circle: "Cerchio", arrow: "Freccia", text: "Testo", marker: "Marcatore", icon: "Icona" };
 
-// Legenda COMPATTA da mostrare immediatamente sotto ogni foto: tabella 3 colonne
-// (N° / Tipo / Descrizione) con l'icona SVG renderizzata per gli item 'icon'.
+// Legenda COMPATTA da mostrare immediatamente sotto ogni foto: tabella 2 colonne
+// (Tipo / Descrizione) larga quanto l'immagine, con l'icona SVG renderizzata per
+// gli item 'icon'. Il numero progressivo è dentro la cella Tipo (sopra l'icona).
 // Async perché pre-carica gli SVG delle icone in base all'iconId salvato.
-async function legendaCompatta(legenda) {
+// `imgWidth` = larghezza dell'immagine sopra, così la legenda è allineata alla foto.
+async function legendaCompatta(legenda, imgWidth) {
   // Mostra solo gli item che hanno una descrizione.
   const items = (legenda || []).filter((it) => has(it.descrizione));
   if (!items.length) return [];
@@ -222,35 +224,45 @@ async function legendaCompatta(legenda) {
     return fetchSvgText(`/icons/security/${slug}.svg`).catch(() => null);
   }));
 
-  // Header: bold 7pt su sfondo grigio chiaro.
-  const head = ["N°", "Tipo", "Descrizione"].map((h, i) => ({
-    text: h, bold: true, fontSize: 7, color: TXT, fillColor: "#f0f0f0", alignment: i === 0 ? "center" : "left",
-  }));
+  // Larghezza colonna Descrizione = larghezza immagine − colonna Tipo (50pt).
+  const TIPO_W = 50;
+  const descW = Math.max(60, imgWidth - TIPO_W);
 
-  const body = [head];
-  items.forEach((it, i) => {
+  const body = items.map((it, i) => {
     const svg = svgs[i];
-    const tipoLabel = it.tipo === "icon" ? (it.nome || "Icona") : (TIPO_LABEL[it.tipo] || it.tipo);
-    const tipoCell = svg
-      ? { svg, width: 16, height: 16, alignment: "center" }
-      : { text: tipoLabel, fontSize: 7, color: TXT };
-    body.push([
-      { text: String(i + 1), fontSize: 7, alignment: "center", color: TXT },
+    const num = { text: String(i + 1), fontSize: 6, color: GREY, alignment: "center", margin: [0, 0, 0, 1] };
+    let tipoCell;
+    if (svg) {
+      // Icona disponibile: numero grigio sopra, icona 18x18 sotto, tutto centrato.
+      tipoCell = { stack: [num, { svg, width: 18, height: 18, alignment: "center" }], alignment: "center" };
+    } else {
+      // Testo: numero grigio sopra, etichetta del tipo sotto, centrati.
+      const tipoLabel = it.tipo === "icon" ? (it.nome || "Icona") : (TIPO_LABEL[it.tipo] || it.tipo);
+      tipoCell = { stack: [num, { text: tipoLabel, fontSize: 7, color: TXT, alignment: "center" }], alignment: "center" };
+    }
+    return [
       tipoCell,
-      { text: it.descrizione || "", fontSize: 7, color: TXT },
-    ]);
+      { text: it.descrizione || "", fontSize: 8, color: TXT, alignment: "left", margin: [0, 0, 0, 0] },
+    ];
   });
 
-  return [{
-    table: { headerRows: 1, widths: [20, 40, "*"], body },
-    layout: {
-      hLineWidth: () => 0.3, vLineWidth: () => 0.3,
-      hLineColor: () => "#cccccc", vLineColor: () => "#cccccc",
-      paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 3, paddingBottom: () => 3,
+  return [
+    // Header "LEGENDA" largo quanto l'immagine.
+    {
+      table: { widths: [imgWidth], body: [[{ text: "LEGENDA", bold: true, fontSize: 8, color: TXT, fillColor: "#e8ecf0", border: [false, false, false, false] }]] },
+      layout: { defaultBorder: false, paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 3, paddingBottom: () => 3 },
+      margin: [0, 4, 0, 0],
     },
-    fontSize: 7,
-    margin: [0, 4, 0, 12],
-  }];
+    {
+      table: { widths: [TIPO_W, descW], body },
+      layout: {
+        hLineWidth: () => 0.3, vLineWidth: () => 0.3,
+        hLineColor: () => "#cccccc", vLineColor: () => "#cccccc",
+        paddingLeft: () => 4, paddingRight: () => 4, paddingTop: () => 3, paddingBottom: () => 3,
+      },
+      margin: [0, 0, 0, 12],
+    },
+  ];
 }
 
 // ── Funzione principale ──────────────────────────────────────────────────────
@@ -483,10 +495,11 @@ export async function buildPpsPdfBlob(dati = {}) {
       if (has(ph.didascalia)) {
         content.push({ text: val(ph.didascalia), bold: true, fontSize: 9, color: TXT, margin: [0, 4, 0, 4] });
       }
-      content.push({ image: dataUrl, width: 400, margin: [0, 0, 0, 2] });
-      // Legenda compatta immediatamente sotto la foto.
+      const FOTO_W = 400;
+      content.push({ image: dataUrl, width: FOTO_W, margin: [0, 0, 0, 2] });
+      // Legenda compatta immediatamente sotto la foto, allineata alla sua larghezza.
       if (Array.isArray(ph.legenda) && ph.legenda.length > 0) {
-        content.push(...(await legendaCompatta(ph.legenda)));
+        content.push(...(await legendaCompatta(ph.legenda, FOTO_W)));
       }
     }
   }
