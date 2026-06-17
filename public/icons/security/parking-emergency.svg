@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Parcheggio mezzi soccorso">
+  <title>Parcheggio mezzi soccorso</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#0057B8)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="15" y="12" width="34" height="40" rx="5" fill="none" stroke-width="4"/>
+    <path d="M27 43V22h9c5 0 8 3 8 7s-3 7-8 7h-9" fill="none" stroke-width="5"/>
+  </g>
+</svg>

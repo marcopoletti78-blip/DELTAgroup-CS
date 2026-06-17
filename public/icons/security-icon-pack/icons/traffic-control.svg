@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Gestione traffico">
+  <title>Gestione traffico</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#F57C00)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M25 51h14l-5-31h-4l-5 31z" fill="none" stroke-width="4"/>
+    <path d="M22 51h20M28 31h8M27 41h10" fill="none" stroke-width="4"/>
+    <path d="M40 19h12M47 12l7 7-7 7" fill="none" stroke-width="4"/>
+  </g>
+</svg>

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Locale sanitario">
+  <title>Locale sanitario</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#00A651)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="13" y="29" width="38" height="13" rx="2" fill="none" stroke-width="4"/>
+    <path d="M17 29v-7h15c5 0 8 3 8 7M16 42v7M48 42v7" fill="none" stroke-width="4"/>
+    <path d="M25 13v12M19 19h12" fill="none" stroke-width="5"/>
+  </g>
+</svg>

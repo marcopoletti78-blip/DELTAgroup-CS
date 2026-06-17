@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Videosorveglianza">
+  <title>Videosorveglianza</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#0B3A53)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M15 24l29-8 4 13-29 8-4-13z" fill="none" stroke-width="4"/>
+    <path d="M31 34v8l-9 8M31 42h12" fill="none" stroke-width="4"/>
+    <path d="M45 16l5-5M49 28l7 2" fill="none" stroke-width="3"/>
+  </g>
+</svg>

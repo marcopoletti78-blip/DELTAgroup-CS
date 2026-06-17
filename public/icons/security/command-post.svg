@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Posto comando">
+  <title>Posto comando</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#263238)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="14" y="16" width="36" height="24" rx="3" fill="none" stroke-width="4"/>
+    <path d="M22 47h20M32 40v7" fill="none" stroke-width="4"/>
+    <path d="M24 27h7l3-5 4 10 3-5h5" fill="none" stroke-width="3.5"/>
+  </g>
+</svg>

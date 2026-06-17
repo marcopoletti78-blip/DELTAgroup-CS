@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Estintore">
+  <title>Estintore</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#E30613)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M29 18h9M33 18v7M28 25h12v25c0 3-2 5-6 5s-6-2-6-5V25z" fill="none" stroke-width="4"/>
+    <path d="M40 27c7 0 9 4 9 8v7M25 33h18" fill="none" stroke-width="4"/>
+    <path d="M25 15l12-3" fill="none" stroke-width="3"/>
+  </g>
+</svg>

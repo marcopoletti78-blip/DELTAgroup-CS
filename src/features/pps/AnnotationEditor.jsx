@@ -27,113 +27,6 @@ function withAlpha(hex, a) {
   return `rgba(${r},${g},${b},${a})`;
 }
 
-// ── Icone operative (ISO 7010 + custom) inseribili sulla mappa ──────────────
-const ICON_DEFINITIONS = [
-  {
-    id: 'iso-e001',
-    label: 'Uscita sicurezza',
-    sublabel: 'ISO E001',
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 80">
-      <rect width="120" height="80" rx="6" fill="#00a550"/>
-      <rect x="78" y="14" width="22" height="52" rx="2" fill="none" stroke="white" stroke-width="3"/>
-      <path d="M48 36 L72 36 M65 28 L72 36 L65 44" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      <circle cx="22" cy="17" r="7" fill="white"/>
-      <path d="M22 24 L31 43" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-      <path d="M27 31 L13 37" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-      <path d="M27 31 L38 26" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-      <path d="M31 43 L18 62" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-      <path d="M31 43 L41 59" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
-    </svg>`
-  },
-  {
-    id: 'iso-e003',
-    label: 'Primo soccorso',
-    sublabel: 'ISO E003',
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-      <rect width="80" height="80" rx="6" fill="#00a550"/>
-      <rect x="30" y="12" width="20" height="56" rx="4" fill="white"/>
-      <rect x="12" y="30" width="56" height="20" rx="4" fill="white"/>
-    </svg>`
-  },
-  {
-    id: 'iso-e007',
-    label: 'Punto di raccolta',
-    sublabel: 'ISO E007',
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-      <rect width="80" height="80" rx="6" fill="#00a550"/>
-      <circle cx="40" cy="20" r="7" fill="white"/>
-      <path d="M40 27 L40 48 M29 34 L51 34 M40 48 L29 65 M40 48 L51 65" stroke="white" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-      <path d="M8 63 L23 63 L18 55 M23 63 L18 71" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M72 63 L57 63 L62 55 M57 63 L62 71" stroke="white" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>`
-  },
-  {
-    id: 'custom-pompieri',
-    label: 'Postazione Pompieri',
-    sublabel: 'Operativo',
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 90 80">
-      <rect width="90" height="80" rx="6" fill="#cc0000"/>
-      <rect x="8" y="28" width="50" height="26" rx="3" fill="white"/>
-      <rect x="56" y="33" width="24" height="21" rx="3" fill="white"/>
-      <rect x="59" y="36" width="18" height="11" rx="2" fill="#88ccff"/>
-      <circle cx="24" cy="56" r="8" fill="#333"/>
-      <circle cx="24" cy="56" r="3.5" fill="#aaa"/>
-      <circle cx="66" cy="56" r="8" fill="#333"/>
-      <circle cx="66" cy="56" r="3.5" fill="#aaa"/>
-      <rect x="8" y="28" width="50" height="5" fill="#cc0000"/>
-      <rect x="12" y="22" width="44" height="4" rx="2" fill="#ccc"/>
-      <line x1="20" y1="22" x2="20" y2="14" stroke="#ccc" stroke-width="2" stroke-linecap="round"/>
-      <line x1="40" y1="22" x2="40" y2="14" stroke="#ccc" stroke-width="2" stroke-linecap="round"/>
-      <rect x="56" y="30" width="24" height="4" rx="2" fill="#cc0000"/>
-      <text x="45" y="74" text-anchor="middle" fill="white" font-size="8.5" font-family="Arial" font-weight="bold">POMPIERI</text>
-    </svg>`
-  },
-  {
-    id: 'iso-w001',
-    label: 'Pericolo / Attenzione',
-    sublabel: 'ISO W001',
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-      <rect width="80" height="80" rx="6" fill="#ffcd00"/>
-      <path d="M40 10 L75 70 L5 70 Z" fill="none" stroke="#1a1a1a" stroke-width="5" stroke-linejoin="round"/>
-      <rect x="36" y="30" width="8" height="22" rx="3" fill="#1a1a1a"/>
-      <circle cx="40" cy="60" r="5" fill="#1a1a1a"/>
-    </svg>`
-  },
-  {
-    id: 'custom-polizia',
-    label: 'Postazione Polizia',
-    sublabel: 'Operativo',
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-      <rect width="80" height="80" rx="6" fill="#003399"/>
-      <rect x="25" y="32" width="30" height="20" rx="8" fill="#3399ff"/>
-      <rect x="20" y="50" width="40" height="6" rx="2" fill="white"/>
-      <line x1="40" y1="16" x2="40" y2="24" stroke="#ffff00" stroke-width="3.5" stroke-linecap="round"/>
-      <line x1="27" y1="20" x2="30" y2="27" stroke="#ffff00" stroke-width="2.5" stroke-linecap="round"/>
-      <line x1="53" y1="20" x2="50" y2="27" stroke="#ffff00" stroke-width="2.5" stroke-linecap="round"/>
-      <line x1="18" y1="30" x2="26" y2="35" stroke="#ffff00" stroke-width="2" stroke-linecap="round"/>
-      <line x1="62" y1="30" x2="54" y2="35" stroke="#ffff00" stroke-width="2" stroke-linecap="round"/>
-      <text x="40" y="70" text-anchor="middle" fill="white" font-size="8.5" font-family="Arial" font-weight="bold">POLIZIA</text>
-    </svg>`
-  },
-  {
-    id: 'custom-ambulanza',
-    label: 'Postazione Ambulanza',
-    sublabel: 'Operativo',
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80">
-      <rect width="80" height="80" rx="6" fill="#003399"/>
-      <text x="40" y="16" text-anchor="middle" fill="white" font-size="7.5" font-family="Arial" font-weight="bold">AMBULANZA</text>
-      <circle cx="40" cy="48" r="22" fill="white"/>
-      <rect x="33" y="31" width="14" height="34" rx="4" fill="#cc0000"/>
-      <rect x="23" y="41" width="34" height="14" rx="4" fill="#cc0000"/>
-    </svg>`
-  }
-];
-
-function svgToDataUrl(svgString) {
-  return 'data:image/svg+xml;charset=utf-8,' +
-    encodeURIComponent(svgString.trim());
-}
-
 // Palette coerente con il resto dell'app
 const N = "#0c1d3d";
 const AC = "#1E40AF";
@@ -185,8 +78,10 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
   const [markerInput, setMarkerInput] = useState({ visible: false, x: 0, y: 0, value: "" });
   const [filled, setFilled] = useState(false);       // riempimento on/off (rect/cerchio)
   const [strokeWidth, setStrokeWidth] = useState(2);  // spessore bordi/frecce
-  const [iconImages, setIconImages] = useState({});   // { [iconId]: HTMLImageElement }
+  const [iconManifest, setIconManifest] = useState([]); // voci del manifest icone
+  const [iconImages, setIconImages] = useState({});     // { [iconId]: HTMLImageElement }
   const [iconPanelOpen, setIconPanelOpen] = useState(false);
+  const [iconCategory, setIconCategory] = useState("Tutte"); // filtro categoria nel pannello
   const [pendingIcon, setPendingIcon] = useState(null); // { id, label, konvaImage } | null
 
   const newId = () => `s${Date.now()}_${idCounter.current++}`;
@@ -208,20 +103,29 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     return () => { active = false; };
   }, [imageSrc]);
 
-  // ── Pre-caricamento delle icone come window.Image (una volta al mount) ──
+  // ── Caricamento manifest icone + pre-caricamento come window.Image (al mount) ──
   useEffect(() => {
-    const loaded = {};
-    let count = 0;
-    const done = () => {
-      count++;
-      if (count === ICON_DEFINITIONS.length) setIconImages({ ...loaded });
-    };
-    ICON_DEFINITIONS.forEach((icon) => {
-      const img = new window.Image();
-      img.onload = () => { loaded[icon.id] = img; done(); };
-      img.onerror = () => { done(); }; // non bloccare il pannello se una fallisce
-      img.src = svgToDataUrl(icon.svg);
-    });
+    let active = true;
+    fetch("/icons/security-icon-pack/securityIcons.manifest.json")
+      .then((r) => r.json())
+      .then((icons) => {
+        if (!active) return;
+        setIconManifest(icons);
+        const loaded = {};
+        let count = 0;
+        const done = () => {
+          count++;
+          if (count === icons.length) setIconImages({ ...loaded });
+        };
+        icons.forEach((icon) => {
+          const img = new window.Image();
+          img.onload = () => { loaded[icon.id] = img; done(); };
+          img.onerror = () => { done(); }; // non bloccare il pannello se una fallisce
+          img.src = icon.svg; // già "/icons/security/[filename].svg"
+        });
+      })
+      .catch((e) => console.error("[AnnotationEditor] manifest icone", e));
+    return () => { active = false; };
   }, []);
 
   // ── Escape annulla la modalità "posiziona icona" ──
@@ -291,7 +195,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     if (s.type === "text" || s.type === "marker") return s.fill;
     return null; // icona: immagine fissa
   };
-  const iconDef = (id) => ICON_DEFINITIONS.find((d) => d.id === id) || null;
+  const iconDef = (id) => iconManifest.find((d) => d.id === id) || null;
 
   // Aggiorna la descrizione senza salvare in history (lo si fa onBlur)
   const updateDescription = (id, value) => setShapes((prev) => prev.map((s) => (s.id === id ? { ...s, description: value } : s)));
@@ -304,7 +208,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     if (s.type === "arrow") return <span style={{ color: c, fontWeight: 700, fontSize: 16, lineHeight: "16px" }}>→</span>;
     if (s.type === "text") return <span style={{ color: c, fontWeight: 700, fontSize: 14, lineHeight: "16px" }}>T</span>;
     if (s.type === "marker") return <span style={{ display: "inline-flex", width: 16, height: 16, borderRadius: "50%", background: c, color: "#fff", fontSize: 9, fontWeight: 700, alignItems: "center", justifyContent: "center" }}>{s.number}</span>;
-    if (s.type === "icon") { const d = iconDef(s.iconId); return d ? <img src={svgToDataUrl(d.svg)} alt="" width={16} height={16} style={{ objectFit: "contain" }} /> : null; }
+    if (s.type === "icon") { const d = iconDef(s.iconId); return d ? <img src={d.svg} alt="" width={16} height={16} style={{ objectFit: "contain" }} /> : null; }
     return null;
   };
 
@@ -411,7 +315,7 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
     if (!pos) return;
     if (pendingIcon) {
       const id = newId();
-      const newShape = { id, type: "icon", iconId: pendingIcon.id, label: pendingIcon.label, x: pos.x, y: pos.y, width: 70, height: 70, description: "" };
+      const newShape = { id, type: "icon", iconId: pendingIcon.id, x: pos.x, y: pos.y, width: 70, height: 70, description: "" };
       commit([...shapes, newShape]);
       setPendingIcon(null);
       setTool("select");
@@ -518,13 +422,20 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
           tipo: s.type,
           colore: shapeColor(s),
           descrizione: s.description.trim(),
-          nome: s.type === "icon" ? (s.label || null) : null, // nome icona per la legenda PDF
+          nome: s.type === "icon" ? (iconDef(s.iconId)?.label || null) : null, // nome icona per la legenda PDF
         }));
       onSave({ annotatedDataUrl: uri, legenda });
     });
   };
 
   const selectedShape = shapes.find((s) => s.id === selectedId) || null;
+
+  // Categorie dinamiche dal manifest (ordine di apparizione), con "Tutte" in testa.
+  const iconCategories = ["Tutte", ...iconManifest.reduce((acc, ic) => {
+    if (ic.category && !acc.includes(ic.category)) acc.push(ic.category);
+    return acc;
+  }, [])];
+  const iconsFiltered = iconCategory === "Tutte" ? iconManifest : iconManifest.filter((ic) => ic.category === iconCategory);
 
   const shapeProps = (s) => ({
     key: s.id, id: s.id, name: "shape",
@@ -551,18 +462,37 @@ export default function AnnotationEditor({ imageSrc, onSave, onCancel }) {
           <div style={{
             position: "absolute", top: "calc(100% + 6px)", left: "12px", zIndex: 50,
             background: WH, border: `1px solid ${GB}`, borderRadius: "8px", boxShadow: "0 8px 24px rgba(12,29,61,0.18)",
-            padding: "12px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", maxWidth: "320px",
+            padding: "12px", width: "360px", maxHeight: "440px", overflowY: "auto",
           }}>
-            {ICON_DEFINITIONS.map((icon) => (
-              <div key={icon.id} onClick={() => selezionaIcona(icon)} title={icon.label} style={{
-                display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
-                padding: "8px 6px", border: `1px solid ${GB}`, borderRadius: "8px", cursor: "pointer", background: WH,
-              }}>
-                <img src={svgToDataUrl(icon.svg)} alt={icon.label} width={48} height={48} style={{ objectFit: "contain" }} />
-                <span style={{ ...SANS, fontSize: "10px", fontWeight: 700, color: N, textAlign: "center", lineHeight: 1.2 }}>{icon.label}</span>
-                <span style={{ ...SANS, fontSize: "8px", color: GR, textAlign: "center" }}>{icon.sublabel}</span>
-              </div>
-            ))}
+            {iconManifest.length === 0 ? (
+              <div style={{ ...SANS, padding: "24px", textAlign: "center", color: TM, fontSize: "13px" }}>Caricamento icone…</div>
+            ) : (
+              <>
+                {/* Pill categorie (dinamiche dal manifest) */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px", marginBottom: "10px" }}>
+                  {iconCategories.map((cat) => (
+                    <button key={cat} onClick={() => setIconCategory(cat)} style={{
+                      ...SANS, padding: "4px 10px", borderRadius: "999px", fontSize: "11px", fontWeight: 700,
+                      border: `1px solid ${iconCategory === cat ? AC : GB}`,
+                      background: iconCategory === cat ? AC : WH, color: iconCategory === cat ? WH : N,
+                      cursor: "pointer", whiteSpace: "nowrap",
+                    }}>{cat}</button>
+                  ))}
+                </div>
+                {/* Griglia icone filtrate */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                  {iconsFiltered.map((icon) => (
+                    <div key={icon.id} onClick={() => selezionaIcona(icon)} title={icon.recommendedUse || icon.label} style={{
+                      display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
+                      padding: "8px 6px", border: `1px solid ${GB}`, borderRadius: "8px", cursor: "pointer", background: WH,
+                    }}>
+                      <img src={icon.svg} alt={icon.label} width={48} height={48} style={{ objectFit: "contain" }} />
+                      <span style={{ ...SANS, fontSize: "10px", fontWeight: 700, color: N, textAlign: "center", lineHeight: 1.2 }}>{icon.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
         <Divider />

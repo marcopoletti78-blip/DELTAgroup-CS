@@ -1,0 +1,24 @@
+:root {
+  --security-green: #00A651;
+  --security-red: #E30613;
+  --security-blue: #0057B8;
+  --security-navy: #263238;
+  --security-yellow: #FFD400;
+  --security-orange: #F57C00;
+  --security-purple: #6A1B9A;
+}
+
+.security-icon-card {
+  border: 1px solid #d8e0ec;
+  border-radius: 12px;
+  background: #ffffff;
+  padding: 10px;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06);
+}
+
+.security-icon-card img,
+.security-icon-card svg {
+  width: 44px;
+  height: 44px;
+}

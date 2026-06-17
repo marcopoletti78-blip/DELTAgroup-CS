@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Transenna / Barriera">
+  <title>Transenna / Barriera</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#F28C28)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="11" y="25" width="42" height="14" rx="2" fill="none" stroke-width="4"/>
+    <path d="M18 39v11M46 39v11M18 25l12 14M32 25l12 14M46 25l7 8" fill="none" stroke-width="4"/>
+  </g>
+</svg>

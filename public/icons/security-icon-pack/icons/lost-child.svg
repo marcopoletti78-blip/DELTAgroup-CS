@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Bambino smarrito">
+  <title>Bambino smarrito</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#F9A825)"/>
+  <g fill="var(--icon-fg,#111111)" stroke="var(--icon-fg,#111111)" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="24" cy="22" r="5"/>
+    <circle cx="39" cy="28" r="4"/>
+    <path d="M16 50v-8c0-6 4-10 8-10s8 4 8 10v8M34 50v-6c0-4 2-7 5-7s5 3 5 7v6" fill="none" stroke-width="4"/>
+    <path d="M48 18c0-4 3-7 7-5 2 1 2 4 0 6l-3 3v3M52 31h.1" fill="none" stroke-width="3"/>
+  </g>
+</svg>

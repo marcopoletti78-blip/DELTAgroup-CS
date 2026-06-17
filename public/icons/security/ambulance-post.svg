@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Postazione Ambulanza">
+  <title>Postazione Ambulanza</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#006BB6)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="11" y="28" width="32" height="14" rx="2" stroke-width="3" fill="none"/>
+    <path d="M43 32h7l4 5v5H43z" fill="none" stroke-width="3"/>
+    <circle cx="21" cy="46" r="3" fill="none" stroke-width="3"/>
+    <circle cx="45" cy="46" r="3" fill="none" stroke-width="3"/>
+    <path d="M27 19v14M20 26h14" fill="none" stroke-width="5"/>
+    <path d="M47 20v10M42 25h10M43.5 21.5l7 7M50.5 21.5l-7 7" fill="none" stroke-width="2"/>
+  </g>
+</svg>

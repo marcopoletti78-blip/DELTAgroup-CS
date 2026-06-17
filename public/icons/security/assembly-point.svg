@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Punto di raccolta">
+  <title>Punto di raccolta</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#00A651)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="32" cy="23" r="4"/>
+    <path d="M25 46v-8c0-4 3-7 7-7s7 3 7 7v8" fill="none" stroke-width="4"/>
+    <circle cx="19" cy="32" r="3"/>
+    <circle cx="45" cy="32" r="3"/>
+    <path d="M14 47v-6c0-3 2-5 5-5M50 47v-6c0-3-2-5-5-5" fill="none" stroke-width="3.5"/>
+    <path d="M15 17l8 2-6 6M49 17l-8 2 6 6" fill="none" stroke-width="3"/>
+  </g>
+</svg>

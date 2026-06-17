@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="Radio / Canale operativo">
+  <title>Radio / Canale operativo</title>
+  <rect x="4" y="4" width="56" height="56" rx="12" fill="var(--icon-bg,#003C88)"/>
+  <g fill="var(--icon-fg,#FFFFFF)" stroke="var(--icon-fg,#FFFFFF)" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="20" y="21" width="23" height="31" rx="4" fill="none" stroke-width="4"/>
+    <path d="M27 21v-8h10v8M27 31h9M28 40h7" fill="none" stroke-width="4"/>
+    <circle cx="38" cy="40" r="2"/>
+    <path d="M47 19c4 4 4 10 0 14M52 14c7 7 7 17 0 24" fill="none" stroke-width="3"/>
+  </g>
+</svg>
