@@ -414,7 +414,7 @@ export async function buildPpsPdfBlob(dati = {}) {
   if (foto.length) {
     startSection("8. Allegati e foto");
     for (const ph of foto) {
-      const dataUrl = await fetchAsDataUrl(ph.url);
+      const dataUrl = await fetchAsDataUrl(ph.annotatedUrl ?? ph.url);
       if (!dataUrl) continue;
       content.push({ image: dataUrl, width: 400, margin: [0, 4, 0, 2] });
       if (has(ph.didascalia)) {

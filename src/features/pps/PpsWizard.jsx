@@ -9,6 +9,7 @@ import { saveAs } from "file-saver";
 import { generatePpsDocxBlob } from "./buildPpsDocx";
 import { buildPpsPdfBlob } from "../../buildPpsPdf";
 import { supabase } from "../../supabaseClient";
+import AnnotationEditor from "./AnnotationEditor";
 
 // ── CONDIVISIONE / DOWNLOAD DOCX (Web Share API con fallback) ─────────────────
 async function shareOrDownloadDocx(blob, filename, title, text) {
@@ -114,7 +115,7 @@ function normalizeLoaded(c) {
   const referenti = Array.isArray(c.referenti) && c.referenti.length
     ? c.referenti.map((r) => ({ nome: r.nome ?? "", ruolo: r.ruolo ?? "", telefono: r.telefono ?? "", email: r.email ?? "" }))
     : [{ nome: "", ruolo: "", telefono: "", email: "" }];
-  const foto = Array.isArray(c.foto) ? c.foto.filter((p) => p && p.url).map((p) => ({ url: p.url, didascalia: p.didascalia ?? "" })) : [];
+  const foto = Array.isArray(c.foto) ? c.foto.filter((p) => p && p.url).map((p) => ({ url: p.url, didascalia: p.didascalia ?? "", annotatedUrl: p.annotatedUrl ?? null })) : [];
   return {
     codice: c.codice ?? "",
     numero_cliente: c.numero_cliente ?? c.numeroCliente ?? "",
@@ -505,6 +506,10 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
   const fileRef = useRef(null);
   const [uploading, setUploading] = useState(false);
   const [upErr, setUpErr] = useState(null);
+  // Annotazione foto (editor react-konva in modal)
+  const [annotIdx, setAnnotIdx] = useState(null);   // indice foto in annotazione
+  const [annotSrc, setAnnotSrc] = useState(null);    // dataURL base64 pre-fetchato
+  const [annotLoading, setAnnotLoading] = useState(false);
 
   // Caricamento PPS esistente / reset per nuova PPS
   useEffect(() => {
@@ -604,6 +609,52 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
     }
   };
   const setDidascalia = (idx, val) => u("foto", f.foto.map((x, i) => (i === idx ? { ...x, didascalia: val } : x)));
+
+  // Pre-fetch dell'immagine come dataURL base64 (evita SecurityError CORS su toDataURL).
+  const fetchAsDataUrl = (url) => new Promise((resolve, reject) => {
+    fetch(url)
+      .then((r) => r.blob())
+      .then((blob) => {
+        const fr = new FileReader();
+        fr.onloadend = () => resolve(fr.result);
+        fr.onerror = () => reject(new Error("lettura immagine fallita"));
+        fr.readAsDataURL(blob);
+      })
+      .catch(reject);
+  });
+
+  // Apre l'editor di annotazione: pre-carica l'immagine (annotata se presente,
+  // altrimenti l'originale) come base64 e mostra il modal con loader.
+  const openAnnotation = async (idx) => {
+    setUpErr(null);
+    setAnnotIdx(idx);
+    setAnnotSrc(null);
+    setAnnotLoading(true);
+    try {
+      const ph = f.foto[idx];
+      const base = ph.annotatedUrl || ph.url;
+      const src = base.startsWith("data:") ? base : await fetchAsDataUrl(base);
+      setAnnotSrc(src);
+    } catch (e) {
+      console.error("[PpsWizard] prefetch annotazione", e);
+      setUpErr(`Impossibile caricare l'immagine per l'annotazione: ${e.message}`);
+      setAnnotIdx(null);
+    } finally {
+      setAnnotLoading(false);
+    }
+  };
+
+  const closeAnnotation = () => { setAnnotIdx(null); setAnnotSrc(null); };
+
+  // Salva l'annotazione su un campo separato (annotatedUrl), senza toccare l'originale.
+  const onSaveAnnotation = async (annotatedDataUrl) => {
+    const idx = annotIdx;
+    if (idx == null) return;
+    const newFoto = f.foto.map((x, i) => (i === idx ? { ...x, annotatedUrl: annotatedDataUrl } : x));
+    u("foto", newFoto);
+    await persistFoto(newFoto);
+    closeAnnotation();
+  };
 
   const doAiSituazione = async () => {
     setAiSit(true); setErr(null);
@@ -1018,9 +1069,13 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
                   <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "16px" }}>
                     {f.foto.map((ph, i) => (
                       <div key={i} style={{ display: "flex", gap: "12px", alignItems: "center", border: `1px solid ${GB}`, borderRadius: "10px", padding: "10px", background: WH }}>
-                        <img src={ph.url} alt="" style={{ width: "120px", height: "80px", objectFit: "cover", borderRadius: "6px", flexShrink: 0, border: `1px solid ${GB}` }} />
+                        <img src={ph.annotatedUrl || ph.url} alt="" style={{ width: "120px", height: "80px", objectFit: "cover", borderRadius: "6px", flexShrink: 0, border: `1px solid ${ph.annotatedUrl ? AC : GB}` }} />
                         <input value={ph.didascalia || ""} placeholder="Didascalia (es. Ingresso principale)"
                           onChange={(e) => setDidascalia(i, e.target.value)} onBlur={() => persistFoto(f.foto)} style={inpStyle} />
+                        <button onClick={() => openAnnotation(i)} title="Annota immagine"
+                          style={{ ...SANS, flexShrink: 0, padding: "8px 12px", borderRadius: "8px", border: `1px solid ${AC}`, background: WH, color: AC, cursor: "pointer", fontSize: "12.5px", fontWeight: 700, whiteSpace: "nowrap" }}>
+                          {ph.annotatedUrl ? "✏️ Modifica annotazione" : "✏️ Annota"}
+                        </button>
                         <button onClick={() => removeFoto(i)} title="Elimina"
                           style={{ ...SANS, flexShrink: 0, width: "34px", height: "34px", borderRadius: "8px", border: `1px solid ${GB}`, background: WH, color: ERR, cursor: "pointer", fontSize: "16px", fontWeight: 700 }}>×</button>
                       </div>
@@ -1053,6 +1108,26 @@ export default function PpsWizard({ ppsId = null, onBack, onSaved, isMobile = fa
           )}
         </div>
       </div>
+
+      {/* Modal editor di annotazione foto */}
+      {annotIdx != null && (
+        <div
+          onClick={closeAnnotation}
+          style={{ position: "fixed", inset: 0, background: "rgba(12,29,61,0.72)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: "3vh 2vw" }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{ background: WH, borderRadius: "16px", padding: "20px", width: "min(96vw, 920px)", maxHeight: "94vh", overflow: "auto", boxShadow: "0 12px 48px rgba(0,0,0,0.4)" }}
+          >
+            <div style={{ ...SANS, fontSize: "15px", fontWeight: 700, color: N, marginBottom: "14px" }}>Annotazione foto</div>
+            {annotLoading || !annotSrc ? (
+              <div style={{ ...SANS, padding: "60px", textAlign: "center", color: TM, fontSize: "14px" }}>Caricamento immagine…</div>
+            ) : (
+              <AnnotationEditor imageSrc={annotSrc} onSave={onSaveAnnotation} onCancel={closeAnnotation} />
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
